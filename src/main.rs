@@ -3,8 +3,6 @@
 //! A modern CLI for managing IDA Pro installations, licenses, downloads,
 //! plugins, file sharing, and more.
 
-#![allow(dead_code, unused_imports)]
-
 mod api;
 mod auth;
 mod cmd;

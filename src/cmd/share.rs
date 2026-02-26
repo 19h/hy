@@ -96,6 +96,51 @@ async fn run_put(args: PutArgs) -> Result<()> {
         .to_string_lossy()
         .to_string();
 
+    // Determine ACL.
+    let acl_type = match args.acl.as_deref() {
+        Some(a) => a.to_string(),
+        None => {
+            let choices = &["private (just me)", "domain (my organization)", "authenticated (anyone with link)"];
+            let selection = dialoguer::Select::new()
+                .with_prompt("Access control")
+                .items(choices)
+                .default(0)
+                .interact()
+                .unwrap_or(0);
+            match selection {
+                0 => "private".to_string(),
+                1 => "domain".to_string(),
+                _ => "authenticated".to_string(),
+            }
+        }
+    };
+
+    // Get the user's email for ACL computation.
+    let user_email = {
+        let auth = crate::auth::AuthService::global();
+        auth.user_email().unwrap_or("").to_string()
+    };
+    let email_domain = user_email
+        .split_once('@')
+        .map(|(_, d)| format!("@{d}"))
+        .unwrap_or_default();
+
+    // Compute permissions from ACL type.
+    let (allowed_segments, allowed_emails): (Vec<String>, Option<Vec<String>>) = match acl_type.as_str() {
+        "private" => (
+            vec!["authenticated".into()],
+            Some(vec![user_email.clone()]),
+        ),
+        "domain" => (
+            vec!["authenticated".into(), email_domain],
+            None,
+        ),
+        _ => (
+            vec!["authenticated".into()],
+            None,
+        ),
+    };
+
     // SHA-256
     let bytes = std::fs::read(&path)?;
     let checksum = format!("{:x}", Sha256::digest(&bytes));
@@ -106,7 +151,13 @@ async fn run_put(args: PutArgs) -> Result<()> {
         "force": args.force,
         "status": "active",
         "checksum": checksum,
+        "allowed_segments": allowed_segments,
+        "metadata": { "acl_type": acl_type },
     });
+
+    if let Some(ref emails) = allowed_emails {
+        upload_data["allowed_emails"] = serde_json::json!(emails);
+    }
 
     if let Some(ref code) = args.code {
         upload_data["code"] = serde_json::json!(code);
@@ -119,6 +170,7 @@ async fn run_put(args: PutArgs) -> Result<()> {
     let upload_url = resp.get("url").and_then(|v| v.as_str());
     let code = resp.get("code").and_then(|v| v.as_str());
     let key = resp.get("key").and_then(|v| v.as_str());
+    let download_url = resp.get("download_url").and_then(|v| v.as_str());
 
     if let Some(url) = upload_url {
         client.put_file(url, &path).await?;
@@ -131,7 +183,12 @@ async fn run_put(args: PutArgs) -> Result<()> {
     }
 
     if let Some(c) = code {
+        let portal = crate::config::Env::global().portal_url.clone();
         fmt::success(&format!("Uploaded! Code: {c}"));
+        eprintln!("  Share URL: {portal}/share/{c}");
+        if let Some(dl) = download_url {
+            eprintln!("  Download: {dl}");
+        }
     } else {
         fmt::success("Upload complete.");
     }

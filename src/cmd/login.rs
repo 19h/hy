@@ -1,9 +1,10 @@
-//! `hcli login` command.
+//! `hy login` command.
 
 use clap::Args;
-use dialoguer::{Confirm, Select};
+use dialoguer::{Confirm, Input, Select};
 
 use crate::auth::AuthService;
+use crate::config::ConfigStore;
 use crate::error::Result;
 use crate::util::fmt;
 
@@ -58,9 +59,47 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             let _ = auth.set_default(&cred.name);
         }
         _ => {
-            // OTP (placeholder — requires Supabase OTP integration).
-            fmt::warning("Email OTP login is not yet implemented in the Rust version.");
-            fmt::info("Please use Google OAuth instead.");
+            // Email OTP
+            let last_email = {
+                let store = ConfigStore::global();
+                store.get_str("login.email").map(String::from)
+            };
+
+            let email: String = Input::new()
+                .with_prompt("Email address")
+                .default(last_email.unwrap_or_default())
+                .interact_text()
+                .map_err(|_| crate::error::Error::Other("Cancelled".into()))?;
+
+            if email.is_empty() {
+                fmt::error("Email address is required.");
+                return Ok(());
+            }
+
+            fmt::info(&format!("Sending OTP to {email}..."));
+
+            if args.force {
+                auth.logout_current();
+            }
+
+            auth.send_otp(&email)?;
+            fmt::success("OTP sent. Check your email.");
+
+            let otp: String = Input::new()
+                .with_prompt("Enter the code received by email")
+                .interact_text()
+                .map_err(|_| crate::error::Error::Other("Cancelled".into()))?;
+
+            match auth.verify_otp(&email, &otp, args.name.as_deref()) {
+                Ok(cred) => {
+                    fmt::success(&format!("Logged in as {}", cred.email));
+                    let _ = auth.set_default(&cred.name);
+                }
+                Err(_) => {
+                    fmt::error("Login failed. Invalid OTP.");
+                    return Ok(());
+                }
+            }
         }
     }
 

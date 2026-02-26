@@ -66,6 +66,7 @@ pub struct PluginManifest {
 }
 
 /// Minimal metadata for legacy / single-file plugins.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MinimalPluginMetadata {
     pub name: String,

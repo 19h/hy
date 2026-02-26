@@ -12,6 +12,7 @@ use crate::error::{Error, Result};
 use crate::util::io::check_free_space;
 
 /// Minimal representation of a GitHub release asset.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReleaseAsset {
     pub id: u64,
@@ -21,6 +22,7 @@ pub struct ReleaseAsset {
 }
 
 /// Minimal representation of a GitHub release.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct Release {
     pub tag_name: String,

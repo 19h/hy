@@ -128,6 +128,7 @@ impl ConfigStore {
         let _ = self.flush();
     }
 
+    #[allow(dead_code)]
     pub fn has(&self, key: &str) -> bool {
         self.data.get(key).is_some_and(|v| !v.is_null())
     }

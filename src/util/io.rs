@@ -85,6 +85,7 @@ pub fn is_binary() -> bool {
 }
 
 /// Read a text file, handling BOM and encoding gracefully.
+#[allow(dead_code)]
 pub fn read_text_file(path: &Path) -> Result<String> {
     let bytes = std::fs::read(path)?;
 

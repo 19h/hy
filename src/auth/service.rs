@@ -186,6 +186,7 @@ impl AuthService {
 
     // ── mutations ───────────────────────────────────────────────────────
 
+    #[allow(dead_code)]
     pub fn add_credentials(&mut self, cred: Credentials) {
         self.config.add(cred);
         self.save_config();
@@ -316,6 +317,95 @@ impl AuthService {
             }
             None => Err(Error::OAuthFailed("Login timeout or cancelled".into())),
         }
+    }
+
+    // ── Email OTP login flow ──────────────────────────────────────────────
+
+    /// Send an OTP code to the given email address.
+    pub fn send_otp(&self, email: &str) -> Result<()> {
+        let env = Env::global();
+        let url = format!("{}/auth/v1/otp", env.supabase_url);
+
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()?;
+
+        let resp = client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("apiKey", &env.supabase_anon_key)
+            .header(
+                "Authorization",
+                format!("Bearer {}", env.supabase_anon_key),
+            )
+            .json(&serde_json::json!({ "email": email }))
+            .send()?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().unwrap_or_default();
+            return Err(Error::Authentication(format!(
+                "Failed to send OTP ({status}): {body}"
+            )));
+        }
+        Ok(())
+    }
+
+    /// Verify an OTP code and create credentials on success.
+    /// Returns the created/updated credential, or an error.
+    pub fn verify_otp(
+        &mut self,
+        email: &str,
+        otp: &str,
+        name: Option<&str>,
+    ) -> Result<Credentials> {
+        let env = Env::global();
+        let url = format!("{}/auth/v1/verify", env.supabase_url);
+
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()?;
+
+        let resp = client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("apiKey", &env.supabase_anon_key)
+            .header(
+                "Authorization",
+                format!("Bearer {}", env.supabase_anon_key),
+            )
+            .json(&serde_json::json!({
+                "email": email,
+                "token": otp,
+                "type": "email"
+            }))
+            .send()?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().unwrap_or_default();
+            return Err(Error::Authentication(format!(
+                "OTP verification failed ({status}): {body}"
+            )));
+        }
+
+        let session: crate::auth::session::SupabaseSession = resp.json().map_err(|e| {
+            Error::Authentication(format!("Failed to parse OTP response: {e}"))
+        })?;
+
+        // Save the full Supabase session for future token refresh.
+        crate::auth::session::save_session_pub(&session);
+
+        // Create or update interactive credentials.
+        let cred = self.upsert_interactive(email, &session.access_token, name);
+
+        // Persist the last-used email for convenience.
+        {
+            let mut store = ConfigStore::global();
+            store.set_str("login.email", email);
+        }
+
+        Ok(cred)
     }
 
     /// Show current login status to the console.

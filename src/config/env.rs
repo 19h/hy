@@ -9,6 +9,7 @@ use std::sync::OnceLock;
 static ENV: OnceLock<Env> = OnceLock::new();
 
 /// Read-only snapshot of all environment-driven configuration.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Env {
     // ── API ─────────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ impl Env {
     }
 
     /// Full version string including any extra suffix.
+    #[allow(dead_code)]
     pub fn full_version(&self) -> String {
         format!("{}{}", self.version, self.version_extra)
     }

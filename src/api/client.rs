@@ -85,7 +85,13 @@ impl ApiClient {
         let headers = self.auth_headers()?;
         let resp = self.inner.get(&url).headers(headers).send().await?;
         let resp = Self::handle(resp).await?;
-        Ok(resp.json().await?)
+        let text = resp.text().await?;
+        serde_json::from_str(&text).map_err(|e| {
+            // Log the first 500 chars of the body for debugging.
+            let preview: String = text.chars().take(500).collect();
+            tracing::debug!("JSON parse error for {path}: {e}\nBody: {preview}");
+            Error::Other(format!("Failed to parse API response for {path}: {e}"))
+        })
     }
 
     pub async fn post_json<T: DeserializeOwned>(

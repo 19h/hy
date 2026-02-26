@@ -16,6 +16,7 @@ pub fn format_size(bytes: u64) -> String {
 }
 
 /// Format a duration in seconds to human-readable form.
+#[allow(dead_code)]
 pub fn format_duration(seconds: f64) -> String {
     if seconds < 60.0 {
         format!("{seconds:.1}s")

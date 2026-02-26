@@ -1,4 +1,7 @@
 //! API data models (mirrors the Python Pydantic models).
+//!
+//! All models are kept even if not currently referenced, since they are part
+//! of the API schema and will be used as features are exercised.
 
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
@@ -13,8 +16,26 @@ where
     Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
 }
 
+/// Deserialize an i64 that might arrive as a JSON string (e.g. `"1000"` instead of `1000`).
+fn string_or_i64<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNum {
+        Num(i64),
+        Str(String),
+    }
+    match StringOrNum::deserialize(deserializer)? {
+        StringOrNum::Num(n) => Ok(n),
+        StringOrNum::Str(s) => s.parse().map_err(serde::de::Error::custom),
+    }
+}
+
 // ── Auth ────────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthUser {
     pub email: String,
@@ -22,6 +43,7 @@ pub struct AuthUser {
 
 // ── Customer ────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Customer {
     pub id: Option<i64>,
@@ -46,6 +68,7 @@ pub struct Customer {
     pub cf_notifications_enabled: Option<bool>,
 }
 
+#[allow(dead_code)]
 impl Customer {
     /// Human-readable display name.
     pub fn display_name(&self) -> String {
@@ -187,8 +210,11 @@ pub struct Asset {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PagedAssets {
+    #[serde(deserialize_with = "string_or_i64")]
     pub offset: i64,
+    #[serde(deserialize_with = "string_or_i64")]
     pub limit: i64,
+    #[serde(deserialize_with = "string_or_i64")]
     pub total: i64,
     pub items: Vec<Asset>,
 }
@@ -222,6 +248,7 @@ pub struct TagsResponse {
     pub tags: Vec<Tag>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadResponse {
     pub bucket: String,
@@ -232,6 +259,7 @@ pub struct UploadResponse {
     pub download_url: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadRequest {
     pub filename: String,
@@ -253,17 +281,20 @@ pub struct UploadRequest {
 
 // ── Bucket ──────────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BucketMetadata {
     pub name: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RequiredField {
     pub description: String,
     pub example: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bucket {
     pub filename: String,

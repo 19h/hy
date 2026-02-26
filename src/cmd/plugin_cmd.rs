@@ -708,6 +708,7 @@ struct RepoPlugin {
     versions: std::collections::HashMap<String, Vec<RepoPluginArchiveLocation>>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RepoPluginArchiveLocation {
     #[serde(default)]
@@ -722,6 +723,7 @@ struct RepoPluginManifest {
     plugin: RepoPluginMeta,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, serde::Deserialize)]
 struct RepoPluginMeta {
     name: String,

@@ -1,11 +1,13 @@
 //! String processing utilities.
 
 /// Extract the domain portion of an email address.
+#[allow(dead_code)]
 pub fn email_domain(email: &str) -> &str {
     email.split_once('@').map_or("", |(_, d)| d)
 }
 
 /// Abbreviate a string to `max` characters, respecting word boundaries.
+#[allow(dead_code)]
 pub fn abbreviate(text: &str, max: usize) -> String {
     if text.len() <= max {
         return text.to_owned();
@@ -18,6 +20,7 @@ pub fn abbreviate(text: &str, max: usize) -> String {
 }
 
 /// Truncate in the middle, keeping start and end.
+#[allow(dead_code)]
 pub fn truncate_middle(text: &str, max: usize) -> String {
     if text.len() <= max {
         return text.to_owned();
@@ -33,6 +36,7 @@ pub fn truncate_middle(text: &str, max: usize) -> String {
 }
 
 /// Simple slugify: lowercase, replace non-alphanumeric runs with `sep`.
+#[allow(dead_code)]
 pub fn slugify(text: &str, sep: char) -> String {
     let s: String = text
         .to_lowercase()
@@ -50,6 +54,7 @@ pub fn slugify(text: &str, sep: char) -> String {
 }
 
 /// Levenshtein distance between two strings.
+#[allow(dead_code)]
 pub fn levenshtein(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.chars().collect();
     let b: Vec<char> = b.chars().collect();
@@ -71,6 +76,7 @@ pub fn levenshtein(a: &str, b: &str) -> usize {
 }
 
 /// Similarity ratio (0.0–1.0) based on Levenshtein distance.
+#[allow(dead_code)]
 pub fn similarity(a: &str, b: &str) -> f64 {
     if a == b {
         return 1.0;
@@ -83,6 +89,7 @@ pub fn similarity(a: &str, b: &str) -> f64 {
 }
 
 /// Find the best matching candidate (above `threshold`) for `target`.
+#[allow(dead_code)]
 pub fn best_match<'a>(target: &str, candidates: &'a [String], threshold: f64) -> Option<&'a str> {
     let target_lower = target.to_lowercase();
     candidates

@@ -25,6 +25,7 @@ pub enum Error {
     #[error("Not logged in — run `hy login` first")]
     NotLoggedIn,
 
+    #[allow(dead_code)]
     #[error("Credentials not found: {0}")]
     CredentialsNotFound(String),
 
@@ -65,6 +66,7 @@ pub enum Error {
     PluginInstall(String),
 
     // ── IDA errors ──────────────────────────────────────────────────────
+    #[allow(dead_code)]
     #[error("IDA installation not found")]
     IdaNotFound,
 

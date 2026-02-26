@@ -96,6 +96,7 @@ impl CredentialsConfig {
     }
 
     /// Get the default credential set.
+    #[allow(dead_code)]
     pub fn default_credentials(&self) -> Option<&Credentials> {
         self.default
             .as_deref()

@@ -76,6 +76,7 @@ pub fn ida_binary_path(install_dir: &Path) -> Option<PathBuf> {
 }
 
 /// Locate the `idat` (headless / text-mode) binary.
+#[allow(dead_code)]
 pub fn idat_path(install_dir: &Path) -> Option<PathBuf> {
     let name = if cfg!(target_os = "windows") {
         "idat64.exe"

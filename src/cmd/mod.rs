@@ -27,7 +27,7 @@ pub enum Commands {
     /// Display the currently logged-in user
     Whoami,
 
-    /// Check for hcli updates
+    /// Check for updates
     Update(update::UpdateArgs),
 
     /// Download IDA binaries, SDKs, and utilities
@@ -66,7 +66,7 @@ pub enum Commands {
         command: plugin_cmd::PluginCommands,
     },
 
-    /// Manage hcli extensions
+    /// Manage extensions
     Extension {
         #[command(subcommand)]
         command: extension::ExtensionCommands,

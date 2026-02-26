@@ -104,7 +104,7 @@ fn save_session(session: &SupabaseSession) {
 /// Returns the (possibly refreshed) access token and email.
 pub fn ensure_fresh_token() -> Result<(String, String)> {
     let session = load_session().ok_or_else(|| {
-        Error::Authentication("No Supabase session found. Run `hcli login` first.".into())
+        Error::Authentication("No Supabase session found. Run `hy login` first.".into())
     })?;
 
     let access_token = if is_token_expired(&session.access_token) {

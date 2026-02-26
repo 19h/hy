@@ -120,7 +120,7 @@ fn check_for_update() -> Option<String> {
 
     if latest > current && !is_dev_version(&latest) {
         Some(format!(
-            "\nUpdate available: {} -> {}. Run `hcli update` to install.",
+            "\nUpdate available: {} -> {}. Run `hy update` to install.",
             current, latest
         ))
     } else {

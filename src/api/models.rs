@@ -1,7 +1,17 @@
 //! API data models (mirrors the Python Pydantic models).
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+
+/// Deserialize a value that might be `null` in JSON into `T::default()`.
+/// Unlike `#[serde(default)]` alone, this handles explicit `null` values.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
 
 // ── Auth ────────────────────────────────────────────────────────────────
 
@@ -161,15 +171,16 @@ pub struct ApiKeyToken {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset {
     pub email: Option<String>,
-    pub filename: String,
     #[serde(default)]
+    pub filename: String,
+    #[serde(default, deserialize_with = "null_as_default")]
     pub size: u64,
     pub key: String,
     pub code: Option<String>,
     pub created_at: Option<String>,
     pub expires_at: Option<String>,
     pub url: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub version: u32,
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 }

@@ -1,4 +1,4 @@
-//! `hcli ida` command group: install, set-default, accept-eula.
+//! `hy ida` command group: install, set-default, accept-eula.
 
 use std::path::PathBuf;
 
@@ -13,8 +13,8 @@ pub enum IdaCommands {
     Install(IdaInstallArgs),
     /// Set the default IDA installation directory
     SetDefault(IdaSetDefaultArgs),
-    /// Accept the IDA EULA
-    AcceptEula,
+    /// Accept the IDA EULA for an installation
+    AcceptEula(IdaAcceptEulaArgs),
 }
 
 #[derive(Debug, Args)]
@@ -35,11 +35,17 @@ pub struct IdaSetDefaultArgs {
     pub path: PathBuf,
 }
 
+#[derive(Debug, Args)]
+pub struct IdaAcceptEulaArgs {
+    /// Path to the IDA installation directory (uses default if omitted)
+    pub path: Option<PathBuf>,
+}
+
 pub async fn run(cmd: IdaCommands) -> Result<()> {
     match cmd {
         IdaCommands::Install(args) => run_install(args).await,
         IdaCommands::SetDefault(args) => run_set_default(args).await,
-        IdaCommands::AcceptEula => run_accept_eula().await,
+        IdaCommands::AcceptEula(args) => run_accept_eula(args).await,
     }
 }
 
@@ -90,8 +96,61 @@ async fn run_set_default(args: IdaSetDefaultArgs) -> Result<()> {
     Ok(())
 }
 
-async fn run_accept_eula() -> Result<()> {
-    // The EULA acceptance is typically handled during installation.
-    fmt::info("EULA acceptance is handled during `hcli ida install --accept-eula`.");
+async fn run_accept_eula(args: IdaAcceptEulaArgs) -> Result<()> {
+    let install_dir = match args.path {
+        Some(p) => p,
+        None => match crate::ida::current_install_dir() {
+            Some(d) => d,
+            None => {
+                fmt::error("No IDA installation found. Specify a path or set a default.");
+                return Ok(());
+            }
+        },
+    };
+
+    if !install_dir.exists() {
+        fmt::error(&format!("Directory not found: {}", install_dir.display()));
+        return Ok(());
+    }
+
+    // Look for idalib / idapyswitch to invoke EULA acceptance.
+    let ida_path = if cfg!(target_os = "macos") {
+        install_dir.join("Contents").join("MacOS")
+    } else {
+        install_dir.clone()
+    };
+
+    let idalib = if cfg!(target_os = "windows") {
+        ida_path.join("idalib.exe")
+    } else {
+        ida_path.join("idalib")
+    };
+
+    if idalib.exists() {
+        fmt::info("Accepting EULA via idalib...");
+        let status = std::process::Command::new(&idalib)
+            .arg("--accept-eula")
+            .status();
+
+        match status {
+            Ok(s) if s.success() => {
+                fmt::success("EULA accepted.");
+            }
+            Ok(s) => {
+                fmt::warning(&format!(
+                    "idalib exited with status {}. EULA may not have been accepted.",
+                    s.code().unwrap_or(-1)
+                ));
+            }
+            Err(e) => {
+                fmt::error(&format!("Failed to run idalib: {e}"));
+            }
+        }
+    } else {
+        fmt::warning("idalib not found in the installation directory.");
+        fmt::info("EULA acceptance requires IDA Pro or IDA Teams (not IDA Free/Home).");
+        fmt::info(&format!("Checked: {}", idalib.display()));
+    }
+
     Ok(())
 }

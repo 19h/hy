@@ -22,7 +22,7 @@ pub enum Error {
     Api { status: u16, message: String },
 
     // ── Auth errors ─────────────────────────────────────────────────────
-    #[error("Not logged in — run `hcli login` first")]
+    #[error("Not logged in — run `hy login` first")]
     NotLoggedIn,
 
     #[error("Credentials not found: {0}")]

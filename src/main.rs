@@ -1,4 +1,4 @@
-//! HCLI — Hex-Rays Command-line Interface.
+//! hy — Hex-Rays Command-line Interface.
 //!
 //! A modern CLI for managing IDA Pro installations, licenses, downloads,
 //! plugins, file sharing, and more.
@@ -23,10 +23,10 @@ use crate::error::Error;
 use crate::update::BackgroundUpdateChecker;
 use crate::util::io::is_binary;
 
-/// HCLI — Hex-Rays Command-line Interface
+/// hy — Hex-Rays Command-line Interface
 #[derive(Debug, Parser)]
 #[command(
-    name = "hcli",
+    name = "hy",
     version,
     about = "Hex-Rays CLI for managing IDA installation, licenses, and more",
     long_about = None,
@@ -109,7 +109,7 @@ async fn dispatch(cli: Cli) -> error::Result<()> {
         Commands::Download(args) => cmd::download::run(args).await,
         Commands::Commands => {
             // Print all subcommands.
-            eprintln!("Use `hcli --help` to see all available commands.");
+            eprintln!("Use `hy --help` to see all available commands.");
             Ok(())
         }
         Commands::Auth { command } => cmd::auth_cmd::run(command).await,
@@ -151,13 +151,13 @@ fn handle_error(err: &Error) {
         Error::Authentication(_) => {
             eprintln!(
                 "{}",
-                "Authentication failed. Check your credentials or run `hcli login`.".red()
+                "Authentication failed. Check your credentials or run `hy login`.".red()
             );
         }
         Error::NotLoggedIn => {
             eprintln!(
                 "{}",
-                "Not logged in. Run `hcli login` first.".red()
+                "Not logged in. Run `hy login` first.".red()
             );
         }
         Error::NotFound(msg) => {

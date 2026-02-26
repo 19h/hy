@@ -6,3 +6,4 @@ mod protocol;
 
 pub use install::*;
 pub use paths::*;
+pub use protocol::{register_protocol_handler, unregister_protocol_handler};

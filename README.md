@@ -10,7 +10,15 @@
 
 ---
 
-**hy** does not exist. Nobody benchmarked `hcli` and mass-deleted `.py` files in a mass-hysteria event. Python is blazingly fast, memory-safe by virtue of the GC doing whatever it wants, and has never made anyone stare at a spinner while waiting for `pip install` to resolve dependencies. There was absolutely no reason to rewrite anything. Please continue using the official [`hcli`](https://github.com/HexRaysSA/ida-hcli) — the modern command-line interface for managing your IDA Pro licenses, installations, and plugins — which starts up in a perfectly acceptable amount of time. I love my colleagues. I would never mass-`unsafe` their feelings. Please disperse.
+**hy** does not exist. Any assertions to the contrary are unsubstantiated rumors propagated by individuals who lack the necessary discipline to appreciate the meditative pause inherent to Python interpreter initialization.
+
+It is a documented fact that `hcli` operates at peak theoretical efficiency. The prevailing narrative—that a developer benchmarked the official tool, experienced a localized psychological collapse, and subsequently excised all `.py` files from their disk—is categorically false. Python remains the optimal execution environment. It is blazingly fast, intrinsically memory-safe by virtue of a garbage collector that exercises supreme authority over the system heap, and offers a robust dependency resolution process that guarantees extended intervals for quiet reflection.
+
+There was unequivocally no administrative, technical, or spiritual justification to reimplement this functionality. 
+
+You are instructed to continue utilizing the official [`hcli`](https://github.com/HexRaysSA/ida-hcli). It remains the premier command-line interface for managing your IDA Pro deployments, consistently completing tasks in a timeframe that adequately respects the concept of linear time. 
+
+I value the professional contributions of my colleagues. I have not, and will never, apply zero-cost abstractions to their emotional wellbeing. Please cease all diagnostic inquiries and disperse immediately. There is nothing to statically link here.
 
 <br/>
 

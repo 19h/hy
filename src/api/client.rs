@@ -114,6 +114,31 @@ impl ApiClient {
         Ok(resp.json().await?)
     }
 
+    // ── standalone key validation ───────────────────────────────────────
+
+    /// Validate an API key by calling `/api/whoami` with it directly.
+    /// Returns the user's email on success, or an error if the key is invalid.
+    pub async fn validate_api_key(key: &str) -> Result<String> {
+        let env = Env::global();
+        let client = Client::builder()
+            .user_agent(format!("hcli/{}", env.version))
+            .timeout(std::time::Duration::from_secs(15))
+            .build()?;
+        let resp = client
+            .get(format!("{}/api/whoami", env.api_url))
+            .header("x-api-key", key)
+            .header(header::ACCEPT, "application/json")
+            .send()
+            .await?;
+        let status = resp.status().as_u16();
+        if status >= 400 {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(Error::from_status(status, &body));
+        }
+        let user: crate::api::AuthUser = resp.json().await?;
+        Ok(user.email)
+    }
+
     // ── file upload ─────────────────────────────────────────────────────
 
     pub async fn put_file(&self, url: &str, file_path: &Path) -> Result<()> {

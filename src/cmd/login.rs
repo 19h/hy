@@ -25,19 +25,44 @@ pub async fn run(args: LoginArgs) -> Result<()> {
 
     // Already logged in?
     if auth.is_logged_in() && !args.force {
-        let cred = auth.current_credentials();
-        if let Some(c) = cred {
-            fmt::success(&format!("You are already logged in as {}.", c.email));
-        }
+        let sources = auth.list_credentials();
+        let current = auth.current_credentials();
 
-        let add_another = Confirm::new()
-            .with_prompt("Would you like to login as another user?")
-            .default(false)
-            .interact()
-            .unwrap_or(false);
-
-        if !add_another {
+        if current.is_none() {
+            fmt::error("No valid credentials found.");
             return Ok(());
+        }
+        let current = current.unwrap();
+
+        if sources.len() <= 1 {
+            // Single credential — simplified prompt.
+            fmt::success(&format!(
+                "You are already logged in as {}.",
+                current.email
+            ));
+            let add_another = Confirm::new()
+                .with_prompt("Would you like to login as another user?")
+                .default(false)
+                .interact()
+                .unwrap_or(false);
+            if !add_another {
+                return Ok(());
+            }
+        } else {
+            // Multiple credentials — more detailed.
+            fmt::success("You are already logged in.");
+            eprintln!(
+                "Current source: {} ({})",
+                current.name, current.email
+            );
+            let add_another = Confirm::new()
+                .with_prompt("Would you like to add another credentials?")
+                .default(false)
+                .interact()
+                .unwrap_or(false);
+            if !add_another {
+                return Ok(());
+            }
         }
     }
 
@@ -50,13 +75,16 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         .interact()
         .unwrap_or(0);
 
-    match selection {
+    // Remember credential count before login for default-setting logic.
+    let creds_before = auth.list_credentials().len();
+
+    let cred = match selection {
         0 => {
             // Google OAuth
             fmt::info("Starting OAuth login...");
             let cred = auth.login_interactive_blocking(args.name.as_deref())?;
             fmt::success(&format!("Logged in as {}", cred.email));
-            let _ = auth.set_default(&cred.name);
+            Some(cred)
         }
         _ => {
             // Email OTP
@@ -93,7 +121,7 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             match auth.verify_otp(&email, &otp, args.name.as_deref()) {
                 Ok(cred) => {
                     fmt::success(&format!("Logged in as {}", cred.email));
-                    let _ = auth.set_default(&cred.name);
+                    Some(cred)
                 }
                 Err(_) => {
                     fmt::error("Login failed. Invalid OTP.");
@@ -101,8 +129,45 @@ pub async fn run(args: LoginArgs) -> Result<()> {
                 }
             }
         }
+    };
+
+    // Handle default credential setting.
+    if let Some(ref cred) = cred {
+        if creds_before == 0 {
+            // First login — automatically set as default.
+            let _ = auth.set_default(&cred.name);
+        } else {
+            // Additional credentials — ask before overwriting default.
+            fmt::success(&format!(
+                "Credentials '{}' created!",
+                cred.label()
+            ));
+            eprintln!("Email: {}", cred.email);
+            eprintln!("Type: {}", cred.cred_type);
+
+            let set_default = Confirm::new()
+                .with_prompt(format!(
+                    "Set '{}' as the default credentials?",
+                    cred.name
+                ))
+                .default(true)
+                .interact()
+                .unwrap_or(false);
+
+            if set_default {
+                let _ = auth.set_default(&cred.name);
+                fmt::success(&format!(
+                    "'{}' set as default credentials.",
+                    cred.name
+                ));
+            }
+
+            eprintln!();
+            auth.show_login_info();
+        }
+    } else {
+        fmt::error("Login failed.");
     }
 
-    auth.show_login_info();
     Ok(())
 }

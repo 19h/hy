@@ -61,7 +61,21 @@ pub async fn run(args: DownloadArgs) -> Result<()> {
                 key = Some(resolved);
             } else {
                 fmt::error(&format!("Tag '{normalized}' not found"));
-                return Ok(());
+                // Show tag suggestions.
+                if let Ok(data) = client.get_json::<TagsResponse>("/api/assets/tags").await {
+                    if !data.tags.is_empty() {
+                        eprintln!("Available tags:");
+                        for tag in data.tags.iter().take(10) {
+                            eprintln!("  * {}", tag.tag);
+                        }
+                        if data.tags.len() > 10 {
+                            eprintln!("  ... and {} more", data.tags.len() - 10);
+                        }
+                    }
+                }
+                return Err(crate::error::Error::Other(format!(
+                    "Tag '{normalized}' not found"
+                )));
             }
         }
     }
@@ -76,6 +90,7 @@ pub async fn run(args: DownloadArgs) -> Result<()> {
     };
 
     if selected_keys.is_empty() {
+        // Empty selection from interactive cancel is not an error.
         return Ok(());
     }
 
@@ -366,11 +381,11 @@ async fn download_keys(
 
     if downloaded > 0 {
         fmt::success(&format!("Downloaded {downloaded} file(s)"));
-    } else if !keys.is_empty() {
+        Ok(())
+    } else {
         fmt::error("No files were downloaded");
+        Err(crate::error::Error::Other("No files were downloaded".into()))
     }
-
-    Ok(())
 }
 
 // ── tag helpers ─────────────────────────────────────────────────────────

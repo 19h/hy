@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
+use dialoguer::{Confirm, Input, MultiSelect, Select};
 
 use crate::api::{ApiClient, Asset, PagedAssets};
 use crate::error::Result;
@@ -40,10 +41,10 @@ pub struct GetArgs {
     /// The shortcode of the shared file
     pub shortcode: String,
     /// Output directory
-    #[arg(short, long)]
+    #[arg(short, long, conflicts_with = "output_file")]
     pub output_dir: Option<PathBuf>,
     /// Output file path
-    #[arg(short = 'O', long)]
+    #[arg(short = 'O', long, conflicts_with = "output_dir")]
     pub output_file: Option<PathBuf>,
     /// Overwrite existing files
     #[arg(short, long)]
@@ -58,6 +59,9 @@ pub struct ListArgs {
     /// Offset for pagination
     #[arg(long, default_value_t = 0)]
     pub offset: i64,
+    /// Disable interactive mode
+    #[arg(long)]
+    pub no_interactive: bool,
 }
 
 #[derive(Debug, Args)]
@@ -238,6 +242,7 @@ async fn run_get(args: GetArgs) -> Result<()> {
 async fn run_list(args: ListArgs) -> Result<()> {
     let client = ApiClient::new()?;
 
+    fmt::info("Loading shared files...");
     let page: PagedAssets = client
         .get_json(&format!(
             "/api/assets/shared?type=file&limit={}&offset={}",
@@ -250,30 +255,143 @@ async fn run_list(args: ListArgs) -> Result<()> {
         return Ok(());
     }
 
-    eprintln!(
-        "{:<6} {:<10} {:<30} {:<8} {:<10} {:<20}",
-        "#", "Code", "Name", "Ver", "Size", "Created"
-    );
-    eprintln!("{}", "-".repeat(90));
-
-    for (i, file) in page.items.iter().enumerate() {
-        let name = if file.filename.len() > 28 {
-            format!("{}...", &file.filename[..25])
-        } else {
-            file.filename.clone()
-        };
+    if args.no_interactive {
         eprintln!(
-            "{:<6} {:<10} {:<30} v{:<6} {:<10} {}",
-            i + 1,
-            file.code.as_deref().unwrap_or("-"),
-            name,
-            file.version,
-            fmt::format_size(file.size),
-            file.created_at
-                .as_deref()
-                .map(fmt::format_datetime)
-                .unwrap_or_else(|| "N/A".into()),
+            "{:<6} {:<10} {:<30} {:<8} {:<10} {:<20}",
+            "#", "Code", "Name", "Ver", "Size", "Created"
         );
+        eprintln!("{}", "-".repeat(90));
+
+        for (i, file) in page.items.iter().enumerate() {
+            let name = if file.filename.chars().count() > 28 {
+                format!("{}...", file.filename.chars().take(25).collect::<String>())
+            } else {
+                file.filename.clone()
+            };
+            eprintln!(
+                "{:<6} {:<10} {:<30} v{:<6} {:<10} {}",
+                i + 1,
+                file.code.as_deref().unwrap_or("-"),
+                name,
+                file.version,
+                fmt::format_size(file.size),
+                file.created_at
+                    .as_deref()
+                    .map(fmt::format_datetime)
+                    .unwrap_or_else(|| "N/A".into()),
+            );
+        }
+        return Ok(());
+    }
+
+    // Interactive mode
+    let mut items = Vec::new();
+    for file in &page.items {
+        let code = file.code.as_deref().unwrap_or("-");
+        let name = if file.filename.is_empty() { "unnamed" } else { &file.filename };
+        items.push(format!("{} ({}) - {}", name, code, fmt::format_size(file.size)));
+    }
+
+    let selection = MultiSelect::new()
+        .with_prompt("Select files to manage")
+        .items(&items)
+        .interact_opt()
+        .unwrap_or(None);
+
+    let Some(selected_indices) = selection else {
+        fmt::warning("No files selected.");
+        return Ok(());
+    };
+
+    if selected_indices.is_empty() {
+        fmt::warning("No files selected.");
+        return Ok(());
+    }
+
+    let selected_files: Vec<&Asset> = selected_indices.into_iter().map(|i| &page.items[i]).collect();
+    let count = selected_files.len();
+
+    let action_choices = vec![
+        format!("Delete {count} file{}", if count > 1 { "s" } else { "" }),
+        format!("Download {count} file{}", if count > 1 { "s" } else { "" }),
+    ];
+
+    let action_idx = Select::new()
+        .with_prompt("What would you like to do?")
+        .items(&action_choices)
+        .default(0)
+        .interact_opt()
+        .unwrap_or(None);
+
+    let Some(idx) = action_idx else {
+        return Ok(());
+    };
+
+    if idx == 0 {
+        // Delete
+        eprintln!("\nYou are about to delete {count} file(s):");
+        for f in &selected_files {
+            eprintln!("  * {} ({})", f.filename, f.code.as_deref().unwrap_or("-"));
+        }
+
+        let confirm = Confirm::new()
+            .with_prompt("Are you sure you want to delete these files?")
+            .default(false)
+            .interact()
+            .unwrap_or(false);
+
+        if !confirm {
+            fmt::warning("Deletion cancelled.");
+            return Ok(());
+        }
+
+        for f in selected_files {
+            match client.delete_json::<serde_json::Value>(&format!("/api/assets/shared/{}", f.key)).await {
+                Ok(_) => fmt::success(&format!("Deleted: {} ({})", f.filename, f.code.as_deref().unwrap_or("-"))),
+                Err(e) => fmt::error(&format!("Failed to delete {}: {}", f.filename, e)),
+            }
+        }
+    } else if idx == 1 {
+        // Download
+        let output_dir: String = Input::new()
+            .with_prompt("Output directory")
+            .default("./".into())
+            .interact_text()
+            .unwrap_or_else(|_| "./".into());
+        let output_path = PathBuf::from(output_dir);
+
+        for f in selected_files {
+            fmt::info(&format!("Downloading {}...", f.filename));
+            
+            // Get download URL by code/version
+            let code = f.code.as_deref().unwrap_or("");
+            let url_path = format!("/api/assets/s/{}?version={}", code, f.version);
+            
+            let asset_info: Asset = match client.get_json(&url_path).await {
+                Ok(a) => a,
+                Err(e) => {
+                    fmt::error(&format!("Failed to get download info for {}: {}", f.filename, e));
+                    continue;
+                }
+            };
+
+            let Some(url) = asset_info.url else {
+                fmt::error(&format!("No download URL available for {}", f.filename));
+                continue;
+            };
+
+            match client.download_file(
+                &url,
+                &output_path,
+                Some(&f.filename),
+                false,
+                true,
+                Some(&f.key),
+            ).await {
+                Ok(p) => fmt::success(&format!("Downloaded: {}", p.display())),
+                Err(e) => fmt::error(&format!("Failed to download {}: {}", f.filename, e)),
+            }
+        }
     }
 
     Ok(())

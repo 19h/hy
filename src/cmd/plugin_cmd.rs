@@ -73,8 +73,8 @@ pub struct PluginStatusArgs {
 
 #[derive(Debug, Args)]
 pub struct PluginLintArgs {
-    /// Path to the plugin archive
-    pub path: PathBuf,
+    /// Path or URL to the plugin archive
+    pub path: String,
 }
 
 #[derive(Debug, Subcommand)]
@@ -204,19 +204,76 @@ async fn run_list() -> Result<()> {
 // ── plugin install ──────────────────────────────────────────────────────
 
 async fn run_install(args: PluginInstallArgs) -> Result<()> {
-    let path = PathBuf::from(&args.source);
-    if !path.exists() {
-        fmt::error(&format!("File not found: {}", args.source));
-        return Ok(());
-    }
+    let source_path = if args.source.starts_with("http://") || args.source.starts_with("https://") {
+        fmt::info(&format!("Downloading plugin from {}...", args.source));
+        let client = crate::api::ApiClient::new()?;
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+        let temp_dir = std::env::temp_dir().join(format!("hy-plugin-{ts}"));
+        client
+            .download_file(&args.source, &temp_dir, Some("plugin.zip"), false, false, None)
+            .await?
+    } else {
+        let p = std::path::PathBuf::from(&args.source);
+        if p.exists() {
+            p
+        } else {
+            // Treat as a plugin name from the repository.
+            let repo_url = match crate::plugin::get_repo_url() {
+                Some(url) => url,
+                None => {
+                    fmt::error(&format!("File not found: {}", args.source));
+                    fmt::warning("Or, if trying to install by name, no plugin repository configured.");
+                    return Ok(());
+                }
+            };
+
+            fmt::info(&format!("Looking up plugin '{}' in repository...", args.source));
+            let body = reqwest::get(&repo_url).await?.text().await?;
+            let repo: RepoSnapshot = serde_json::from_str(&body).map_err(|e| {
+                crate::error::Error::Other(format!("Failed to parse repository JSON: {e}"))
+            })?;
+
+            let plugin = repo.plugins.into_iter().find(|p| p.name == args.source);
+            let Some(plugin) = plugin else {
+                fmt::error(&format!("Plugin '{}' not found in repository.", args.source));
+                return Ok(());
+            };
+
+            let latest_version = plugin.versions.keys().max().map(|s| s.as_str());
+            let Some(ver) = latest_version else {
+                fmt::error(&format!("No versions found for plugin '{}'.", args.source));
+                return Ok(());
+            };
+
+            // Grab the first archive location for the latest version.
+            let locations = plugin.versions.get(ver).unwrap();
+            let Some(loc) = locations.first() else {
+                fmt::error(&format!("No download location for '{}' v{ver}.", args.source));
+                return Ok(());
+            };
+
+            fmt::info(&format!("Downloading '{}' v{} from {}...", args.source, ver, loc.url));
+            let client = crate::api::ApiClient::new()?;
+            let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+            let temp_dir = std::env::temp_dir().join(format!("hy-plugin-{ts}"));
+            client
+                .download_file(&loc.url, &temp_dir, Some("plugin.zip"), false, false, None)
+                .await?
+        }
+    };
 
     let ida_version = crate::ida::current_install_dir()
         .as_deref()
         .and_then(crate::ida::detect_ida_version);
 
-    let result =
-        crate::plugin::install_from_archive(&path, ida_version.as_deref(), args.force)?;
+    let result = crate::plugin::install_from_archive(&source_path, ida_version.as_deref(), args.force)?;
     fmt::success(&format!("Plugin installed at: {}", result.display()));
+    
+    // Clean up temp file if we downloaded it
+    if args.source.starts_with("http") || !std::path::PathBuf::from(&args.source).exists() {
+        let _ = std::fs::remove_dir_all(source_path.parent().unwrap());
+    }
+    
     Ok(())
 }
 
@@ -413,7 +470,32 @@ async fn run_status(args: PluginStatusArgs) -> Result<()> {
 // ── plugin lint ─────────────────────────────────────────────────────────
 
 async fn run_lint(args: PluginLintArgs) -> Result<()> {
-    let metadata = crate::plugin::read_metadata_from_archive(&args.path)?;
+    let source_path = if args.path.starts_with("http://") || args.path.starts_with("https://") {
+        fmt::info(&format!("Downloading plugin from {}...", args.path));
+        let client = crate::api::ApiClient::new()?;
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+        let temp_dir = std::env::temp_dir().join(format!("hy-plugin-lint-{ts}"));
+        client
+            .download_file(&args.path, &temp_dir, Some("plugin.zip"), false, false, None)
+            .await?
+    } else {
+        let p = std::path::PathBuf::from(&args.path);
+        if !p.exists() {
+            fmt::error(&format!("File not found: {}", args.path));
+            return Ok(());
+        }
+        p
+    };
+
+    let metadata = match crate::plugin::read_metadata_from_archive(&source_path) {
+        Ok(m) => m,
+        Err(e) => {
+            if args.path.starts_with("http") {
+                let _ = std::fs::remove_dir_all(source_path.parent().unwrap());
+            }
+            return Err(e);
+        }
+    };
 
     eprintln!("  Plugin: {} v{}", metadata.name, metadata.version);
     if !metadata.description.is_empty() {
@@ -421,6 +503,16 @@ async fn run_lint(args: PluginLintArgs) -> Result<()> {
     }
     if let Some(ref ep) = metadata.entry_point {
         eprintln!("  Entry point: {ep}");
+    }
+
+    if let Some(ref ida_versions) = metadata.ida_versions {
+        eprintln!("  IDA versions: {}", ida_versions.join(", "));
+    }
+
+    if let Some(ref deps) = metadata.python_dependencies {
+        if !deps.is_empty() {
+            eprintln!("  Dependencies: {}", deps.join(", "));
+        }
     }
 
     // Recommendations.
@@ -448,6 +540,7 @@ async fn run_lint(args: PluginLintArgs) -> Result<()> {
         warnings.push("No author information");
     }
 
+    use owo_colors::OwoColorize;
     if warnings.is_empty() {
         fmt::success("Plugin archive looks good.");
     } else {
@@ -456,6 +549,10 @@ async fn run_lint(args: PluginLintArgs) -> Result<()> {
         for w in &warnings {
             eprintln!("    - {}", w.yellow());
         }
+    }
+
+    if args.path.starts_with("http") {
+        let _ = std::fs::remove_dir_all(source_path.parent().unwrap());
     }
 
     Ok(())

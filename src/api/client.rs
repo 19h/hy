@@ -280,7 +280,13 @@ impl ApiClient {
         );
         pb.set_message(format!("Downloading {filename}"));
 
-        let mut file = tokio::fs::File::create(&cache_path).await?;
+        let mut file = tokio::fs::File::create(&cache_path).await.map_err(|e| {
+            crate::error::Error::Other(format!(
+                "Failed to create cache file {}: {}",
+                cache_path.display(),
+                e
+            ))
+        })?;
         let mut stream = resp.bytes_stream();
         use futures_util::StreamExt;
         while let Some(chunk) = stream.next().await {
@@ -295,7 +301,14 @@ impl ApiClient {
 
         // Copy from cache to target.
         check_free_space(target_dir, std::fs::metadata(&cache_path)?.len())?;
-        std::fs::copy(&cache_path, &target_path)?;
+        std::fs::copy(&cache_path, &target_path).map_err(|e| {
+            crate::error::Error::Other(format!(
+                "Failed to copy {} to {}: {}",
+                cache_path.display(),
+                target_path.display(),
+                e
+            ))
+        })?;
 
         Ok(target_path)
     }

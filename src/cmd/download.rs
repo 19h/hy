@@ -52,8 +52,8 @@ pub async fn run(args: DownloadArgs) -> Result<()> {
         &args.mode
     };
 
-    if let Some(ref k) = key {
-        if is_tag_format(k) {
+    if let Some(ref k) = key
+        && is_tag_format(k) {
             fmt::info(&format!("Resolving tag: {k}..."));
             let normalized = normalize_tag_with_os(k);
             if let Some(resolved) = resolve_tag(&client, &normalized).await? {
@@ -62,8 +62,8 @@ pub async fn run(args: DownloadArgs) -> Result<()> {
             } else {
                 fmt::error(&format!("Tag '{normalized}' not found"));
                 // Show tag suggestions.
-                if let Ok(data) = client.get_json::<TagsResponse>("/api/assets/tags").await {
-                    if !data.tags.is_empty() {
+                if let Ok(data) = client.get_json::<TagsResponse>("/api/assets/tags").await
+                    && !data.tags.is_empty() {
                         eprintln!("Available tags:");
                         for tag in data.tags.iter().take(10) {
                             eprintln!("  * {}", tag.tag);
@@ -72,13 +72,11 @@ pub async fn run(args: DownloadArgs) -> Result<()> {
                             eprintln!("  ... and {} more", data.tags.len() - 10);
                         }
                     }
-                }
                 return Err(crate::error::Error::Other(format!(
                     "Tag '{normalized}' not found"
                 )));
             }
         }
-    }
 
     let selected_keys: Vec<String> = if let Some(k) = key {
         vec![k]
@@ -108,8 +106,8 @@ async fn run_list_tags(client: &ApiClient) -> Result<()> {
 
     eprintln!("\nAvailable Download Tags ({} total):\n", tags.len());
     eprintln!(
-        "{:<45} {:<40} {}",
-        "Tag", "Name", "Asset Key"
+        "{:<45} {:<40} Asset Key",
+        "Tag", "Name"
     );
     eprintln!("{}", "-".repeat(130));
     for tag in &tags {
@@ -300,16 +298,13 @@ fn nodes_at_path<'a>(root: &'a [TreeNode], path: &[String]) -> Vec<&'a TreeNode>
 /// If the asset has metadata with a `"name"` key, use that plus the
 /// filename in parentheses.  Otherwise, just use the node name.
 fn file_display_name(node: &TreeNode) -> String {
-    if let Some(ref asset) = node.asset {
-        if let Some(ref meta) = asset.metadata {
-            if let Some(name_val) = meta.get("name") {
-                if let Some(name) = name_val.as_str() {
+    if let Some(ref asset) = node.asset
+        && let Some(ref meta) = asset.metadata
+            && let Some(name_val) = meta.get("name")
+                && let Some(name) = name_val.as_str() {
                     let filename = asset.key.rsplit('/').next().unwrap_or(&node.name);
                     return format!("{name} ({filename})");
                 }
-            }
-        }
-    }
     node.name.clone()
 }
 

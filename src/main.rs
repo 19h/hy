@@ -77,11 +77,10 @@ async fn main() {
     let result = dispatch(cli).await;
 
     // Show update notification if available.
-    if let Some(ref checker) = update_checker {
-        if let Some(msg) = checker.get_result(Duration::from_secs(2)) {
+    if let Some(ref checker) = update_checker
+        && let Some(msg) = checker.get_result(Duration::from_secs(2)) {
             eprintln!("{msg}");
         }
-    }
 
     // Handle errors.
     if let Err(e) = result {
@@ -106,8 +105,10 @@ async fn dispatch(cli: Cli) -> error::Result<()> {
         Commands::Update(args) => cmd::update::run(args).await,
         Commands::Download(args) => cmd::download::run(args).await,
         Commands::Commands => {
-            // Print all subcommands.
-            eprintln!("Use `hy --help` to see all available commands.");
+            // Print every command path, including subcommands.
+            use clap::CommandFactory;
+            let cmd = Cli::command();
+            print_command_tree(&cmd, "hy");
             Ok(())
         }
         Commands::Auth { command } => cmd::auth_cmd::run(command).await,
@@ -117,6 +118,26 @@ async fn dispatch(cli: Cli) -> error::Result<()> {
         Commands::Plugin { command } => cmd::plugin_cmd::run(command).await,
         Commands::Extension { command } => cmd::extension::run(command).await,
         Commands::Ke { command } => cmd::ke::run(command).await,
+        Commands::Asset { command } => cmd::asset_cmd::run(command).await,
+    }
+}
+
+/// Recursively print all visible command paths with their about text.
+fn print_command_tree(cmd: &clap::Command, prefix: &str) {
+    for sub in cmd.get_subcommands() {
+        if sub.is_hide_set() || sub.get_name() == "help" {
+            continue;
+        }
+        let path = format!("{prefix} {}", sub.get_name());
+        if sub.has_subcommands() {
+            print_command_tree(sub, &path);
+        } else {
+            let about = sub
+                .get_about()
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            println!("{path:<32} {about}");
+        }
     }
 }
 

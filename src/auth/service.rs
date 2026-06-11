@@ -56,11 +56,10 @@ impl AuthService {
 
     fn load_config(&mut self) {
         let store = ConfigStore::global();
-        if let Some(val) = store.get_value(CONFIG_KEY) {
-            if let Ok(cfg) = serde_json::from_value::<CredentialsConfig>(val.clone()) {
+        if let Some(val) = store.get_value(CONFIG_KEY)
+            && let Ok(cfg) = serde_json::from_value::<CredentialsConfig>(val.clone()) {
                 self.config = cfg;
             }
-        }
     }
 
     fn save_config(&self) {
@@ -79,12 +78,11 @@ impl AuthService {
             return;
         }
 
-        if let Some(ref forced) = self.forced {
-            if self.config.credentials.contains_key(forced) {
+        if let Some(ref forced) = self.forced
+            && self.config.credentials.contains_key(forced) {
                 self.current = Some(forced.clone());
                 return;
             }
-        }
 
         self.current = self.config.default.clone();
     }
@@ -148,11 +146,10 @@ impl AuthService {
         }
 
         // Try the stored token first — if it's not expired, use it directly.
-        if let Some(ref tok) = cred.token {
-            if !crate::auth::session::is_token_expired_pub(tok) {
+        if let Some(ref tok) = cred.token
+            && !crate::auth::session::is_token_expired_pub(tok) {
                 return Some(tok.clone());
             }
-        }
 
         // Token missing or expired — try refreshing from the Supabase session.
         match crate::auth::session::ensure_fresh_token() {
@@ -260,11 +257,10 @@ impl AuthService {
             // For interactive credentials we clear the session but keep the
             // credential entry.  The Python version calls supabase sign_out;
             // in the Rust rewrite we simply clear the token.
-            if let Some(c) = self.config.credentials.get_mut(&name) {
-                if c.cred_type == CredentialType::Interactive {
+            if let Some(c) = self.config.credentials.get_mut(&name)
+                && c.cred_type == CredentialType::Interactive {
                     c.token = None;
                 }
-            }
             self.save_config();
         }
     }

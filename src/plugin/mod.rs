@@ -1,5 +1,6 @@
 //! IDA plugin management: metadata, installation, repositories.
 
+pub mod bundle;
 mod metadata;
 mod repo;
 

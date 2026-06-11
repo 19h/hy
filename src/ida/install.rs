@@ -137,8 +137,8 @@ async fn install_ida_windows(
 pub fn detect_ida_version(install_dir: &Path) -> Option<String> {
     // Try reading from python/ida_pro.py docstring.
     let sdk_file = install_dir.join("python").join("ida_pro.py");
-    if sdk_file.exists() {
-        if let Ok(content) = std::fs::read_to_string(&sdk_file) {
+    if sdk_file.exists()
+        && let Ok(content) = std::fs::read_to_string(&sdk_file) {
             // Look for version pattern like "IDA SDK v9.2" in docstring.
             for line in content.lines().take(10) {
                 if let Some(rest) = line.strip_prefix("IDA SDK v") {
@@ -149,7 +149,6 @@ pub fn detect_ida_version(install_dir: &Path) -> Option<String> {
                 }
             }
         }
-    }
 
     // Fallback: extract from directory name.
     install_dir

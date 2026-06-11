@@ -237,12 +237,8 @@ async fn run_list(args: LicenseListArgs) -> Result<()> {
         return Ok(());
     }
 
-    eprintln!(
-        "  {:<12} {:<22} {:<12} {:<10} {:<10} {}",
-        "ID", "Edition", "Type", "Status", "Expires", "Addons"
-    );
-    eprintln!("  {}", "-".repeat(85));
-
+    let mut table =
+        crate::util::tui::Table::new(&["ID", "Edition", "Type", "Status", "Expires", "Addons"]);
     for lic in &items {
         let pubhash = lic
             .pubhash
@@ -252,16 +248,16 @@ async fn run_list(args: LicenseListArgs) -> Result<()> {
         let lic_type = lic.license_type.as_deref().unwrap_or("-");
         let expiry = format_expiry(lic.end_date.as_deref());
 
-        eprintln!(
-            "  {:<12} {:<22} {:<12} {:<10} {:<10} {}",
-            pubhash,
+        table.add_row(vec![
+            pubhash.to_string(),
             edition_name(lic),
-            lic_type,
+            lic_type.to_string(),
             format_status(lic),
             expiry,
-            addon_summary(lic).dimmed(),
-        );
+            addon_summary(lic).dimmed().to_string(),
+        ]);
     }
+    table.print();
 
     eprintln!();
     eprintln!("  {} license(s).", items.len());

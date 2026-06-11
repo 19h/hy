@@ -291,9 +291,9 @@ async fn run_open(args: KeOpenArgs) -> Result<()> {
         ida_bin.display()
     ));
 
-    let _ = std::process::Command::new(&ida_bin)
-        .arg(&full_path)
-        .spawn();
+    if let Err(e) = crate::ida::launch_ida(&ida_bin, Some(&full_path)) {
+        fmt::error(&format!("Failed to launch IDA: {e}"));
+    }
 
     Ok(())
 }
@@ -337,40 +337,29 @@ async fn run_ida_list() -> Result<()> {
 
     let mut valid_count = 0;
 
-    eprintln!(
-        "  {:<24} {:<50} {:<10} {}",
-        "Name", "Path", "Status", "Default"
-    );
-    eprintln!("  {}", "-".repeat(94));
-
+    let mut table = crate::util::tui::Table::new(&["Name", "Path", "Status", "Default"]);
     for name in &names {
         let path = &instances[*name];
         let path_buf = PathBuf::from(path);
-        let (status, status_color) = if !path_buf.exists() {
-            ("Missing", "red")
+        let status_str = if !path_buf.exists() {
+            "Missing".red().to_string()
         } else if is_ida_dir(&path_buf) {
             valid_count += 1;
-            ("Valid", "green")
+            "Valid".green().to_string()
         } else {
-            ("Invalid", "yellow")
+            "Invalid".yellow().to_string()
         };
 
         let is_default = if *name == &default_name { "*" } else { "" };
 
-        let status_str = match status_color {
-            "green" => status.green().to_string(),
-            "yellow" => status.yellow().to_string(),
-            _ => status.red().to_string(),
-        };
-
-        eprintln!(
-            "  {:<24} {:<50} {:<10} {}",
-            name,
-            path.dimmed(),
+        table.add_row(vec![
+            (*name).clone(),
+            path.dimmed().to_string(),
             status_str,
-            is_default
-        );
+            is_default.to_string(),
+        ]);
     }
+    table.print();
 
     eprintln!();
     eprintln!(
@@ -647,7 +636,7 @@ async fn run_source_list() -> Result<()> {
     let mut names: Vec<_> = sources.keys().collect();
     names.sort();
 
-    eprintln!("  {:<24} {}", "Name", "Path");
+    eprintln!("  {:<24} Path", "Name");
     eprintln!("  {}", "-".repeat(74));
     for name in &names {
         eprintln!("  {:<24} {}", name, sources[*name].dimmed());

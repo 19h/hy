@@ -94,11 +94,6 @@ async fn run_list() -> Result<()> {
         .map(|c| c.name.clone());
 
     eprintln!("Credentials ({}):\n", creds.len());
-    eprintln!(
-        "{:<40} {:<12} {:<18} {:<20} {}",
-        "Label", "Type", "Status", "Created", "Last Used"
-    );
-    eprintln!("{}", "-".repeat(110));
 
     // Sort: default first, then by name.
     let mut sorted: Vec<_> = creds.into_iter().collect();
@@ -108,6 +103,7 @@ async fn run_list() -> Result<()> {
         b_default.cmp(&a_default).then(a.name.cmp(&b.name))
     });
 
+    let mut table = crate::util::tui::Table::new(&["Label", "Type", "Status", "Created", "Last Used"]);
     for c in &sorted {
         let mut status_parts = Vec::new();
         if current_name.as_deref() == Some(c.name.as_str()) {
@@ -119,28 +115,19 @@ async fn run_list() -> Result<()> {
         let status = if status_parts.is_empty() {
             "-".to_string()
         } else {
-            status_parts.join(", ")
+            use owo_colors::OwoColorize;
+            status_parts.join(", ").green().to_string()
         };
 
-        let created = fmt::format_datetime(&c.created_at.to_rfc3339());
-        let last_used = fmt::format_datetime(&c.last_used.to_rfc3339());
-
-        let label = c.label();
-        let label_display = if label.chars().count() > 38 {
-            format!("{}...", label.chars().take(35).collect::<String>())
-        } else {
-            label
-        };
-
-        eprintln!(
-            "{:<40} {:<12} {:<18} {:<20} {}",
-            label_display,
+        table.add_row(vec![
+            c.label(),
             format!("{}", c.cred_type),
             status,
-            created,
-            last_used
-        );
+            fmt::format_datetime(&c.created_at.to_rfc3339()),
+            fmt::format_datetime(&c.last_used.to_rfc3339()),
+        ]);
     }
+    table.print();
 
     eprintln!();
     if let Some(ref name) = current_name {
@@ -256,7 +243,7 @@ async fn run_default(args: DefaultArgs) -> Result<()> {
         }
 
         let names: Vec<String> = creds.iter().map(|c| c.name.clone()).collect();
-        if !names.iter().any(|n| *n == name) {
+        if !names.contains(&name) {
             fmt::error(&format!("Credentials '{name}' not found."));
             eprintln!("Available credentials: {}", names.join(", "));
             return Ok(());
@@ -320,23 +307,19 @@ async fn run_key_list() -> Result<()> {
         fmt::warning("No API keys found.");
         return Ok(());
     }
-    eprintln!(
-        "{:<20} {:<25} {:<25} {}",
-        "Name", "Created", "Last Used", "Requests"
-    );
-    eprintln!("{}", "-".repeat(80));
+    let mut table = crate::util::tui::Table::new(&["Name", "Created", "Last Used", "Requests"]);
     for k in &keys {
-        eprintln!(
-            "{:<20} {:<25} {:<25} {}",
-            k.name,
+        table.add_row(vec![
+            k.name.clone(),
             fmt::format_datetime(&k.created_at),
             k.last_used_at
                 .as_deref()
                 .map(fmt::format_datetime)
                 .unwrap_or_else(|| "Never".into()),
-            k.request_count
-        );
+            k.request_count.to_string(),
+        ]);
     }
+    table.print();
     Ok(())
 }
 

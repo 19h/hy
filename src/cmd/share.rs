@@ -3,11 +3,10 @@
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
-use dialoguer::{Confirm, Input, MultiSelect, Select};
 
 use crate::api::{ApiClient, Asset, PagedAssets};
 use crate::error::Result;
-use crate::util::fmt;
+use crate::util::{fmt, tui};
 
 #[derive(Debug, Subcommand)]
 pub enum ShareCommands {
@@ -104,17 +103,15 @@ async fn run_put(args: PutArgs) -> Result<()> {
     let acl_type = match args.acl.as_deref() {
         Some(a) => a.to_string(),
         None => {
-            let choices = &["private (just me)", "domain (my organization)", "authenticated (anyone with link)"];
-            let selection = dialoguer::Select::new()
-                .with_prompt("Access control")
-                .items(choices)
-                .default(0)
-                .interact()
-                .unwrap_or(0);
-            match selection {
-                0 => "private".to_string(),
-                1 => "domain".to_string(),
-                _ => "authenticated".to_string(),
+            let choices = vec![
+                "private (just me)".to_string(),
+                "domain (my organization)".to_string(),
+                "authenticated (anyone with link)".to_string(),
+            ];
+            match tui::select("Access control", &choices, 0) {
+                Some(1) => "domain".to_string(),
+                Some(2) => "authenticated".to_string(),
+                _ => "private".to_string(),
             }
         }
     };
@@ -256,31 +253,21 @@ async fn run_list(args: ListArgs) -> Result<()> {
     }
 
     if args.no_interactive {
-        eprintln!(
-            "{:<6} {:<10} {:<30} {:<8} {:<10} {:<20}",
-            "#", "Code", "Name", "Ver", "Size", "Created"
-        );
-        eprintln!("{}", "-".repeat(90));
-
+        let mut table = tui::Table::new(&["#", "Code", "Name", "Ver", "Size", "Created"]);
         for (i, file) in page.items.iter().enumerate() {
-            let name = if file.filename.chars().count() > 28 {
-                format!("{}...", file.filename.chars().take(25).collect::<String>())
-            } else {
-                file.filename.clone()
-            };
-            eprintln!(
-                "{:<6} {:<10} {:<30} v{:<6} {:<10} {}",
-                i + 1,
-                file.code.as_deref().unwrap_or("-"),
-                name,
-                file.version,
+            table.add_row(vec![
+                (i + 1).to_string(),
+                file.code.as_deref().unwrap_or("-").to_string(),
+                file.filename.clone(),
+                format!("v{}", file.version),
                 fmt::format_size(file.size),
                 file.created_at
                     .as_deref()
                     .map(fmt::format_datetime)
                     .unwrap_or_else(|| "N/A".into()),
-            );
+            ]);
         }
+        table.print();
         return Ok(());
     }
 
@@ -292,11 +279,7 @@ async fn run_list(args: ListArgs) -> Result<()> {
         items.push(format!("{} ({}) - {}", name, code, fmt::format_size(file.size)));
     }
 
-    let selection = MultiSelect::new()
-        .with_prompt("Select files to manage")
-        .items(&items)
-        .interact_opt()
-        .unwrap_or(None);
+    let selection = tui::multi_select("Select files to manage", &items);
 
     let Some(selected_indices) = selection else {
         fmt::warning("No files selected.");
@@ -316,12 +299,7 @@ async fn run_list(args: ListArgs) -> Result<()> {
         format!("Download {count} file{}", if count > 1 { "s" } else { "" }),
     ];
 
-    let action_idx = Select::new()
-        .with_prompt("What would you like to do?")
-        .items(&action_choices)
-        .default(0)
-        .interact_opt()
-        .unwrap_or(None);
+    let action_idx = tui::select("What would you like to do?", &action_choices, 0);
 
     let Some(idx) = action_idx else {
         return Ok(());
@@ -334,11 +312,7 @@ async fn run_list(args: ListArgs) -> Result<()> {
             eprintln!("  * {} ({})", f.filename, f.code.as_deref().unwrap_or("-"));
         }
 
-        let confirm = Confirm::new()
-            .with_prompt("Are you sure you want to delete these files?")
-            .default(false)
-            .interact()
-            .unwrap_or(false);
+        let confirm = tui::confirm("Are you sure you want to delete these files?", false);
 
         if !confirm {
             fmt::warning("Deletion cancelled.");
@@ -353,11 +327,7 @@ async fn run_list(args: ListArgs) -> Result<()> {
         }
     } else if idx == 1 {
         // Download
-        let output_dir: String = Input::new()
-            .with_prompt("Output directory")
-            .default("./".into())
-            .interact_text()
-            .unwrap_or_else(|_| "./".into());
+        let output_dir = tui::input("Output directory", "./");
         let output_path = PathBuf::from(output_dir);
 
         for f in selected_files {
@@ -407,11 +377,7 @@ async fn run_delete(args: DeleteArgs) -> Result<()> {
     eprintln!("File: {} ({})", asset.filename, args.code);
 
     if !args.force {
-        let confirm = dialoguer::Confirm::new()
-            .with_prompt("Delete this file?")
-            .default(false)
-            .interact()
-            .unwrap_or(false);
+        let confirm = tui::confirm("Delete this file?", false);
         if !confirm {
             fmt::warning("Deletion cancelled.");
             return Ok(());

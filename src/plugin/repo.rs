@@ -11,13 +11,24 @@ pub fn plugins_dir() -> PathBuf {
     ida_user_dir().join("plugins")
 }
 
-/// Check if a plugin is installed by name.
+/// Check if a plugin is installed by name (including editable symlinks,
+/// even dangling ones).
 pub fn is_installed(name: &str) -> bool {
-    plugins_dir().join(name).exists()
+    let path = plugins_dir().join(name);
+    path.exists() || std::fs::symlink_metadata(&path).is_ok()
 }
 
-/// List installed plugins (name, version).
-pub fn installed_plugins() -> Result<Vec<(String, Option<String>)>> {
+/// An installed plugin as found on disk.
+#[derive(Debug, Clone)]
+pub struct InstalledPlugin {
+    pub name: String,
+    pub version: Option<String>,
+    /// True when the plugin directory is a symlink (editable install).
+    pub editable: bool,
+}
+
+/// List installed plugins.
+pub fn installed_plugins() -> Result<Vec<InstalledPlugin>> {
     let dir = plugins_dir();
     if !dir.exists() {
         return Ok(Vec::new());
@@ -25,14 +36,22 @@ pub fn installed_plugins() -> Result<Vec<(String, Option<String>)>> {
 
     let mut plugins = Vec::new();
     for entry in std::fs::read_dir(&dir)?.flatten() {
+        // Resolve symlinks (editable installs) when checking for a directory.
         if !entry.path().is_dir() {
             continue;
         }
+        let editable = std::fs::symlink_metadata(entry.path())
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false);
         let name = entry.file_name().to_string_lossy().to_string();
         let version = read_installed_version(&entry.path());
-        plugins.push((name, version));
+        plugins.push(InstalledPlugin {
+            name,
+            version,
+            editable,
+        });
     }
-    plugins.sort_by(|a, b| a.0.cmp(&b.0));
+    plugins.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(plugins)
 }
 
@@ -74,16 +93,36 @@ pub fn validate_can_install(metadata: &PluginMetadata, ida_version: Option<&str>
     }
 
     // IDA version check.
-    if let Some(ver) = ida_version {
-        if !is_ida_version_compatible(metadata, ver) {
+    if let Some(ver) = ida_version
+        && !is_ida_version_compatible(metadata, ver) {
             return Err(Error::IdaVersionIncompatible(format!(
                 "Plugin '{}' is not compatible with IDA {}",
                 metadata.name, ver
             )));
         }
-    }
 
     Ok(())
+}
+
+/// Safely resolve an archive entry name below `base`, rejecting absolute
+/// paths and any path-traversal components. Returns `None` for unsafe paths.
+fn safe_join(base: &Path, entry_name: &str) -> Option<PathBuf> {
+    use std::path::Component;
+
+    let rel = Path::new(entry_name);
+    let mut out = base.to_path_buf();
+    for component in rel.components() {
+        match component {
+            Component::Normal(part) => out.push(part),
+            Component::CurDir => {}
+            // Absolute paths, drive prefixes, and `..` are all rejected
+            // outright rather than skipped component-wise, so an attacker
+            // can't construct a path that escapes the plugin directory.
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+    // Defense in depth: the result must remain below the base directory.
+    out.starts_with(base).then_some(out)
 }
 
 /// Install a plugin from a zip archive.
@@ -98,28 +137,39 @@ pub fn install_from_archive(
         validate_can_install(&metadata, ida_version)?;
     }
 
-    let target_dir = plugins_dir().join(&metadata.name);
-    std::fs::create_dir_all(&target_dir)?;
-
-    // Extract archive.
+    // Validate every entry path before extracting anything, so a malicious
+    // archive cannot leave a partial installation behind.
     let file = std::fs::File::open(archive_path)?;
     let mut archive = zip::ZipArchive::new(file)?;
+
+    let target_dir = plugins_dir().join(&metadata.name);
+    for i in 0..archive.len() {
+        let entry = archive.by_index(i)?;
+        if entry.is_symlink() {
+            continue;
+        }
+        if safe_join(&target_dir, entry.name()).is_none() {
+            return Err(Error::PluginInstall(format!(
+                "archive contains an unsafe path: {}",
+                entry.name()
+            )));
+        }
+    }
+
+    std::fs::create_dir_all(&target_dir)?;
 
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)?;
         let name = entry.name().to_owned();
-
-        // Reject dangerous paths.
-        if name.contains("..") || name.starts_with('/') || name.starts_with('\\') {
-            continue;
-        }
 
         // Skip symlinks.
         if entry.is_symlink() {
             continue;
         }
 
-        let out_path = target_dir.join(&name);
+        let Some(out_path) = safe_join(&target_dir, &name) else {
+            continue; // unreachable: validated above
+        };
 
         if entry.is_dir() {
             std::fs::create_dir_all(&out_path)?;
@@ -135,14 +185,107 @@ pub fn install_from_archive(
     Ok(target_dir)
 }
 
+/// Install a plugin from a local source directory by copying it into the
+/// plugins directory. The directory must contain `ida-plugin.json`.
+pub fn install_from_directory(
+    source_dir: &Path,
+    ida_version: Option<&str>,
+    force: bool,
+) -> Result<PathBuf> {
+    let metadata = crate::plugin::metadata::read_metadata_from_directory(source_dir)?;
+
+    if !force {
+        validate_can_install(&metadata, ida_version)?;
+    }
+
+    let target_dir = plugins_dir().join(&metadata.name);
+    if force && (target_dir.exists() || std::fs::symlink_metadata(&target_dir).is_ok()) {
+        remove_plugin_dir(&target_dir)?;
+    }
+
+    copy_plugin_tree(source_dir, &target_dir)
+        .map_err(|e| Error::PluginInstall(format!("copy failed: {e}")))?;
+    Ok(target_dir)
+}
+
+/// Copy a plugin source tree, skipping VCS and build artifacts.
+fn copy_plugin_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
+    const SKIP: &[&str] = &[".git", ".hg", ".svn", "__pycache__", ".venv", "venv", ".idea"];
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        if SKIP.contains(&name.to_string_lossy().as_ref()) {
+            continue;
+        }
+        let src_path = entry.path();
+        let dst_path = dst.join(&name);
+        if src_path.is_dir() {
+            copy_plugin_tree(&src_path, &dst_path)?;
+        } else if src_path.is_file() {
+            std::fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
+/// Install a plugin editable: symlink `$IDAUSR/plugins/<name>` to the
+/// source directory so edits take effect on the next plugin reload.
+pub fn install_editable(
+    source_dir: &Path,
+    ida_version: Option<&str>,
+    force: bool,
+) -> Result<PathBuf> {
+    let source_dir = source_dir
+        .canonicalize()
+        .map_err(|e| Error::PluginInstall(format!("cannot resolve source directory: {e}")))?;
+    let metadata = crate::plugin::metadata::read_metadata_from_directory(&source_dir)?;
+
+    if !force {
+        validate_can_install(&metadata, ida_version)?;
+    }
+
+    let target = plugins_dir().join(&metadata.name);
+    if force && (target.exists() || std::fs::symlink_metadata(&target).is_ok()) {
+        remove_plugin_dir(&target)?;
+    }
+    std::fs::create_dir_all(plugins_dir())?;
+
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&source_dir, &target)
+        .map_err(|e| Error::PluginInstall(format!("symlink failed: {e}")))?;
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_dir(&source_dir, &target).map_err(|e| {
+        Error::PluginInstall(format!(
+            "symlink failed: {e} (developer mode or admin rights may be required)"
+        ))
+    })?;
+
+    Ok(target)
+}
+
+/// Remove a plugin directory; editable installs only remove the symlink,
+/// never the source tree it points to.
+fn remove_plugin_dir(dir: &Path) -> Result<()> {
+    let meta = std::fs::symlink_metadata(dir)?;
+    if meta.file_type().is_symlink() {
+        #[cfg(unix)]
+        std::fs::remove_file(dir)?;
+        #[cfg(windows)]
+        std::fs::remove_dir(dir)?;
+    } else {
+        std::fs::remove_dir_all(dir)?;
+    }
+    Ok(())
+}
+
 /// Uninstall a plugin by name.
 pub fn uninstall(name: &str) -> Result<()> {
     let dir = plugins_dir().join(name);
-    if !dir.exists() {
+    if !dir.exists() && std::fs::symlink_metadata(&dir).is_err() {
         return Err(Error::PluginNotInstalled(name.into()));
     }
-    std::fs::remove_dir_all(&dir)?;
-    Ok(())
+    remove_plugin_dir(&dir)
 }
 
 // ── plugin settings (ida-config.json) ───────────────────────────────────

@@ -45,10 +45,15 @@ pub fn os_name() -> &'static str {
     }
 }
 
-/// Normalised architecture: `"x86_64"` or `"arm64"`.
+/// Normalised architecture, matching release-asset naming conventions:
+/// `"x86_64"`, `"arm64"` (macOS), or `"aarch64"` (Linux).
 pub fn arch_name() -> &'static str {
     if cfg!(target_arch = "aarch64") {
-        "arm64"
+        if cfg!(target_os = "linux") {
+            "aarch64"
+        } else {
+            "arm64"
+        }
     } else {
         "x86_64"
     }

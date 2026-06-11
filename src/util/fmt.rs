@@ -40,23 +40,23 @@ pub fn format_datetime(iso: &str) -> String {
 /// Print a styled success message.
 pub fn success(msg: &str) {
     use owo_colors::OwoColorize;
-    eprintln!("{}", format!("  {msg}").green());
+    eprintln!("  {} {msg}", "✓".green().bold());
 }
 
 /// Print a styled error message.
 pub fn error(msg: &str) {
     use owo_colors::OwoColorize;
-    eprintln!("{}", format!("  {msg}").red());
+    eprintln!("  {} {}", "✗".red().bold(), msg.red());
 }
 
 /// Print a styled warning message.
 pub fn warning(msg: &str) {
     use owo_colors::OwoColorize;
-    eprintln!("{}", format!("  {msg}").yellow());
+    eprintln!("  {} {}", "⚠".yellow().bold(), msg.yellow());
 }
 
 /// Print a styled info message.
 pub fn info(msg: &str) {
     use owo_colors::OwoColorize;
-    eprintln!("{}", format!("  {msg}").blue());
+    eprintln!("  {} {msg}", "•".blue().bold());
 }

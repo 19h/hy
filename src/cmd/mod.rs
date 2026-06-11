@@ -1,5 +1,6 @@
 //! CLI command definitions (clap derive).
 
+pub mod asset_cmd;
 pub mod auth_cmd;
 pub mod download;
 pub mod extension;
@@ -76,5 +77,12 @@ pub enum Commands {
     Ke {
         #[command(subcommand)]
         command: ke::KeCommands,
+    },
+
+    /// Low-level bucket asset operations
+    #[command(hide = true)]
+    Asset {
+        #[command(subcommand)]
+        command: asset_cmd::AssetCommands,
     },
 }

@@ -153,3 +153,102 @@ pub fn read_metadata_from_archive(
         "ida-plugin.json not found in archive".into(),
     ))
 }
+
+/// Read plugin metadata from a source directory containing `ida-plugin.json`.
+pub fn read_metadata_from_directory(
+    dir: &std::path::Path,
+) -> crate::error::Result<PluginMetadata> {
+    let manifest_path = dir.join("ida-plugin.json");
+    if !manifest_path.is_file() {
+        return Err(crate::error::Error::PluginInstall(format!(
+            "ida-plugin.json not found in {}",
+            dir.display()
+        )));
+    }
+    let text = std::fs::read_to_string(&manifest_path)?;
+    let manifest: PluginManifest = serde_json::from_str(&text)?;
+    Ok(manifest.metadata)
+}
+
+/// JSON Schema for `ida-plugin.json`, mirroring the schema emitted by the
+/// Python hcli (`hcli plugin schema`).
+pub fn ida_plugin_json_schema() -> serde_json::Value {
+    let contact = serde_json::json!({
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "email": {"type": "string"},
+            "url": {"type": "string"}
+        },
+        "required": ["name"]
+    });
+
+    serde_json::json!({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "ida-plugin.json",
+        "description": "Metadata descriptor for IDA Pro plugins",
+        "type": "object",
+        "properties": {
+            "$schema": {"type": "string"},
+            "name": {
+                "type": "string",
+                "description": "Unique plugin name; used as the installation directory name"
+            },
+            "version": {
+                "type": "string",
+                "description": "Plugin version (semantic versioning recommended)"
+            },
+            "description": {"type": "string"},
+            "entryPoint": {
+                "type": "string",
+                "description": "Plugin entry point (e.g. a .py file or native library)"
+            },
+            "author": {"type": "string"},
+            "authors": {"type": "array", "items": contact.clone()},
+            "license": {"type": "string"},
+            "urls": {
+                "type": "object",
+                "properties": {
+                    "homepage": {"type": "string"},
+                    "repository": {"type": "string"},
+                    "documentation": {"type": "string"},
+                    "issues": {"type": "string"}
+                }
+            },
+            "categories": {"type": "array", "items": {"type": "string"}},
+            "keywords": {"type": "array", "items": {"type": "string"}},
+            "idaVersions": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Compatible IDA versions or version ranges"
+            },
+            "platforms": {
+                "type": "array",
+                "items": {"type": "string", "enum": ["win", "linux", "macx64", "macarm", "all"]}
+            },
+            "logoPath": {"type": "string"},
+            "pythonDependencies": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "PEP 508 dependency specifiers"
+            },
+            "settings": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string", "enum": ["string", "boolean"]},
+                        "description": {"type": "string"},
+                        "default": {},
+                        "required": {"type": "boolean"},
+                        "choices": {"type": "array", "items": {"type": "string"}},
+                        "pattern": {"type": "string"},
+                        "prompt": {"type": "string"}
+                    },
+                    "required": ["type"]
+                }
+            }
+        },
+        "required": ["name", "version"]
+    })
+}

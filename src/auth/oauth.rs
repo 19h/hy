@@ -84,8 +84,8 @@ impl OAuthServer {
                         // Extract JSON body.
                         if let Some(body_start) = request.find("\r\n\r\n") {
                             let body = &request[body_start + 4..];
-                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(body) {
-                                if let Some(at) = val.get("access_token").and_then(|v| v.as_str()) {
+                            if let Ok(val) = serde_json::from_str::<serde_json::Value>(body)
+                                && let Some(at) = val.get("access_token").and_then(|v| v.as_str()) {
                                     let tokens = OAuthTokens {
                                         access_token: at.to_owned(),
                                         refresh_token: val
@@ -101,7 +101,6 @@ impl OAuthServer {
                                     // Token received — break out.
                                     break;
                                 }
-                            }
                         }
                         let resp = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
                         let _ = stream.write_all(resp.as_bytes());

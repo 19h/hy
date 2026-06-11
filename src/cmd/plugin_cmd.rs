@@ -6,13 +6,13 @@ use clap::{Args, Subcommand};
 use owo_colors::OwoColorize;
 
 use crate::error::Result;
-use crate::util::fmt;
+use crate::util::{fmt, tui};
 
 // ── CLI definitions ─────────────────────────────────────────────────────
 
 #[derive(Debug, Subcommand)]
 pub enum PluginCommands {
-    /// Install a plugin from a zip archive or URL
+    /// Install a plugin from a repository, local directory, zip archive, bundle, or URL
     Install(PluginInstallArgs),
     /// Uninstall an installed plugin
     Uninstall(PluginUninstallArgs),
@@ -26,6 +26,11 @@ pub enum PluginCommands {
     Status(PluginStatusArgs),
     /// Lint a plugin archive
     Lint(PluginLintArgs),
+    /// Manage plugin bundles for offline installation
+    Bundle {
+        #[command(subcommand)]
+        command: BundleCommands,
+    },
     /// Manage plugin repositories
     Repo {
         #[command(subcommand)]
@@ -36,15 +41,71 @@ pub enum PluginCommands {
         #[command(subcommand)]
         command: ConfigCommands,
     },
+    /// Print the JSON Schema for ida-plugin.json
+    #[command(hide = true)]
+    Schema(PluginSchemaArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct PluginInstallArgs {
-    /// Path or URL to the plugin archive
+    /// Plugin name, path to a directory / zip archive / bundle, or URL
     pub source: String,
     /// Force installation even if already installed
     #[arg(short, long)]
     pub force: bool,
+    /// Install a local plugin directory by symlinking it into $IDAUSR/plugins/.
+    /// Edits to the source tree take effect on the next plugin reload.
+    #[arg(short, long)]
+    pub editable: bool,
+    /// Configuration setting in key=value format (repeatable; use true/false for booleans)
+    #[arg(long = "config")]
+    pub config: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct PluginSchemaArgs {
+    /// Write the schema to this file instead of stdout
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+    /// Indentation for the emitted JSON
+    #[arg(long, default_value_t = 2)]
+    pub indent: usize,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum BundleCommands {
+    /// Show plugin bundle metadata
+    Info(BundleInfoArgs),
+    /// Create a plugin bundle from plugin specs and/or local ZIPs
+    Create(BundleCreateArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BundleInfoArgs {
+    /// Path to the bundle archive
+    pub bundle_path: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct BundleCreateArgs {
+    /// Output archive path
+    #[arg(long = "path")]
+    pub output: PathBuf,
+    /// Target platform: 'current', 'all', or a name like 'linux', 'windows', 'macos-arm64' (repeatable)
+    #[arg(long = "platform")]
+    pub platforms: Vec<String>,
+    /// Target Python version: 'current', 'all', or a version like '3.12' (repeatable)
+    #[arg(long = "python")]
+    pub pythons: Vec<String>,
+    /// Exact target ID (e.g. linux-x86_64-cp312)
+    #[arg(long = "target", hide = true)]
+    pub targets: Vec<String>,
+    /// Plugin repository (URL or local snapshot JSON) for resolving specs
+    #[arg(long)]
+    pub repo: Option<String>,
+    /// Plugin specs (name==version[@host]) and/or local plugin ZIPs
+    #[arg(required = true)]
+    pub plugin_specs: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -175,9 +236,38 @@ pub async fn run(cmd: PluginCommands) -> Result<()> {
         PluginCommands::Search(args) => run_search(args).await,
         PluginCommands::Status(args) => run_status(args).await,
         PluginCommands::Lint(args) => run_lint(args).await,
+        PluginCommands::Bundle { command } => run_bundle(command).await,
         PluginCommands::Repo { command } => run_repo(command).await,
         PluginCommands::Config { command } => run_config(command).await,
+        PluginCommands::Schema(args) => run_schema(args),
     }
+}
+
+// ── plugin schema ───────────────────────────────────────────────────────
+
+fn run_schema(args: PluginSchemaArgs) -> Result<()> {
+    let schema = crate::plugin::ida_plugin_json_schema();
+    let mut payload = serde_json::to_string_pretty(&schema)?;
+    if args.indent != 2 {
+        // Re-render with the requested indentation.
+        let indent_bytes = " ".repeat(args.indent);
+        let mut buf = Vec::new();
+        let formatter = serde_json::ser::PrettyFormatter::with_indent(indent_bytes.as_bytes());
+        let mut ser = serde_json::Serializer::with_formatter(&mut buf, formatter);
+        serde::Serialize::serialize(&schema, &mut ser)?;
+        payload = String::from_utf8_lossy(&buf).into_owned();
+    }
+
+    if let Some(ref output) = args.output {
+        if let Some(parent) = output.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(output, format!("{payload}\n"))?;
+        fmt::success(&format!("Wrote schema to {}", output.display()));
+    } else {
+        println!("{payload}");
+    }
+    Ok(())
 }
 
 // ── plugin list ─────────────────────────────────────────────────────────
@@ -189,21 +279,96 @@ async fn run_list() -> Result<()> {
         return Ok(());
     }
 
-    eprintln!("  {:<30} {}", "Name", "Version");
-    eprintln!("  {}", "-".repeat(50));
-    for (name, ver) in &plugins {
-        eprintln!(
-            "  {:<30} {}",
-            name,
-            ver.as_deref().unwrap_or("unknown").dimmed()
-        );
-    }
+    print_installed_table(&plugins);
     Ok(())
+}
+
+fn print_installed_table(plugins: &[crate::plugin::InstalledPlugin]) {
+    let mut table = tui::Table::new(&["Name", "Version", ""]);
+    for plugin in plugins {
+        table.add_row(vec![
+            plugin.name.clone(),
+            plugin
+                .version
+                .as_deref()
+                .unwrap_or("unknown")
+                .dimmed()
+                .to_string(),
+            if plugin.editable {
+                "editable".yellow().to_string()
+            } else {
+                String::new()
+            },
+        ]);
+    }
+    table.print();
 }
 
 // ── plugin install ──────────────────────────────────────────────────────
 
 async fn run_install(args: PluginInstallArgs) -> Result<()> {
+    let ida_version = crate::ida::current_install_dir()
+        .as_deref()
+        .and_then(crate::ida::detect_ida_version);
+
+    // Validate --config syntax up front, before touching the filesystem.
+    for item in &args.config {
+        if !item.contains('=') {
+            fmt::error(&format!("Invalid config format: '{item}', expected key=value"));
+            return Ok(());
+        }
+    }
+
+    let source_as_path = std::path::PathBuf::from(&args.source);
+
+    // Editable install: symlink a source directory into the plugins dir.
+    if args.editable {
+        if !source_as_path.is_dir() {
+            fmt::error(&format!(
+                "--editable requires a directory containing ida-plugin.json, got: {}",
+                args.source
+            ));
+            return Ok(());
+        }
+        let metadata = crate::plugin::read_metadata_from_directory(&source_as_path)?;
+        let target = crate::plugin::install_editable(&source_as_path, ida_version.as_deref(), args.force)?;
+        apply_install_settings(&metadata, &args.config)?;
+        fmt::success(&format!(
+            "Installed plugin: {}=={} (editable) -> {}",
+            metadata.name,
+            metadata.version,
+            target.display()
+        ));
+        return Ok(());
+    }
+
+    // Local directory install: copy the source tree.
+    if source_as_path.is_dir() {
+        if !source_as_path.join("ida-plugin.json").is_file() {
+            fmt::error(&format!(
+                "Directory {} does not contain ida-plugin.json.",
+                args.source
+            ));
+            return Ok(());
+        }
+        let metadata = crate::plugin::read_metadata_from_directory(&source_as_path)?;
+        let target =
+            crate::plugin::install_from_directory(&source_as_path, ida_version.as_deref(), args.force)?;
+        apply_install_settings(&metadata, &args.config)?;
+        fmt::success(&format!(
+            "Installed plugin: {}=={} -> {}",
+            metadata.name,
+            metadata.version,
+            target.display()
+        ));
+        return Ok(());
+    }
+
+    // Plugin bundle: install every plugin contained in the bundle.
+    if source_as_path.is_file() && crate::plugin::bundle::is_plugin_bundle_zip(&source_as_path) {
+        return install_from_bundle(&source_as_path, ida_version.as_deref(), args.force, &args.config);
+    }
+
     let source_path = if args.source.starts_with("http://") || args.source.starts_with("https://") {
         fmt::info(&format!("Downloading plugin from {}...", args.source));
         let client = crate::api::ApiClient::new()?;
@@ -262,18 +427,180 @@ async fn run_install(args: PluginInstallArgs) -> Result<()> {
         }
     };
 
-    let ida_version = crate::ida::current_install_dir()
-        .as_deref()
-        .and_then(crate::ida::detect_ida_version);
+    // A downloaded file could itself be a bundle.
+    if crate::plugin::bundle::is_plugin_bundle_zip(&source_path) {
+        let result =
+            install_from_bundle(&source_path, ida_version.as_deref(), args.force, &args.config);
+        if args.source.starts_with("http") || !std::path::PathBuf::from(&args.source).exists() {
+            let _ = std::fs::remove_dir_all(source_path.parent().unwrap());
+        }
+        return result;
+    }
 
+    let metadata = crate::plugin::read_metadata_from_archive(&source_path)?;
     let result = crate::plugin::install_from_archive(&source_path, ida_version.as_deref(), args.force)?;
-    fmt::success(&format!("Plugin installed at: {}", result.display()));
-    
+    apply_install_settings(&metadata, &args.config)?;
+    fmt::success(&format!(
+        "Installed plugin: {}=={} -> {}",
+        metadata.name,
+        metadata.version,
+        result.display()
+    ));
+
     // Clean up temp file if we downloaded it
     if args.source.starts_with("http") || !std::path::PathBuf::from(&args.source).exists() {
         let _ = std::fs::remove_dir_all(source_path.parent().unwrap());
     }
-    
+
+    Ok(())
+}
+
+/// Install every plugin archive contained in a bundle zip.
+fn install_from_bundle(
+    bundle_path: &std::path::Path,
+    ida_version: Option<&str>,
+    force: bool,
+    config: &[String],
+) -> Result<()> {
+    let manifest = crate::plugin::bundle::read_bundle_manifest(bundle_path)?;
+    let plugins = crate::plugin::bundle::list_bundle_plugins(bundle_path)?;
+
+    if plugins.is_empty() {
+        fmt::warning("Bundle contains no plugins.");
+        return Ok(());
+    }
+
+    fmt::info(&format!(
+        "Installing {} plugin(s) from bundle (built {} by {} {})...",
+        plugins.len(),
+        manifest.built_at,
+        manifest.created_by.tool,
+        manifest.created_by.version
+    ));
+
+    let mut installed = 0usize;
+    for plugin in &plugins {
+        let archive = crate::plugin::bundle::extract_bundled_plugin(bundle_path, &plugin.entry_name)?;
+        match crate::plugin::install_from_archive(&archive, ida_version, force) {
+            Ok(_) => {
+                apply_install_settings(&plugin.metadata, config)?;
+                fmt::success(&format!(
+                    "Installed plugin: {}=={}",
+                    plugin.metadata.name, plugin.metadata.version
+                ));
+                installed += 1;
+            }
+            Err(e) => {
+                fmt::error(&format!(
+                    "Failed to install {}: {e}",
+                    plugin.metadata.name
+                ));
+            }
+        }
+        let _ = std::fs::remove_dir_all(archive.parent().unwrap());
+    }
+
+    if plugins
+        .iter()
+        .any(|p| p.metadata.python_dependencies.as_ref().is_some_and(|d| !d.is_empty()))
+    {
+        fmt::warning(
+            "Some plugins declare Python dependencies; install them from the bundle wheelhouse with pip if needed.",
+        );
+    }
+
+    fmt::info(&format!("{installed}/{} plugin(s) installed.", plugins.len()));
+    Ok(())
+}
+
+/// Apply `--config key=value` settings after a successful install, or
+/// interactively prompt for required, unset settings.
+fn apply_install_settings(
+    metadata: &crate::plugin::PluginMetadata,
+    config: &[String],
+) -> Result<()> {
+    let Some(ref descriptors) = metadata.settings else {
+        if !config.is_empty() {
+            fmt::warning("Plugin declares no settings; ignoring --config values.");
+        }
+        return Ok(());
+    };
+
+    if !config.is_empty() {
+        for item in config {
+            let Some((key, raw)) = item.split_once('=') else {
+                return Err(crate::error::Error::Other(format!(
+                    "invalid config format: {item}, expected key=value"
+                )));
+            };
+            if !descriptors.contains_key(key) {
+                fmt::warning(&format!("Unknown setting '{key}' for plugin '{}'.", metadata.name));
+                continue;
+            }
+            let value = parse_setting_value(&metadata.name, key, raw);
+            crate::plugin::set_plugin_setting(&metadata.name, key, value)?;
+            eprintln!("    {key} = {raw}");
+        }
+        return Ok(());
+    }
+
+    // No CLI config: prompt for required settings that have no default and
+    // are not configured yet.
+    let interactive = {
+        use std::io::IsTerminal;
+        console::Term::stderr().is_term() && std::io::stdin().is_terminal()
+    };
+    let mut keys: Vec<&String> = descriptors.keys().collect();
+    keys.sort();
+
+    for key in keys {
+        let descr = &descriptors[key];
+        let required = descr.required.unwrap_or(false);
+        if !required || descr.default.is_some() {
+            continue;
+        }
+        if crate::plugin::get_plugin_setting(&metadata.name, key).is_some() {
+            continue;
+        }
+        if !interactive {
+            fmt::warning(&format!(
+                "Setting '{key}' is required; configure it with: hy plugin config set {} {key} <value>",
+                metadata.name
+            ));
+            continue;
+        }
+
+        let prompt = descr
+            .description
+            .as_deref()
+            .filter(|d| !d.is_empty())
+            .map(|d| format!("{key} ({d})"))
+            .unwrap_or_else(|| key.clone());
+
+        let value = match descr.setting_type.as_str() {
+            "boolean" => serde_json::Value::Bool(tui::confirm(&prompt, false)),
+            _ => {
+                if let Some(ref choices) = descr.choices {
+                    match tui::select(&prompt, choices, 0) {
+                        Some(idx) => serde_json::Value::String(choices[idx].clone()),
+                        None => continue,
+                    }
+                } else {
+                    let answer = tui::input(&prompt, "");
+                    if answer.is_empty() {
+                        fmt::warning(&format!(
+                            "Setting '{key}' left unset; configure it with: hy plugin config set {} {key} <value>",
+                            metadata.name
+                        ));
+                        continue;
+                    }
+                    serde_json::Value::String(answer)
+                }
+            }
+        };
+        crate::plugin::set_plugin_setting(&metadata.name, key, value)?;
+    }
+
     Ok(())
 }
 
@@ -325,8 +652,10 @@ async fn run_search(args: PluginSearchArgs) -> Result<()> {
     })?;
 
     let installed = crate::plugin::installed_plugins()?;
-    let installed_map: std::collections::HashMap<String, Option<String>> =
-        installed.into_iter().collect();
+    let installed_map: std::collections::HashMap<String, Option<String>> = installed
+        .into_iter()
+        .map(|p| (p.name, p.version))
+        .collect();
 
     let _ida_version = crate::plugin::detect_current_ida_version();
 
@@ -349,12 +678,7 @@ async fn run_search(args: PluginSearchArgs) -> Result<()> {
         return Ok(());
     }
 
-    eprintln!(
-        "  {:<24} {:<12} {:<14} {}",
-        "Name", "Version", "Status", "URL"
-    );
-    eprintln!("  {}", "-".repeat(80));
-
+    let mut table = tui::Table::new(&["Name", "Version", "Status", "Host"]);
     for plugin in &matching {
         let name = &plugin.name;
         let latest_version = plugin
@@ -376,10 +700,14 @@ async fn run_search(args: PluginSearchArgs) -> Result<()> {
             None => "available".dimmed().to_string(),
         };
 
-        let host = &plugin.host;
-
-        eprintln!("  {:<24} {:<12} {:<14} {}", name, latest_version, status, host.dimmed());
+        table.add_row(vec![
+            name.clone(),
+            latest_version.to_string(),
+            status,
+            plugin.host.dimmed().to_string(),
+        ]);
     }
+    table.print();
 
     eprintln!();
     eprintln!("  {} plugin(s) found.", matching.len());
@@ -398,24 +726,21 @@ fn does_plugin_match_query(query: &str, plugin: &RepoPlugin) -> bool {
             if meta.description.to_lowercase().contains(query) {
                 return true;
             }
-            if let Some(ref cats) = meta.categories {
-                if cats.iter().any(|c| c.to_lowercase().contains(query)) {
+            if let Some(ref cats) = meta.categories
+                && cats.iter().any(|c| c.to_lowercase().contains(query)) {
                     return true;
                 }
-            }
-            if let Some(ref kws) = meta.keywords {
-                if kws.iter().any(|k| k.to_lowercase().contains(query)) {
+            if let Some(ref kws) = meta.keywords
+                && kws.iter().any(|k| k.to_lowercase().contains(query)) {
                     return true;
                 }
-            }
-            if let Some(ref authors) = meta.authors {
-                if authors
+            if let Some(ref authors) = meta.authors
+                && authors
                     .iter()
                     .any(|a| a.name.to_lowercase().contains(query))
                 {
                     return true;
                 }
-            }
         }
     }
     false
@@ -451,15 +776,7 @@ async fn run_status(args: PluginStatusArgs) -> Result<()> {
         if plugins.is_empty() {
             fmt::info("No plugins installed.");
         } else {
-            eprintln!("  {:<30} {}", "Name", "Version");
-            eprintln!("  {}", "-".repeat(50));
-            for (name, ver) in &plugins {
-                eprintln!(
-                    "  {:<30} {}",
-                    name,
-                    ver.as_deref().unwrap_or("unknown").dimmed()
-                );
-            }
+            print_installed_table(&plugins);
             eprintln!();
             eprintln!("  {} plugin(s) installed.", plugins.len());
         }
@@ -509,11 +826,10 @@ async fn run_lint(args: PluginLintArgs) -> Result<()> {
         eprintln!("  IDA versions: {}", ida_versions.join(", "));
     }
 
-    if let Some(ref deps) = metadata.python_dependencies {
-        if !deps.is_empty() {
+    if let Some(ref deps) = metadata.python_dependencies
+        && !deps.is_empty() {
             eprintln!("  Dependencies: {}", deps.join(", "));
         }
-    }
 
     // Recommendations.
     let mut warnings = Vec::new();
@@ -521,16 +837,16 @@ async fn run_lint(args: PluginLintArgs) -> Result<()> {
     if metadata.description.is_empty() {
         warnings.push("Missing description");
     }
-    if metadata.categories.as_ref().map_or(true, |c| c.is_empty()) {
+    if metadata.categories.as_ref().is_none_or(|c| c.is_empty()) {
         warnings.push("No categories specified");
     }
-    if metadata.keywords.as_ref().map_or(true, |k| k.is_empty()) {
+    if metadata.keywords.as_ref().is_none_or(|k| k.is_empty()) {
         warnings.push("No keywords specified");
     }
-    if metadata.ida_versions.as_ref().map_or(true, |v| v.is_empty()) {
+    if metadata.ida_versions.as_ref().is_none_or(|v| v.is_empty()) {
         warnings.push("No IDA versions specified (will match all versions)");
     }
-    if metadata.platforms.as_ref().map_or(true, |p| p.is_empty()) {
+    if metadata.platforms.as_ref().is_none_or(|p| p.is_empty()) {
         warnings.push("No platforms specified (will match all platforms)");
     }
     if metadata.license.is_none() {
@@ -615,11 +931,10 @@ async fn run_repo(cmd: RepoCommands) -> Result<()> {
                 let text = std::fs::read_to_string(&config_path)?;
                 let mut config: serde_json::Value =
                     serde_json::from_str(&text).unwrap_or(serde_json::json!({}));
-                if let Some(settings) = config.get_mut("Settings") {
-                    if let Some(obj) = settings.as_object_mut() {
+                if let Some(settings) = config.get_mut("Settings")
+                    && let Some(obj) = settings.as_object_mut() {
                         obj.remove("plugin-repository");
                     }
-                }
                 std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
             }
             fmt::success("Repository configuration removed.");
@@ -697,8 +1012,8 @@ async fn run_config(cmd: ConfigCommands) -> Result<()> {
                 .and_then(|m| m.settings.as_ref());
 
             eprintln!(
-                "  {:<24} {:<24} {}",
-                "Key", "Value", "Description"
+                "  {:<24} {:<24} Description",
+                "Key", "Value"
             );
             eprintln!("  {}", "-".repeat(74));
 
@@ -767,24 +1082,332 @@ fn parse_setting_value(
     raw: &str,
 ) -> serde_json::Value {
     // Try to load the setting descriptor for type info.
-    if let Ok(metadata) = crate::plugin::read_installed_metadata(plugin_name) {
-        if let Some(ref settings) = metadata.settings {
-            if let Some(descriptor) = settings.get(key) {
-                match descriptor.setting_type.as_str() {
-                    "boolean" => {
-                        let lower = raw.to_lowercase();
-                        return serde_json::Value::Bool(
-                            lower == "true" || lower == "1" || lower == "yes",
-                        );
-                    }
-                    _ => {}
-                }
-            }
-        }
+    if let Ok(metadata) = crate::plugin::read_installed_metadata(plugin_name)
+        && let Some(ref settings) = metadata.settings
+        && let Some(descriptor) = settings.get(key)
+        && descriptor.setting_type.as_str() == "boolean"
+    {
+        let lower = raw.to_lowercase();
+        return serde_json::Value::Bool(lower == "true" || lower == "1" || lower == "yes");
     }
 
     // Fallback: try JSON parsing, then treat as string.
     serde_json::from_str(raw).unwrap_or(serde_json::Value::String(raw.to_owned()))
+}
+
+// ── plugin bundle ───────────────────────────────────────────────────────
+
+async fn run_bundle(cmd: BundleCommands) -> Result<()> {
+    match cmd {
+        BundleCommands::Info(args) => run_bundle_info(args),
+        BundleCommands::Create(args) => run_bundle_create(args).await,
+    }
+}
+
+fn run_bundle_info(args: BundleInfoArgs) -> Result<()> {
+    use crate::plugin::bundle;
+
+    if !bundle::is_plugin_bundle_zip(&args.bundle_path) {
+        fmt::error(&format!(
+            "{} is not a plugin bundle",
+            args.bundle_path.display()
+        ));
+        return Ok(());
+    }
+
+    let manifest = bundle::read_bundle_manifest(&args.bundle_path)?;
+    let plugins = bundle::list_bundle_plugins(&args.bundle_path)?;
+
+    eprintln!("  {}: {}", "plugin bundle".bold(), args.bundle_path.display());
+    eprintln!("    built: {}", manifest.built_at);
+    eprintln!(
+        "    created by: {} {}",
+        manifest.created_by.tool, manifest.created_by.version
+    );
+    eprintln!(
+        "    targets: {}",
+        manifest
+            .target_platform_tags
+            .iter()
+            .map(|t| t.id.clone())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    if plugins.is_empty() {
+        eprintln!("    plugins: (none)");
+    } else {
+        eprintln!("    plugins: {}", plugins.len());
+        for plugin in &plugins {
+            eprintln!(
+                "      {}: {}",
+                plugin.metadata.name, plugin.metadata.version
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Map a bundle platform (`linux-x86_64`) to the IDA plugin platform
+/// identifier used in ida-plugin.json (`linux`).
+fn bundle_platform_to_ida_platform(platform: &str) -> &'static str {
+    match platform {
+        "windows-x86_64" => "win",
+        "linux-x86_64" => "linux",
+        "macos-aarch64" => "macarm",
+        "macos-x86_64" => "macx64",
+        _ => "linux",
+    }
+}
+
+fn detect_current_python_version() -> Result<String> {
+    for name in &["python3", "python"] {
+        if let Ok(output) = std::process::Command::new(name).arg("--version").output()
+            && output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                // "Python 3.12.4" -> "3.12"
+                if let Some(version) = text.strip_prefix("Python ") {
+                    let parts: Vec<&str> = version.split('.').collect();
+                    if parts.len() >= 2 {
+                        return Ok(format!("{}.{}", parts[0], parts[1]));
+                    }
+                }
+            }
+    }
+    Err(crate::error::Error::Other(
+        "could not detect the current Python version; pass --python <version> explicitly".into(),
+    ))
+}
+
+fn resolve_bundle_targets(args: &BundleCreateArgs) -> Result<Vec<crate::plugin::bundle::PipTarget>> {
+    use crate::plugin::bundle::{
+        current_bundle_platform, resolve_platform_alias, PipTarget, ALL_PLATFORMS,
+        SUPPORTED_PYTHON_VERSIONS,
+    };
+
+    if !args.targets.is_empty() && (!args.platforms.is_empty() || !args.pythons.is_empty()) {
+        return Err(crate::error::Error::Other(
+            "--target cannot be combined with --platform or --python".into(),
+        ));
+    }
+
+    if !args.targets.is_empty() {
+        return args.targets.iter().map(|t| PipTarget::parse(t)).collect();
+    }
+
+    if args.platforms.is_empty() {
+        return Err(crate::error::Error::Other(
+            "--platform is required\n  use --platform current for this machine, or --platform all for all supported platforms".into(),
+        ));
+    }
+    if args.pythons.is_empty() {
+        return Err(crate::error::Error::Other(
+            "--python is required\n  use --python current for this machine, or --python all for all supported versions".into(),
+        ));
+    }
+
+    let mut platforms = Vec::new();
+    for p in &args.platforms {
+        match p.trim().to_lowercase().as_str() {
+            "all" => platforms.extend(ALL_PLATFORMS.iter().map(|s| s.to_string())),
+            "current" => platforms.push(current_bundle_platform().to_string()),
+            _ => platforms.push(resolve_platform_alias(p)?),
+        }
+    }
+
+    let mut pythons = Vec::new();
+    for py in &args.pythons {
+        match py.trim().to_lowercase().as_str() {
+            "all" => pythons.extend(SUPPORTED_PYTHON_VERSIONS.iter().map(|s| s.to_string())),
+            "current" => pythons.push(detect_current_python_version()?),
+            other => pythons.push(other.to_string()),
+        }
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    let mut targets = Vec::new();
+    for platform in &platforms {
+        for python in &pythons {
+            let target = PipTarget::new(platform, python)?;
+            if seen.insert(target.id()) {
+                targets.push(target);
+            }
+        }
+    }
+    Ok(targets)
+}
+
+/// Load a repository snapshot for bundle spec resolution: from an explicit
+/// `--repo` (URL or local JSON file) or the configured repository URL.
+async fn load_repo_snapshot(repo_arg: Option<&str>) -> Result<Option<RepoSnapshot>> {
+    let body = match repo_arg {
+        Some(spec) if std::path::Path::new(spec).is_file() => {
+            std::fs::read_to_string(spec)?
+        }
+        Some(url) => reqwest::get(url).await?.text().await?,
+        None => match crate::plugin::get_repo_url() {
+            Some(url) => reqwest::get(&url).await?.text().await?,
+            None => return Ok(None),
+        },
+    };
+    let snapshot: RepoSnapshot = serde_json::from_str(&body).map_err(|e| {
+        crate::error::Error::Other(format!("Failed to parse repository JSON: {e}"))
+    })?;
+    Ok(Some(snapshot))
+}
+
+async fn run_bundle_create(args: BundleCreateArgs) -> Result<()> {
+    use crate::plugin::bundle::{self, ResolvedPluginArchive};
+    use sha2::{Digest, Sha256};
+
+    let targets = resolve_bundle_targets(&args)?;
+
+    eprintln!("  targets ({}):", targets.len());
+    for target in &targets {
+        eprintln!(
+            "    {}  Python {}  ({})",
+            target.ida_platform,
+            target.python_version,
+            target.id()
+        );
+    }
+
+    let target_platforms: Vec<String> = {
+        let mut platforms: Vec<String> =
+            targets.iter().map(|t| t.ida_platform.clone()).collect();
+        platforms.sort();
+        platforms.dedup();
+        platforms
+    };
+
+    // Resolve each spec to one or more plugin archives.
+    let mut repo_snapshot: Option<Option<RepoSnapshot>> = None;
+    let mut archives: Vec<ResolvedPluginArchive> = Vec::new();
+
+    for spec in &args.plugin_specs {
+        let spec_path = std::path::PathBuf::from(spec);
+        if spec_path.is_file() && spec.ends_with(".zip") {
+            let spinner = tui::spinner(format!("resolving {spec}"));
+            let bytes = std::fs::read(&spec_path)?;
+            let metadata = crate::plugin::read_metadata_from_archive(&spec_path)?;
+            spinner.finish_and_clear();
+            archives.push(ResolvedPluginArchive {
+                name: metadata.name,
+                version: metadata.version,
+                bytes,
+                platforms: Vec::new(),
+            });
+            continue;
+        }
+
+        // Repository spec: name==version[@host]
+        let (bare_spec, host) = match spec.rsplit_once('@') {
+            Some((s, h)) if !h.contains('=') => (s.to_string(), Some(h.to_string())),
+            _ => (spec.clone(), None),
+        };
+        let Some((name, version)) = bare_spec.split_once("==") else {
+            let example = match host {
+                Some(ref h) => format!("{bare_spec}==1.0.0@{h}"),
+                None => format!("{bare_spec}==1.0.0"),
+            };
+            return Err(crate::error::Error::Other(format!(
+                "repository plugin specs must include exact version (e.g. {example})"
+            )));
+        };
+
+        if repo_snapshot.is_none() {
+            repo_snapshot = Some(load_repo_snapshot(args.repo.as_deref()).await?);
+        }
+        let Some(Some(ref snapshot)) = repo_snapshot else {
+            return Err(crate::error::Error::Other(
+                "no plugin repository available to resolve spec (configure one or pass --repo)".into(),
+            ));
+        };
+
+        let plugin = snapshot
+            .plugins
+            .iter()
+            .find(|p| p.name == name && host.as_ref().is_none_or(|h| &p.host == h))
+            .ok_or_else(|| {
+                crate::error::Error::Other(format!("plugin '{name}' not found in repository"))
+            })?;
+        let locations = plugin.versions.get(version).ok_or_else(|| {
+            crate::error::Error::Other(format!("version {version} not found for plugin '{name}'"))
+        })?;
+
+        // Pick a compatible archive per target platform and dedupe by hash.
+        let mut archives_by_hash: std::collections::HashMap<String, Vec<u8>> =
+            std::collections::HashMap::new();
+        let mut hash_by_platform: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+
+        for platform in &target_platforms {
+            let ida_platform = bundle_platform_to_ida_platform(platform);
+            let location = locations
+                .iter()
+                .find(|loc| {
+                    loc.metadata
+                        .plugin
+                        .platforms
+                        .as_ref()
+                        .is_none_or(|p| {
+                            p.is_empty() || p.iter().any(|x| x == ida_platform || x == "all")
+                        })
+                })
+                .ok_or_else(|| {
+                    crate::error::Error::Other(format!(
+                        "no archive of '{name}=={version}' is compatible with {platform}"
+                    ))
+                })?;
+
+            let spinner = tui::spinner(format!("resolving {spec} for {platform}"));
+            let bytes = reqwest::get(&location.url).await?.bytes().await?.to_vec();
+            spinner.finish_and_clear();
+
+            let hash = format!("{:x}", Sha256::digest(&bytes));
+            archives_by_hash.entry(hash.clone()).or_insert(bytes);
+            hash_by_platform.insert(platform.clone(), hash);
+        }
+
+        let unique_hashes: std::collections::HashSet<&String> =
+            hash_by_platform.values().collect();
+        let needs_suffix = unique_hashes.len() > 1;
+
+        for (hash, bytes) in archives_by_hash {
+            let platforms = if needs_suffix {
+                let mut p: Vec<String> = hash_by_platform
+                    .iter()
+                    .filter(|(_, h)| **h == hash)
+                    .map(|(platform, _)| platform.clone())
+                    .collect();
+                p.sort();
+                p
+            } else {
+                Vec::new()
+            };
+            archives.push(ResolvedPluginArchive {
+                name: name.to_string(),
+                version: version.to_string(),
+                bytes,
+                platforms,
+            });
+        }
+    }
+
+    let spinner = tui::spinner("building bundle");
+    let spinner_ref = &spinner;
+    bundle::create_bundle(&args.output, &archives, &targets, move |msg| {
+        spinner_ref.set_message(msg.to_string());
+    })?;
+    spinner.finish_and_clear();
+
+    fmt::success(&format!("Created plugin bundle: {}", args.output.display()));
+    eprintln!("    plugins: {}", args.plugin_specs.len());
+    eprintln!("    targets: {}", targets.len());
+    for target in &targets {
+        eprintln!("      {}  Python {}", target.ida_platform, target.python_version);
+    }
+    Ok(())
 }
 
 // ── Repo snapshot model ─────────────────────────────────────────────────

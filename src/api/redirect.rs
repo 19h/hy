@@ -58,21 +58,7 @@ fn redirected_method(method: &Method, status: u16) -> Method {
 }
 
 fn target(current: &url::Url, response: &Response) -> Result<Option<url::Url>> {
-    if !matches!(response.status().as_u16(), 301 | 302 | 303 | 307 | 308) {
-        return Ok(None);
-    }
-    let Some(location) = response.headers().get(header::LOCATION) else {
-        return Ok(None);
-    };
-    let decoder = crate::util::http_headers::TextDecoder::new(response.headers());
-    let location = decoder.decode(location);
-    let mut target = current
-        .join(&location)
-        .map_err(|error| Error::Other(format!("invalid redirect URL: {error}")))?;
-    if target.fragment().is_none_or(str::is_empty) {
-        target.set_fragment(current.fragment());
-    }
-    Ok(Some(target))
+    crate::util::http_redirect::target(current, response.status().as_u16(), response.headers())
 }
 
 fn is_https_upgrade(from: &url::Url, to: &url::Url) -> bool {

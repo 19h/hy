@@ -8,7 +8,7 @@ use reqwest::header::{self, HeaderMap, HeaderValue};
 
 use crate::error::{Error, Result};
 use crate::util::cookies::Jar;
-use crate::util::http_headers::TextDecoder;
+use crate::util::http_redirect;
 
 const MAX_REDIRECTS: usize = 20;
 
@@ -48,7 +48,7 @@ where
         let status = response.status().as_u16();
         cookies.store(response.headers(), &current);
         // HTTPX constructs the redirect request before reading its body.
-        let target = redirect_target(&current, status, response.headers())?;
+        let target = http_redirect::target(&current, status, response.headers())?;
         let body = super::response::decode(response).await?;
         if let Some(target) = target {
             if redirects == MAX_REDIRECTS {
@@ -83,28 +83,6 @@ fn initial_headers(url: &url::Url, accept: &'static str) -> Result<HeaderMap> {
         headers.insert(header::AUTHORIZATION, value);
     }
     Ok(headers)
-}
-
-fn redirect_target(
-    current: &url::Url,
-    status: u16,
-    headers: &HeaderMap,
-) -> Result<Option<url::Url>> {
-    if !matches!(status, 301 | 302 | 303 | 307 | 308) || !headers.contains_key(header::LOCATION) {
-        return Ok(None);
-    }
-    let decoder = TextDecoder::new(headers);
-    let location = headers
-        .get_all(header::LOCATION)
-        .iter()
-        .map(|value| decoder.decode(value))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let mut target = current.join(&location).map_err(invalid_url)?;
-    if target.fragment().is_none_or(str::is_empty) {
-        target.set_fragment(current.fragment());
-    }
-    Ok(Some(target))
 }
 
 fn https_upgrade(current: &url::Url, target: &url::Url) -> bool {

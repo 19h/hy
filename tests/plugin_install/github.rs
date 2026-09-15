@@ -24,6 +24,79 @@ fn install(sandbox: &Sandbox, server: &Server) -> std::process::Output {
 }
 
 #[test]
+fn metadata_and_asset_redirects_repair_hosts_and_combine_locations_on_the_wire() {
+    for duplicate in [false, true] {
+        let sandbox = Sandbox::new();
+        let path = sandbox.path().join("plugin.zip");
+        archive(&path, "1", &[]);
+        let bytes = fs::read(path).unwrap();
+        let server = Server::start_with_headers(move |request, base| {
+            let destination = match request.path.as_str() {
+                "/repos/o/r/releases/latest" => Some("/metadata"),
+                "/asset" => Some("/archive"),
+                _ => None,
+            };
+            if let Some(destination) = destination {
+                let headers = if duplicate {
+                    vec![
+                        ("Location".into(), destination.into()),
+                        ("Location".into(), "/tail".into()),
+                    ]
+                } else {
+                    let port = url::Url::parse(base).unwrap().port().unwrap();
+                    vec![("Location".into(), format!("http://:{port}{destination}"))]
+                };
+                return (
+                    Response {
+                        status: 302,
+                        ..Response::json(json!({}))
+                    },
+                    headers,
+                );
+            }
+            if request.path.starts_with("/metadata") {
+                return (
+                    Response::json(json!({"assets":[{
+                        "name":"a.zip", "browser_download_url":format!("{base}/asset"),
+                    }]})),
+                    Vec::new(),
+                );
+            }
+            (Response::zip(bytes.clone()), Vec::new())
+        });
+        assert_success(&install(&sandbox, &server));
+        assert!(sandbox.path().join("idausr/plugins/example/plugin.py").is_file());
+        let requests = server.requests();
+        assert_eq!(requests.len(), 4);
+        assert_eq!(
+            requests[1].path,
+            if duplicate {
+                "/metadata,%20/tail"
+            } else {
+                "/metadata"
+            }
+        );
+        assert_eq!(
+            requests[3].path,
+            if duplicate {
+                "/archive,%20/tail"
+            } else {
+                "/archive"
+            }
+        );
+        for request in &requests {
+            assert!(
+                request.headers.contains(&format!(
+                    "host: {}\r\n",
+                    server.url.strip_prefix("http://").unwrap()
+                ))
+            );
+            assert!(!request.headers.to_ascii_lowercase().contains("authorization:"));
+        }
+    }
+}
+
+#[test]
 fn release_selection_accepts_irrelevant_assets_sizes_and_json_byte_encodings() {
     for (size, utf16) in [(json!(-1), false), (json!(0.5), true), (json!(true), false)] {
         let sandbox = Sandbox::new();

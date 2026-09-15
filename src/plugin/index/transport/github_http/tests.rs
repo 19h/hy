@@ -72,7 +72,7 @@ fn report(result: Result<Vec<u8>>) -> Value {
 #[tokio::test]
 async fn redirect_and_final_response_policy_matches_upstream_github_fetch() {
     let cases = cases::all();
-    assert_eq!(cases.len(), 125);
+    assert_eq!(cases.len(), 133);
     let mut expected = Vec::new();
     for case in &cases {
         let requests = RefCell::new(Vec::new());

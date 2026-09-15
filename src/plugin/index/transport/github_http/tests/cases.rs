@@ -76,5 +76,18 @@ pub(super) fn all() -> Vec<Case> {
             replies: vec![reply, Reply::new(200)],
         });
     }
+    for base in ["http://user:pass@api.github.com", "https://user:pass@api.github.com:8443"] {
+        for location in
+            ["https:/next", "http:///next", "https://:8443/next", "https://new:pass@:8443/next"]
+        {
+            cases.push(Case {
+                base: base.into(),
+                replies: vec![
+                    Reply::new(302).header("location", location.as_bytes()),
+                    Reply::new(200),
+                ],
+            });
+        }
+    }
     cases
 }

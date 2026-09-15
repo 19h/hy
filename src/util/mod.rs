@@ -6,6 +6,7 @@ pub mod files;
 pub mod fmt;
 pub mod http_body;
 pub mod http_headers;
+pub mod http_redirect;
 pub mod io;
 pub mod json_encoding;
 pub mod json_numbers;

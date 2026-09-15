@@ -134,6 +134,72 @@ fn file_transfers_allow_twenty_redirects_and_reject_the_twenty_first() {
 }
 
 #[test]
+fn file_transfers_repair_hostless_locations_and_combine_duplicate_headers() {
+    for duplicate in [false, true] {
+        let sandbox = Sandbox::new();
+        write_config(&sandbox, &stored("key", "fixture-key"));
+        let file = sandbox.path().join("payload");
+        fs::write(&file, b"fixture").unwrap();
+        let server = Server::start_with_headers(move |request, base| {
+            if request.path == "/api/assets/shared" {
+                return (
+                    Response::json(json!({"key":"fixture", "code":"fixture", "version":1,
+                        "url":format!("{base}/signed-put")})),
+                    Vec::new(),
+                );
+            }
+            if request.path == "/signed-put" {
+                let headers = if duplicate {
+                    vec![
+                        ("Location".into(), "/redirected".into()),
+                        ("Location".into(), "/tail".into()),
+                    ]
+                } else {
+                    let port = url::Url::parse(base).unwrap().port().unwrap();
+                    vec![("Location".into(), format!("http://:{port}/redirected"))]
+                };
+                return (
+                    Response {
+                        status: 302,
+                        ..Response::json(json!({}))
+                    },
+                    headers,
+                );
+            }
+            (Response::json(json!({})), Vec::new())
+        });
+        let output = command(
+            &sandbox,
+            &server,
+            &["share", "put", file.to_str().unwrap(), "--acl", "private"],
+        )
+        .output()
+        .unwrap();
+        assert_success(&output);
+        let requests = server.requests();
+        assert_eq!(requests.len(), 4);
+        assert_eq!(requests[1].method, "PUT");
+        assert_eq!(requests[1].body, b"fixture");
+        assert_eq!(requests[2].method, "GET");
+        assert!(requests[2].body.is_empty());
+        assert_eq!(
+            requests[2].path,
+            if duplicate {
+                "/redirected,%20/tail"
+            } else {
+                "/redirected"
+            }
+        );
+        assert!(
+            requests[2]
+                .headers
+                .contains(&format!("host: {}\r\n", server.url.strip_prefix("http://").unwrap()))
+        );
+        assert_eq!(requests[3].path, "/api/assets/shared/fixture");
+    }
+}
+
+#[test]
 fn json_requests_parse_redirect_responses_without_following_location() {
     for operation in ["get", "delete", "put"] {
         let sandbox = Sandbox::new();

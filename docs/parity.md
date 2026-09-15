@@ -85,6 +85,7 @@ The package version alone does not establish behavioral parity.
 | A65 | Repository fetch policy is compared with the pinned source and HTTPX in the A45 runtime. The source client uses an in-memory transport; native wire regressions use owned HTTP loopback servers. Authentication resolution is replaced with deterministic empty or API-key headers in the policy oracle. | Probe real authentication refresh, arbitrary HTTPX URL normalization/joining, proxies/TLS, duplicate headers, malformed wire responses, timeout phases, optional content codecs and native Windows networking. | 231 response-sequence comparisons and 280 raw-host decisions pass. Three CLI regressions cover 37 wire scenarios. Lazy credential reuse, exact redirect statuses, represented cookie transitions, decoding order and entitlement diagnostics agree within this corpus. Generic HTTP diagnostics, URL serialization and phase deadlines remain distinct or unverified. |
 | A66 | Direct GitHub release acquisition uses the pinned source and A45 runtime. Ordinary JSON values and represented UTF byte encodings are compared through the actual source fetch function with intercepted GET operations. Redirect policy uses actual HTTPX client handling over MockTransport. | Probe Python JSON nonfinite constants, lone surrogates, nesting limits, malformed/normalized URL forms, live TLS/proxy behavior, phase deadlines, optional codecs and native Windows execution. | 1,998 selection comparisons and 125 HTTP transition comparisons pass. Three added CLI regressions cover eleven owned-server scenarios. Asset defaults, delayed field access, numeric size decisions, selection diagnostics, request headers, separate cookies and represented redirect/error order agree. General JSON and HTTPX URL equivalence remain open. |
 | A67 | Release JSON uses CPython 3.13.15, Unicode 15.1 and its default 4,300-digit integer limit as the decoding oracle. Strings retain Unicode code points, including surrogates. Policy diagnostics project the runtime's UTF-8 stderr/backslashreplace behavior. | Probe other Python/Unicode runtimes, configured integer limits, nondefault stderr encodings, exact JSON exception diagnostics and resource-failure boundaries. Audit other JSON consumers independently before adopting the reader. | 2,012 decoder comparisons, complete Unicode scalar scans for ZIP-letter lowercase mappings, 2,196 release-selection comparisons and six added CLI scenarios pass. Native parsing and destruction are iterative. A separate source probe accepts depth 5,000 but rejects 10,000; the native stability fixture accepts 10,000, so runtime resource-limit parity is not established. |
+| A68 | Automatic redirect construction targets HTTPX 0.28.1 under A45. Comparisons use representable HTTP/HTTPS URLs and normalize only an empty source URL path to its transmitted `/` form. Repository manual redirects retain their separate contract. | Probe percent-encoded hosts/dot segments, backslashes, unusual authorities and ports, non-HTTP schemes, complete URL/error serialization, live proxies/TLS and native Windows. | 480 source target comparisons, 133 expanded GitHub request-policy comparisons and four added owned-server CLI scenarios cover missing-host repair, duplicate Location headers, literal dot segments, fragment inheritance, credentials and Host headers. Complete HTTPX URL and raw-wire equivalence remain open. |
 
 ## Implemented contracts and remaining coverage
 
@@ -113,6 +114,7 @@ imply that every upstream edge case or supported operating system was tested.
 | Repository HTTP policy | A65 resolves credentials lazily once per fetch, attaches them only to eligible raw HTTPS hosts, follows the five source redirect statuses with Location, retains per-fetch cookies, decodes bodies before status handling and distinguishes missing credentials, rejected credentials and entitlement denial. | HTTPX URL serialization/joining, generic HTTP diagnostic text, proxy/TLS and timeout-phase behavior, live credentials and native Windows networking remain open. Direct GitHub release transport has a separate source contract. |
 | Direct GitHub release acquisition | A66 selects ZIP assets after inspecting names, reads size/download fields only for the sole candidate, applies the source 104,857,600-byte metadata limit, and supplies separate metadata/asset HTTP operations with source Accept values and 30 s/60 s connect/read settings. Twenty redirects are permitted; final HTTP errors precede final-scheme downgrade checks. A67 accepts source nonfinite numbers, preserves surrogate strings and handles represented deep metadata. | Exact Python resource-failure boundaries, arbitrary HTTPX URL construction, generic error presentation, write/pool timeout semantics, TLS/proxies and native Windows execution remain open. |
 | Python JSON values in release metadata | A67 supplies a typed reader for null, booleans, arbitrary integers, binary64 floats, Python strings, arrays and ordered objects. It preserves nonfinite numbers, surrogate code points, signed floating zero and duplicate-key replacement order. UTF-8/16/32 byte decoding shares source encoding detection. | Adoption by other API/model/configuration JSON consumers is not implied. Full malformed-input diagnostic text, custom Python runtime limits and exact recursion/memory-failure behavior remain open. |
+| Automatic redirect targets | A68 shares target construction between streamed API transfers and GitHub acquisition. Duplicate Location values are combined using response-wide text decoding. Absolute targets without a host inherit only the previous host; literal dot segments are normalized before that repair. Control characters and oversized Locations are rejected before consuming the redirect body. | WHATWG URL normalization still differs from HTTPX for encoded hosts/path segments and other URL forms. Full diagnostic and serialized-URL equality, non-HTTP schemes and native Windows execution remain open. |
 | Editable package registration | `src` layouts write `_hcli_editable_NAME.pth` into the selected IDA interpreter's `sysconfig` purelib directory. Flat/regular replacements remove stale registrations. Uninstall removes links and registrations while retaining source files. Broken entries can be replaced or removed. Staged registration errors preserve the old plugin; cleanup skips interpreter-discovery failures, matching upstream. A real isolated Python process imports the fixture and observes later source edits. | Windows symlink/registration execution and live IDA imports remain unverified. Registrations left in a previously selected interpreter, and stale filenames after name-case changes on case-sensitive filesystems, remain open. |
 | Installed plugin inventory | Managed operations share records whose descriptors, referenced files and exact directory names validate. Broken directories do not enter dependency preflight, search, upgrades or configuration. Unfiltered status separately lists minimal descriptors and single-file legacy plugins; named status accepts only managed records and retains requested order/repetitions. Broken entries remain removable by filesystem name, including UTF-8 legacy names. | Directory entries are sorted for deterministic reports rather than retaining upstream filesystem iteration order. Case-colliding installed names produce errors in destructive/metadata lookup paths; upstream may select its first record. Non-UTF-8 filenames and exhaustive Unicode case conversion remain unverified. |
 | Python dependency metadata | Installation, dependency preflight and migration resolve explicit requirements or PEP 723 inline metadata. Lint does not resolve dependency scripts. Bundle creation collects explicit lists only and leaves inline metadata untouched, matching its source-specific policy. Tests cover archives, directories, editable sources, retained neighbors, malformed scripts and later installation from an inline-only bundle. Plugin code is not executed to extract requirements. | Depends on A45 for bundle collection. Migration and real wheel resolution still need end-to-end verification. Non-string TOML dependency entries are rejected during parsing; upstream returns them and fails downstream. |
@@ -785,8 +787,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 263 unit tests and 428
-integration tests on macOS: 691 passed, no failures. A67 records this validation;
+The latest uninterrupted serial all-target run passed 266 unit tests and 430
+integration tests on macOS: 696 passed, no failures. A68 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -821,6 +823,8 @@ Direct GitHub release selection and acquisition use A66's source-function,
 HTTPX-transition and owned-server installation comparisons.
 Release JSON values and byte encodings use A67's CPython decoder projections,
 expanded source-selection corpus and installation regressions.
+Automatic redirect targets use A68's HTTPX target-construction comparisons,
+expanded GitHub request-policy corpus and API/GitHub wire regressions.
 The earlier A54 parallel run observed an OAuth callback shutdown
 assertion failure at `src/auth/oauth_tests.rs:158`; that assertion passed in the
 serial run. Its intermittent cause is unknown; port reuse is an unverified
@@ -2393,6 +2397,89 @@ using the full command recorded under A61. Decoder and release corpus sizes are
 asserted in their tests. Rustfmt, whitespace checks, Clippy with warnings denied
 and Windows all-target cross-compilation passed. The source checkout remained
 clean at the pinned revision. Full project parity remains open under QG3 and QG5.
+
+### Automatic redirect target construction
+
+Under A68, `src/util/http_redirect.rs` supplies target construction shared by
+streamed API transfers and direct GitHub acquisition. Repository HTTP redirects
+remain governed by the source's separate manual `URL.join` loop under A65.
+
+The primary dependency source is HTTPX 0.28.1 in the A45 runtime:
+
+- `_client.py`, especially `_redirect_url` and `_redirect_headers`, SHA-256
+  `c43f941baefe58c91e96d00039e1868fe719d91453026d7db1647194563bff8d`.
+- `_urlparse.py`, especially URL component parsing, `validate_path` and
+  `normalize_path`, SHA-256
+  `640987e3b38d7e4c6bae3f8f3d88467a21e36fa0232824be00d58837838bfca6`.
+
+The shared helper follows the five automatic redirect statuses only when Location
+is present. It combines duplicate Location values with comma-space using the
+existing response-wide text decoder. The API previously selected only the first
+value. Absolute spellings such as `https:/next` now receive the previous host;
+the previous credentials and nondefault port are not copied. Explicit target
+userinfo and ports survive URL construction, while the existing caller-specific
+header policy determines whether Authorization is retained. Literal dot segments
+are normalized before missing-host repair, matching the source's two-stage parse
+and `copy_with(host=...)` sequence. Prior fragments retain the existing inheritance
+rule. Non-printable ASCII characters and Locations above 65,536 Unicode characters
+are rejected before redirect body consumption. Error text remains native.
+
+Evidence:
+
+- 480 HTTPX comparisons cross three bases, twenty Location arrangements and eight
+  statuses. They cover credentials, nondefault ports, IPv6, explicit/missing hosts,
+  duplicate headers, fragments, literal dot segments, absent headers and represented
+  invalid inputs. The oracle invokes `_redirect_url` and `has_redirect_location`.
+  An empty source URL path is projected to `/`, which HTTPX transmits on the wire;
+  source string serialization without that slash is not claimed equivalent.
+- The GitHub source-function corpus expands from 125 to 133 sequences. The eight
+  additions compare actual HTTPX MockTransport requests, including Authorization
+  retention/removal across repaired origins and explicit target userinfo.
+- Two added CLI tests run four owned-server scenarios: API PUT-to-GET transfers
+  and GitHub metadata plus archive acquisition, each using hostless targets or
+  duplicate Location values. Assertions check exact request paths, Host headers,
+  body/method transitions, successful confirmation or installation, and absence of
+  unintended GitHub credentials.
+- Native regressions cover the 65,536-character absolute-Location boundary and
+  confirm that invalid Location values on nonredirect responses are ignored. Existing header-encoding,
+  fragment, redirect-body ordering and redirect-limit regressions remain in use.
+
+Bounded findings: **high impact** — transport still uses `url::Url`, which applies
+WHATWG normalization to percent-encoded hosts and dot segments that HTTPX retains.
+The source probes `https://%70lugins.hex-rays.com/final` and
+`https://api.github.com/a/%2e%2e/final` therefore remain outside this result.
+The initial Location character limit is not the complete source URL-size policy:
+a source probe accepts an absolute ASCII URL of 65,536 characters but rejects a
+relative path of that length after joining adds its authority. Complete joined-URL
+and re-encoded component limits remain open; the native boundary regression uses
+the absolute spelling, independently confirmed by that source probe.
+**Medium impact** — host repair can change the effective port and origin, so tests
+must observe Authorization and actual requests, not only URL strings. **Low impact**
+— sharing the automatic policy removes drift between its two consumers without
+changing the repository's distinct manual policy.
+
+For L aggregate header/URL characters, construction and literal path normalization
+take O(L) time and temporary storage, excluding downstream URL-library work. This
+adds the source Location character limit; it adds no body-size or elapsed-time
+limit. Complete URL grammar, malformed-input diagnostic equality and raw transport
+equivalence remain open under QG3 and QG5.
+
+Enabling `HY_TEST_HTTPX_ORACLE_PYTHON` for the full A68 run also exposed a
+pre-existing indentation error in the inline environment-integer source fixture.
+That script failed before comparison. Commit `eff650ac` corrects only its loop
+indentation; all 78 environment-integer comparisons then passed. This does not
+change runtime setting behavior or retroactively certify previously skipped oracles.
+
+The subsequent A68 serial all-target run passed 696 tests: 266 unit tests and
+430 integration tests across 62 suites, with nine existing opt-in tests ignored
+and no failures. It enabled the established bundle, venv and lint source runtimes
+and additionally set `HY_TEST_HTTPX_ORACLE_PYTHON` to the A45 runtime. The final
+absolute-Location boundary fixture adjustment passed a separate three-test redirect
+rerun, including all 480 HTTPX comparisons. Logs are `/tmp/hy-redirect-full-final.log`
+and `/tmp/hy-redirect-target-final.log`. Formatting, whitespace checks, Clippy with
+warnings denied and Windows all-target cross-compilation passed. The source tree
+remained clean at its pinned revision. QG3 and QG5 remain open for the documented
+remaining contracts.
 
 ### Lint archive discovery, validation and README locations
 

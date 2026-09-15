@@ -86,11 +86,11 @@ import json, os, sys
 from hcli.env import _env_int
 results = []
 for raw in json.load(sys.stdin):
-os.environ['HY_FIXTURE_INTEGER'] = raw
-days = _env_int('HY_FIXTURE_INTEGER', 3)
-limit = max(0, _env_int('HY_FIXTURE_INTEGER', 0))
-byte_limit = min(limit * 1024 * 1024, 2**64 - 1) if limit else 2**64 - 1
-results.append([str(days), str(byte_limit)])
+    os.environ['HY_FIXTURE_INTEGER'] = raw
+    days = _env_int('HY_FIXTURE_INTEGER', 3)
+    limit = max(0, _env_int('HY_FIXTURE_INTEGER', 0))
+    byte_limit = min(limit * 1024 * 1024, 2**64 - 1) if limit else 2**64 - 1
+    results.append([str(days), str(byte_limit)])
 print(json.dumps(results))
 "#,
             ])

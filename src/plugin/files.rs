@@ -70,14 +70,6 @@ pub fn validate_directory_files(metadata: &PluginMetadata, root: &Path) -> Resul
     validate_logo(metadata, &exists)
 }
 
-pub(super) fn validate_distribution_directory(
-    metadata: &PluginMetadata,
-    root: &Path,
-) -> Result<()> {
-    // Directory packaging emits files, not directory records.
-    validate_distribution(metadata, |path| Ok(crate::util::python_path::join(root, path).is_file()))
-}
-
 pub(super) fn validate_distribution(
     metadata: &PluginMetadata,
     exists: impl Fn(&str) -> Result<bool>,

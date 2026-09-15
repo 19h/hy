@@ -29,7 +29,7 @@ pub use context::PluginContext;
 pub use dependencies::*;
 pub use editable::EditableRegistration;
 pub use files::validate_directory_files;
-pub use install::{PreparedPlugin, uninstall};
+pub use install::{InstallationSource, uninstall};
 pub use installed::*;
 pub use manifest::*;
 pub use metadata::*;

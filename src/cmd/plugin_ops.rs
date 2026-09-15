@@ -34,14 +34,23 @@ fn combined_dependencies(
 }
 
 pub async fn install(args: PluginInstallArgs, context: &plugin::PluginContext) -> Result<()> {
-    if args.editable && !Path::new(&args.source).is_dir() {
-        return Err(Error::PluginInstall("--editable requires a local directory".into()));
+    let expanded = PathBuf::from(crate::util::python_path::expand_user(&args.source)?);
+    let local_directory = crate::util::python_path::is_dir(&expanded)?
+        && crate::util::python_path::is_file(&expanded.join("ida-plugin.json"))?;
+    if args.editable && !local_directory {
+        return Err(Error::PluginInstall(
+            "--editable requires a local directory containing ida-plugin.json".into(),
+        ));
     }
     let temporary = tempfile::tempdir()?;
-    let mut source = PathBuf::from(&args.source);
+    let mut source = if local_directory {
+        expanded.canonicalize()?
+    } else {
+        PathBuf::from(&args.source)
+    };
     let mut loaded = None;
     let mut selected_name = None;
-    if !source.exists() {
+    if !source.exists() || (!local_directory && source.is_dir()) {
         let bytes = if args.source.starts_with("https://github.com/")
             && !args.source.contains("/releases/download/")
         {
@@ -138,12 +147,8 @@ pub(super) async fn install_local(
     upgrade_policy: UpgradePolicy,
 ) -> Result<()> {
     let replace = args.force || args.upgrade || args.editable;
-    let metadata = if source.is_dir() {
-        plugin::read_metadata_from_directory(source)?
-    } else {
-        let mut archive = crate::util::python_zip::Archive::new(std::fs::File::open(source)?)?;
-        plugin::select_archived_plugin(&mut archive, selected_name)?.metadata
-    };
+    let mut distribution = plugin::InstallationSource::read(source, args.editable)?;
+    let metadata = distribution.metadata(selected_name)?;
     let candidate_version = plugin::parse_version(&metadata.version).ok_or_else(|| {
         Error::PluginInstall(format!("invalid plugin version: {}", metadata.version))
     })?;
@@ -190,13 +195,7 @@ pub(super) async fn install_local(
     } else if upgrade_policy == UpgradePolicy::RequireNewer {
         return Err(Error::PluginNotInstalled(metadata.name));
     }
-    let prepared = plugin::PreparedPlugin::prepare(
-        source,
-        ida_version().as_deref(),
-        replace,
-        args.editable,
-        Some(&metadata),
-    )?;
+    let prepared = distribution.prepare(ida_version().as_deref(), replace, &metadata)?;
     let proposed = prepared.dependencies()?;
     let dependencies = if proposed.is_empty() {
         None

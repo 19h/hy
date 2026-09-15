@@ -1,5 +1,6 @@
 //! Prepare plugin files, publish replacements, and remove installations.
 
+use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
 
 use super::{
@@ -9,6 +10,9 @@ use super::{
 use crate::error::{Error, Result};
 
 mod archive;
+mod directory;
+mod source;
+pub use source::InstallationSource;
 
 /// Validate that a plugin can be installed.
 fn validate_can_install(metadata: &PluginMetadata, ida_version: Option<&str>) -> Result<()> {
@@ -61,51 +65,21 @@ impl PreparedPlugin {
         super::dependencies_from_directory(&self.metadata, &self.path)
     }
 
-    pub fn prepare(
-        source: &Path,
-        ida_version: Option<&str>,
-        replace: bool,
-        editable: bool,
-        expected: Option<&PluginMetadata>,
-    ) -> Result<Self> {
-        let prepared = if editable {
-            if !source.is_dir() {
-                return Err(Error::PluginInstall("--editable requires a local directory".into()));
-            }
-            prepare_editable(source, ida_version, replace)?
-        } else if source.is_dir() {
-            prepare_directory(source, ida_version, replace)?
-        } else {
-            prepare_archive(
-                source,
-                ida_version,
-                replace,
-                expected.map(|metadata| metadata.name.as_str()),
-            )?
-        };
-        if let Some(expected) = expected {
-            prepared.metadata.verify_prepared_identity(expected)?;
-        }
-        Ok(prepared)
-    }
-
     pub fn publish(self, registration: super::EditableRegistration) -> Result<PathBuf> {
         commit_staged(self.staging, &self.path, &self.metadata.name, self.replace, registration)
     }
 }
 
-fn prepare_archive(
-    archive_path: &Path,
+fn prepare_archive<R: Read + Seek>(
+    archive: &mut crate::util::python_zip::Archive<R>,
     ida_version: Option<&str>,
     force: bool,
     name: Option<&str>,
 ) -> Result<PreparedPlugin> {
-    let file = std::fs::File::open(archive_path)?;
-    let mut archive = crate::util::python_zip::Archive::new(file)?;
-    let selected = crate::plugin::select_archived_plugin(&mut archive, name)?;
+    let selected = crate::plugin::select_archived_plugin(archive, name)?;
     let metadata = selected.metadata;
     let root = selected.prefix;
-    super::files::ArchiveReferences::read(&archive).validate(&metadata, &root)?;
+    super::files::ArchiveReferences::read(archive).validate(&metadata, &root)?;
     validate_metadata(&metadata, ida_version)?;
     if !force {
         validate_can_install(&metadata, ida_version)?;
@@ -113,7 +87,7 @@ fn prepare_archive(
 
     let staging = staging_directory()?;
     let target_dir = staging.path().join("new");
-    archive::extract(&mut archive, &root, &target_dir)?;
+    archive::extract(archive, &root, &target_dir)?;
 
     super::validate_directory_files(&metadata, &target_dir)?;
     Ok(PreparedPlugin {
@@ -122,70 +96,6 @@ fn prepare_archive(
         path: target_dir,
         replace: force,
     })
-}
-
-/// Install a plugin from a local source directory by copying it into the
-/// plugins directory. The directory must contain `ida-plugin.json`.
-fn prepare_directory(
-    source_dir: &Path,
-    ida_version: Option<&str>,
-    force: bool,
-) -> Result<PreparedPlugin> {
-    let metadata = crate::plugin::read_metadata_from_directory(source_dir)?;
-    validate_metadata(&metadata, ida_version)?;
-    if !force {
-        validate_can_install(&metadata, ida_version)?;
-    }
-
-    let staging = staging_directory()?;
-    let target_dir = staging.path().join("new");
-    if target_dir.starts_with(source_dir.canonicalize()?) {
-        return Err(Error::PluginInstall(
-            "source contains the installation staging directory".into(),
-        ));
-    }
-    copy_plugin_tree(source_dir, &target_dir)
-        .map_err(|e| Error::PluginInstall(format!("copy failed: {e}")))?;
-    super::files::validate_distribution_directory(&metadata, &target_dir)?;
-    Ok(PreparedPlugin {
-        metadata,
-        staging,
-        path: target_dir,
-        replace: force,
-    })
-}
-
-/// Match upstream directory packaging: skip its excluded names and empty directories.
-fn copy_plugin_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
-    const SKIP: &[&str] = &[".git", ".hg", ".svn", "__pycache__", ".DS_Store"];
-    let mut entries = std::fs::read_dir(src)?.collect::<std::io::Result<Vec<_>>>()?;
-    entries.sort_by_key(|entry| entry.file_name());
-    for entry in entries {
-        let name = entry.file_name();
-        if SKIP.contains(&name.to_string_lossy().as_ref()) {
-            continue;
-        }
-        let src_path = entry.path();
-        let dst_path = dst.join(&name);
-        let kind = entry.file_type()?;
-        let metadata = std::fs::metadata(&src_path)?;
-        if metadata.is_dir() {
-            // Path.rglob does not traverse directory symlinks upstream.
-            if !kind.is_symlink() {
-                copy_plugin_tree(&src_path, &dst_path)?;
-            }
-        } else if metadata.is_file() {
-            // zipfile.write dereferences file symlinks; copy the same bytes.
-            std::fs::create_dir_all(dst)?;
-            std::fs::copy(&src_path, &dst_path)?;
-        } else {
-            return Err(std::io::Error::other(format!(
-                "unsupported source file type: {}",
-                src_path.display()
-            )));
-        }
-    }
-    Ok(())
 }
 
 /// Install a plugin editable: symlink `$IDAUSR/plugins/<name>` to the

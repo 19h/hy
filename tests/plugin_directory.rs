@@ -1,6 +1,8 @@
 //! Regular source installs follow upstream ZIP packaging and validation rules.
 #![cfg(unix)]
 
+#[path = "plugin_directory/selection.rs"]
+mod selection;
 mod support;
 
 use std::fs;
@@ -97,7 +99,7 @@ fn dangling_source_file_links_fail_before_publication() {
     std::os::unix::fs::symlink(source.join("absent"), source.join("dangling")).unwrap();
     let output = sandbox.run(&["plugin", "install", source.to_str().unwrap()]);
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("copy failed"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("No such file or directory"));
     assert!(!sandbox.path().join("idausr/plugins/example").exists());
     assert!(source.join("dangling").is_symlink());
 }

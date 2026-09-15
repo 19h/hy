@@ -4,13 +4,25 @@ use std::io;
 use std::path::Path;
 
 pub(crate) fn exists(path: &Path) -> io::Result<bool> {
+    Ok(metadata(path)?.is_some())
+}
+
+pub(crate) fn is_dir(path: &Path) -> io::Result<bool> {
+    Ok(metadata(path)?.is_some_and(|metadata| metadata.is_dir()))
+}
+
+pub(crate) fn is_file(path: &Path) -> io::Result<bool> {
+    Ok(metadata(path)?.is_some_and(|metadata| metadata.is_file()))
+}
+
+fn metadata(path: &Path) -> io::Result<Option<std::fs::Metadata>> {
     // Python reports embedded NUL paths as absent, without calling stat.
     if path.as_os_str().as_encoded_bytes().contains(&0) {
-        return Ok(false);
+        return Ok(None);
     }
     match std::fs::metadata(path) {
-        Ok(_) => Ok(true),
-        Err(error) if ignored_error(&error) => Ok(false),
+        Ok(metadata) => Ok(Some(metadata)),
+        Err(error) if ignored_error(&error) => Ok(None),
         Err(error) => Err(error),
     }
 }

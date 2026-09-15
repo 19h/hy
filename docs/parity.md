@@ -80,6 +80,8 @@ The package version alone does not establish behavioral parity.
 | A60 | Lint comparisons target the pinned HCLI archive function and A45 runtime on Unix, using stable ZIP fixtures. Reports compare terminal status, ordered findings and locations while excluding model-specific validation details. | Repeat with arbitrary Pydantic multi-errors, metadata coercion, malformed compressed streams, native Windows path equality, non-UTF-8 filesystem names, concurrent source mutation and Rich markup/terminal rendering. | 181 native CLI/source-function comparisons cover ordered descriptors, duplicate lookup, lexical README parents, reference validation and terminal read/UTF-8 failures. A direct CLI regression checks phase ordering and valid-descriptor accounting. The obsolete scanner and archive inventory are removed; whole lint/model/error equivalence remains open. |
 | A61 | Metadata paths are strings from the represented HCLI models. Pure path comparisons use CPython 3.13.15 POSIX/Windows classes; physical directory comparisons run on Unix under A45. | Probe other Python versions, native Windows filesystem behavior, non-UTF-8 roots/surrogates, arbitrary stat failures, concurrent replacement, platform-specific special files and full regular-directory packaging. | 3,329 grammar cases, 86,554 lexical joins, 196 directory/reference/dependency cases and an effective permission-denial probe match source behavior. Two CLI regressions cover four literal/normalized names and four directory-reference forms. Windows error mappings are source-reviewed and cross-compiled; native runtime equivalence remains open. |
 
+| A62 | Regular-directory packing comparisons use the pinned HCLI function, CPython 3.13.15 and stable Unix fixture trees under A45. The compared ZIP projection includes member order, decoded bytes, sizes, DOS timestamps, compression method and ordinary rwx permissions. | Probe native Windows traversal/case ties, non-UTF-8 names, alternate timezones/runtimes, ZIP64 size boundaries, special permission bits, concurrent mutation during acquisition and arbitrary filesystem failures. | Twelve source packing comparisons, seven new CLI regressions and a retained-source test cover the represented distribution behavior. ZIP bytes and complete external attributes are not identical; special mode bits are discarded by the native writer and are not restored by installation. Source replacement after acquisition cannot change regular installation bytes. Whole installation/model/transport equivalence remains open. |
+
 ## Implemented contracts and remaining coverage
 
 “Implemented” below identifies code present in this working tree. It does not
@@ -101,7 +103,7 @@ imply that every upstream edge case or supported operating system was tested.
 | Plugin compatibility | Defaults and allowed values come from the pinned schema: 63 IDA versions and six platforms. IDA ranges expand to exact known versions, including service packs; empty lists match nothing. Platform selection reads the selected IDA executable and honors `HCLI_CURRENT_IDA_PLATFORM`. | Real cross-architecture IDA execution and all repository archive variants remain unverified. |
 | Plugin schema | `schemas/ida-plugin.json` is copied from the pinned upstream `docs/schemas/ida-plugin.json`. Flat manifests, missing wrapper versions and dictionary-form settings now fail as they do upstream. | Schema equivalence does not establish runtime model equivalence; Pydantic's accepted boolean coercions and IDA range expansion are tested separately. |
 | Plugin installation | Validate and stage files before pip; resolve combined dependencies with pip dry-run, excluding the replaced version; publish after dependency installation succeeds. Direct archives count all valid descriptors; named lookup stops at the first exact name under A59. Reference validation is separate from selection. Extraction validates only the selected subtree, excludes its raw `.git/` prefix, rejects selected symlinks and reads duplicate names through their last record. Replacement directories use the exact new descriptor name, including case. | Archive normalization and malformed-member cases beyond A59, full source installation equivalence and cross-platform publication failures. Pip environment changes are not rolled back after a subsequent failure. |
-| Local directory distribution | Regular directory installs use the same native-binary validation as archives. Copying follows upstream packaging filters, dereferences file symlinks, skips directory symlinks and omits empty directories. `.venv`, `venv` and `.idea` files are retained. Fixtures distinguish regular distribution rules from editable/lint directory rules. | The native copy path still differs from source packing and archive installation: it preserves source file permissions, walks in recursive directory order and starts from the root descriptor. Source packing sorts its complete file list and direct installation counts all valid archived descriptors. Special files are explicitly rejected; upstream can attempt to read them. Whole directory-packaging and archive normalization equivalence remains open. |
+| Local directory distribution | Under A62, regular directories are packed before metadata inspection and use the shared archive pipeline. Packing filters, file-link dereferencing, omitted directory links/empty directories, all-descriptor counting and fresh installed-file permissions are covered by source comparisons and CLI regressions. `.venv`, `venv` and `.idea` files are retained. A single archive snapshot survives inspection through staging. | Native Windows execution, non-UTF-8 names, arbitrary special files, ZIP64 boundaries, concurrent acquisition and complete ZIP metadata/byte identity remain unverified or differ as recorded under A62. Local file classification still accepts existing non-ZIP-suffixed files more broadly than upstream. |
 | Editable package registration | `src` layouts write `_hcli_editable_NAME.pth` into the selected IDA interpreter's `sysconfig` purelib directory. Flat/regular replacements remove stale registrations. Uninstall removes links and registrations while retaining source files. Broken entries can be replaced or removed. Staged registration errors preserve the old plugin; cleanup skips interpreter-discovery failures, matching upstream. A real isolated Python process imports the fixture and observes later source edits. | Windows symlink/registration execution and live IDA imports remain unverified. Registrations left in a previously selected interpreter, and stale filenames after name-case changes on case-sensitive filesystems, remain open. |
 | Installed plugin inventory | Managed operations share records whose descriptors, referenced files and exact directory names validate. Broken directories do not enter dependency preflight, search, upgrades or configuration. Unfiltered status separately lists minimal descriptors and single-file legacy plugins; named status accepts only managed records and retains requested order/repetitions. Broken entries remain removable by filesystem name, including UTF-8 legacy names. | Directory entries are sorted for deterministic reports rather than retaining upstream filesystem iteration order. Case-colliding installed names produce errors in destructive/metadata lookup paths; upstream may select its first record. Non-UTF-8 filenames and exhaustive Unicode case conversion remain unverified. |
 | Python dependency metadata | Installation, dependency preflight and migration resolve explicit requirements or PEP 723 inline metadata. Lint does not resolve dependency scripts. Bundle creation collects explicit lists only and leaves inline metadata untouched, matching its source-specific policy. Tests cover archives, directories, editable sources, retained neighbors, malformed scripts and later installation from an inline-only bundle. Plugin code is not executed to extract requirements. | Depends on A45 for bundle collection. Migration and real wheel resolution still need end-to-end verification. Non-string TOML dependency entries are rejected during parsing; upstream returns them and fails downstream. |
@@ -1777,12 +1779,81 @@ three native suffix alternatives. Filesystem latency and link resolution are not
 bounded by these CPU/storage counts. Inline parsing retains the script bytes as
 before; arbitrary script size and the full PEP 723/TOML grammar remain separate limits.
 
-Code review identifies regular directory packaging as the next integration gap.
-The source command calls `pack_plugin_directory_to_zip`, scans all valid descriptors
-in the result, then installs through the archive path. Native directory installation
-still reads the root descriptor and copies recursively with `std::fs::copy`, which
-preserves file permissions. This is not covered by the directory-validator comparisons
-above and prevents claiming complete directory-installation parity.
+The A61 review identified regular directory packaging as the next integration gap.
+The former implementation read the root descriptor and copied recursively with
+`std::fs::copy`, preserving file permissions. A62 replaces that path as described
+below. The earlier recursive traversal and source's global component sort were
+different algorithms; no final file-order discrepancy was established for stable,
+ordinary Unix trees solely from that distinction.
+
+### Regular directory packaging and retained installation sources
+
+Under A62, `src/plugin/install/source.rs` separates editable directory references
+from owned archive snapshots. Regular directory inputs are packed once by
+`src/plugin/install/directory.rs`; file inputs are read once into the same archive
+representation. Descriptor inspection and staging consume that retained reader.
+The former directory-copy implementation and its separate distribution validator
+were removed. Editable sources remain live directory references.
+
+The source contracts are `pack_plugin_directory_to_zip` in the pinned
+`src/hcli/lib/ida/plugin/install.py` and the acquisition branches in
+`src/hcli/commands/plugin/install.py`. Packing gathers the complete tree before
+writing members in pathlib component order. Directory links are not traversed;
+file links are dereferenced. Directory-type checks precede exclusion filtering.
+Unreadable directory scans are suppressed, while an included unreadable file,
+dangling link, link cycle or socket can terminate packing. Empty directories are
+omitted. Files beneath `.git`, `.hg`, `.svn`, `__pycache__` or `.DS_Store` are excluded.
+
+This ordering moves packing failures ahead of metadata/version checks. A second
+valid descriptor fails direct installation even if it has the same plugin name
+or the installed version is already current. Conversely, invalid root metadata
+can coexist with one valid nested descriptor: the archive selector installs that
+descriptor's subtree. Excluded descriptors do not count. Archive extraction creates
+new files without restoring source execute permissions. Home expansion and directory
+aliases resolve before acquisition; a bare directory without a root descriptor falls
+through to repository selection.
+
+Evidence:
+
+- Ten packing fixtures compare the actual upstream function with native output.
+  The compound tree covers component ordering, Unicode, literal colon/backslash
+  names, included development directories, nested exclusions, executable files,
+  file/directory links and an excluded dangling link. Five timestamp cases cover
+  ordinary, odd-second, fractional-rounding, pre-1980 and post-2107 dates. Separate
+  cases cover included dangling/loop links, sockets and an empty tree.
+- Two effective permission-denial comparisons distinguish a suppressed directory
+  scan from a terminal file-open error. The test reports a privilege bypass if the
+  process can still read its mode-zero fixtures.
+- Seven CLI regressions cover descriptor multiplicity, nested selection, exclusions,
+  failure before an equal-version upgrade skip, installed/source modes, home/link
+  resolution in regular and editable modes, and bare-directory repository fallback.
+- A unit test deletes the original tree or replaces the original ZIP after acquisition,
+  then verifies the retained descriptor and extracted payload for both input kinds.
+  It does not model in-place mutation during the initial read or full publication.
+
+Rust materializes all fixture files. Python runs with `-I -B` and an audit hook that
+rejects filesystem mutation; the upstream ZIP writer only writes `BytesIO`.
+Successful comparisons inspect ordered member names, decoded SHA-256 values, sizes,
+DOS timestamps, compression method and rwx permission bits. Errors compare terminal
+failure, not exception text. These tests do not claim identical compressed ZIP bytes.
+The native ZIP writer discards setuid/setgid/sticky bits from external attributes;
+installation does not restore those attributes. Complete archive metadata identity,
+native Windows creation attributes and case-tie traversal remain outside this result.
+
+**High impact:** inspecting only root metadata accepted directory trees that upstream
+rejects as multiple-plugin distributions. **Medium impact:** deferring file reads
+until staging concealed packaging errors behind upgrade skips. **Medium impact:**
+reopening an archive between inspection and extraction allowed its content to change;
+retained acquisition now removes that interval for regular sources. **Low impact:**
+copying source modes made installed executability differ from archive installation.
+
+For N entries and P aggregate path bytes, collection and cached sort keys retain
+O(N + P) storage. Sorting takes O(N log N) comparisons plus component-byte comparison
+costs. Packing reads B source bytes and retains C compressed bytes plus ZIP member
+metadata and codec buffers; compression cost depends on the codec. File inputs retain
+their entire archive in memory, matching source acquisition. The archive remains
+resident through staging. No size quota, whole-operation deadline, or atomic snapshot
+of a concurrently modified source tree is introduced.
 
 ### Lint archive discovery, validation and README locations
 

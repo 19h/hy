@@ -7,17 +7,15 @@ use crate::error::{Error, Result};
 
 mod file_url;
 mod github_url;
+mod repository;
+mod url_parts;
 
 pub(super) use file_url::path as local_file_path;
 
-pub fn credential_host(url: &url::Url) -> bool {
-    url.scheme() == "https"
-        && url.host_str().is_some_and(|host| {
-            host == "plugins.hex-rays.com" || host.ends_with(".plugins.hex-rays.com")
-        })
-}
+#[cfg(test)]
+pub(super) use repository::credential_host;
 
-/// Recompute credentials per redirect; never forward x-api-key to mirrors or presigned storage.
+/// Reevaluate credential eligibility on each hop, reusing credentials within one fetch.
 pub async fn fetch(url: &str) -> Result<Vec<u8>> {
     if let Some(path) = local_file_path(url)? {
         if !crate::util::python_path::exists(&path)? {
@@ -25,40 +23,7 @@ pub async fn fetch(url: &str) -> Result<Vec<u8>> {
         }
         return Ok(std::fs::read(path)?);
     }
-    let mut current = url::Url::parse(url).map_err(|e| Error::Other(e.to_string()))?;
-    let secure = current.scheme() == "https";
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(std::time::Duration::from_secs(30))
-        .build()?;
-    for _ in 0..=10 {
-        if !matches!(current.scheme(), "https" | "http") || (secure && current.scheme() != "https")
-        {
-            return Err(Error::Other("unsupported protocol or HTTPS redirect downgrade".into()));
-        }
-        let mut request = client
-            .get(current.clone())
-            .header("User-Agent", concat!("hy/", env!("CARGO_PKG_VERSION")));
-        if credential_host(&current) {
-            request = request.headers(crate::auth::request_headers(false).await?);
-        } else if current.host_str() == Some("api.github.com")
-            && let Some(token) = &crate::config::Env::global().github_token
-        {
-            request = request.bearer_auth(token);
-        }
-        let response = request.send().await?;
-        if response.status().is_redirection()
-            && let Some(location) = response.headers().get("location").and_then(|v| v.to_str().ok())
-        {
-            current = current.join(location).map_err(|e| Error::Other(e.to_string()))?;
-            continue;
-        }
-        if !response.status().is_success() {
-            return Err(Error::from_status(response.status().as_u16(), ""));
-        }
-        return Ok(response.bytes().await?.to_vec());
-    }
-    Err(Error::Other("too many repository redirects".into()))
+    repository::fetch(url).await
 }
 
 pub(super) fn verify_checksum(location: &Location, bytes: &[u8]) -> Result<()> {

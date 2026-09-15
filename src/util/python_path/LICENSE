@@ -4,8 +4,9 @@ Lib/ntpath.py and PC/errmap.h. Changes: owned UTF-8 path components and Rust
 filesystem metadata replace Python objects; native Windows execution and
 arbitrary non-UTF-8 path behavior are not established by these adaptations.
 
-The archive file-URL adapter in plugin/index/transport/file_url also adapts
-CPython v3.13.15 Lib/urllib/parse.py, Lib/urllib/request.py and Lib/nturl2path.py.
+The archive file-URL adapter in plugin/index/transport/file_url and shared
+URL-parts adapter in plugin/index/transport/url_parts also adapt CPython
+v3.13.15 Lib/urllib/parse.py, Lib/urllib/request.py and Lib/nturl2path.py.
 Changes: Rust strings, percent decoding and native paths replace Python objects;
 Unix UTF-8/surrogateescape conversion is represented directly as filesystem bytes.
 The NFKC delimiter classification is pinned to Unicode 15.1 rather than a host

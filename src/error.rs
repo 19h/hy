@@ -2,6 +2,9 @@
 
 use std::path::PathBuf;
 
+mod plugin_access;
+pub use plugin_access::PluginAccessDenied;
+
 /// Top-level error type for all hcli operations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -60,6 +63,9 @@ pub enum Error {
     Io(#[from] std::io::Error),
 
     // ── Plugin errors ───────────────────────────────────────────────────
+    #[error("{0}")]
+    PluginAccessDenied(#[from] PluginAccessDenied),
+
     #[error("Plugin already installed: {0}")]
     PluginAlreadyInstalled(String),
 
@@ -101,6 +107,12 @@ pub enum Error {
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
 
+    #[error("HTTP {status} while fetching {url}")]
+    RepositoryHttp {
+        status: u16,
+        url: String,
+    },
+
     // ── Archive ──────────────────────────────────────────────────────────
     #[error("ZIP error: {0}")]
     Zip(#[from] zip::result::ZipError),
@@ -114,14 +126,6 @@ pub enum Error {
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 impl Error {
-    /// Construct an API error from an HTTP response status and body.
-    pub fn from_status(status: u16, body: &str) -> Self {
-        let message = serde_json::from_str::<serde_json::Value>(body)
-            .ok()
-            .and_then(|value| value.get("message")?.as_str().map(String::from));
-        Self::from_status_message(status, message)
-    }
-
     pub(crate) fn from_status_message(status: u16, message: Option<String>) -> Self {
         match status {
             401 => Self::Authentication("Authentication failed".into()),

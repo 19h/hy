@@ -1,8 +1,8 @@
-//! urllib validates an authority even when file acquisition discards it.
+//! urllib authority validation before transport-specific normalization.
 
 use crate::error::{Error, Result};
 
-pub(super) fn validate(authority: &str) -> Result<()> {
+pub(in crate::plugin::index::transport) fn validate(authority: &str) -> Result<()> {
     if authority.contains('[') != authority.contains(']') {
         return Err(invalid());
     }
@@ -23,13 +23,13 @@ pub(super) fn validate(authority: &str) -> Result<()> {
         validate_ip(hostname)?;
     }
     if authority.chars().any(nfkc_delimiter) {
-        return Err(Error::Other("file URL authority contains an NFKC delimiter".into()));
+        return Err(Error::Other("URL authority contains an NFKC delimiter".into()));
     }
     Ok(())
 }
 
 fn invalid() -> Error {
-    Error::Other("invalid bracketed authority in file URL".into())
+    Error::Other("invalid bracketed URL authority".into())
 }
 
 fn validate_ip(hostname: &str) -> Result<()> {
@@ -59,7 +59,7 @@ fn validate_ip(hostname: &str) -> Result<()> {
 
 /// Unicode 15.1 scalars whose NFKC decomposition introduces / ? # @ or :.
 /// The source comparison enumerates every scalar and tests combining contexts.
-pub(super) fn nfkc_delimiter(character: char) -> bool {
+pub(in crate::plugin::index::transport) fn nfkc_delimiter(character: char) -> bool {
     matches!(
         character,
         '\u{2047}'

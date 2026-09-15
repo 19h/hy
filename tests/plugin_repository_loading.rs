@@ -7,6 +7,8 @@ mod bundle;
 mod file_urls;
 #[path = "plugin_repository_loading/filesystem.rs"]
 mod filesystem;
+#[path = "plugin_repository_loading/http.rs"]
+mod http;
 mod support;
 
 use std::fs;

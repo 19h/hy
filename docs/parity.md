@@ -82,6 +82,7 @@ The package version alone does not establish behavioral parity.
 | A62 | Regular-directory packing comparisons use the pinned HCLI function, CPython 3.13.15 and stable Unix fixture trees under A45. The compared ZIP projection includes member order, decoded bytes, sizes, DOS timestamps, compression method and ordinary rwx permissions. | Probe native Windows traversal/case ties, non-UTF-8 names, alternate timezones/runtimes, ZIP64 size boundaries, special permission bits, concurrent mutation during acquisition and arbitrary filesystem failures. | Twelve source packing comparisons, seven new CLI regressions and a retained-source test cover the represented distribution behavior. ZIP bytes and complete external attributes are not identical; special mode bits are discarded by the native writer and are not restored by installation. Source replacement after acquisition cannot change regular installation bytes. Whole installation/model/transport equivalence remains open. |
 | A63 | Direct installation is classified using the pinned command's branch order and A45 runtime. GitHub parsing is compared only after the source direct-install pattern accepts an input. Physical path fixtures run on Unix. | Probe native Windows filesystem encodings/errors, concurrent path replacement, other Python regex runtimes, downstream URL serialization/transport, malformed release responses and complete command diagnostics. | 1,822 source-branch projections and 25,088 actual GitHub recognition/parsing comparisons pass. Four CLI regressions cover local suffixes, directory/archive precedence, rejected direct schemes, file URLs and observed GitHub release requests. The parser preserves source owner/repository/raw-tag spelling; full transport and native Windows runtime equivalence remain open. |
 | A64 | File-URL conversion uses CPython 3.13.15, Unicode 15.1 and the A45 Unix runtime with UTF-8/surrogateescape filesystem encoding. Windows conversion is compared through nturl2path and PureWindowsPath on that runtime. | Probe other filesystem encodings, lone-surrogate input strings, native Windows file operations, arbitrary IPv6/IPvFuture spellings, Unicode normalization contexts, filesystem-specific names and concurrent replacement. | 5,315 conversion comparisons, the complete non-ASCII NFKC-delimiter table, 45 archive reads, six repository-construction comparisons and a direct-install regression cover represented file-URL behavior. This macOS volume rejects invalid UTF-8 filenames; its read failure is compared, while decoding bytes are tested independently. Full HTTP transport and native Windows execution remain open. |
+| A65 | Repository fetch policy is compared with the pinned source and HTTPX in the A45 runtime. The source client uses an in-memory transport; native wire regressions use owned HTTP loopback servers. Authentication resolution is replaced with deterministic empty or API-key headers in the policy oracle. | Probe real authentication refresh, arbitrary HTTPX URL normalization/joining, proxies/TLS, duplicate headers, malformed wire responses, timeout phases, optional content codecs and native Windows networking. | 231 response-sequence comparisons and 280 raw-host decisions pass. Three CLI regressions cover 37 wire scenarios. Lazy credential reuse, exact redirect statuses, represented cookie transitions, decoding order and entitlement diagnostics agree within this corpus. Generic HTTP diagnostics, URL serialization and phase deadlines remain distinct or unverified. |
 
 ## Implemented contracts and remaining coverage
 
@@ -107,6 +108,7 @@ imply that every upstream edge case or supported operating system was tested.
 | Local directory distribution | Under A62, regular directories are packed before metadata inspection and use the shared archive pipeline. Packing filters, file-link dereferencing, omitted directory links/empty directories, all-descriptor counting and fresh installed-file permissions are covered by source comparisons and CLI regressions. `.venv`, `venv` and `.idea` files are retained. A single archive snapshot survives inspection through staging. A63 preserves directory/archive classification through acquisition. | Native Windows execution, non-UTF-8 names, arbitrary special files, ZIP64 boundaries, concurrent acquisition and complete ZIP metadata/byte identity remain unverified or differ as recorded under A62. |
 | Direct installation source selection | A63 uses upstream branch order for editable directories, regular plugin directories, existing lowercase `.zip` paths, `file://`, recognized GitHub URLs, lowercase `https://`, and repository references. GitHub owner/repository/tag parsing preserves source spelling after recognition. | Full command diagnostic text, native Windows path behavior, URL decoding/serialization, transport policy and malformed release-response handling remain open. |
 | File-URL acquisition | A64 shares source-compatible decoding between archive fetching and repository construction. Authority validation is separate from local path selection; semicolons, encoded delimiters, trailing spaces, symlink/parent traversal and Unix filesystem bytes are retained under source rules. | Non-UTF-8 filesystem encodings, lone-surrogate input strings, native Windows execution and arbitrary filesystem/authority edge cases remain unverified. |
+| Repository HTTP policy | A65 resolves credentials lazily once per fetch, attaches them only to eligible raw HTTPS hosts, follows the five source redirect statuses with Location, retains per-fetch cookies, decodes bodies before status handling and distinguishes missing credentials, rejected credentials and entitlement denial. | HTTPX URL serialization/joining, generic HTTP diagnostic text, proxy/TLS and timeout-phase behavior, live credentials and native Windows networking remain open. Direct GitHub release transport has a separate source contract. |
 | Editable package registration | `src` layouts write `_hcli_editable_NAME.pth` into the selected IDA interpreter's `sysconfig` purelib directory. Flat/regular replacements remove stale registrations. Uninstall removes links and registrations while retaining source files. Broken entries can be replaced or removed. Staged registration errors preserve the old plugin; cleanup skips interpreter-discovery failures, matching upstream. A real isolated Python process imports the fixture and observes later source edits. | Windows symlink/registration execution and live IDA imports remain unverified. Registrations left in a previously selected interpreter, and stale filenames after name-case changes on case-sensitive filesystems, remain open. |
 | Installed plugin inventory | Managed operations share records whose descriptors, referenced files and exact directory names validate. Broken directories do not enter dependency preflight, search, upgrades or configuration. Unfiltered status separately lists minimal descriptors and single-file legacy plugins; named status accepts only managed records and retains requested order/repetitions. Broken entries remain removable by filesystem name, including UTF-8 legacy names. | Directory entries are sorted for deterministic reports rather than retaining upstream filesystem iteration order. Case-colliding installed names produce errors in destructive/metadata lookup paths; upstream may select its first record. Non-UTF-8 filenames and exhaustive Unicode case conversion remain unverified. |
 | Python dependency metadata | Installation, dependency preflight and migration resolve explicit requirements or PEP 723 inline metadata. Lint does not resolve dependency scripts. Bundle creation collects explicit lists only and leaves inline metadata untouched, matching its source-specific policy. Tests cover archives, directories, editable sources, retained neighbors, malformed scripts and later installation from an inline-only bundle. Plugin code is not executed to extract requirements. | Depends on A45 for bundle collection. Migration and real wheel resolution still need end-to-end verification. Non-string TOML dependency entries are rejected during parsing; upstream returns them and fails downstream. |
@@ -779,8 +781,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 255 unit tests and 421
-integration tests on macOS: 676 passed, no failures. A64 records this validation;
+The latest uninterrupted serial all-target run passed 257 unit tests and 424
+integration tests on macOS: 681 passed, no failures. A65 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -809,6 +811,8 @@ Direct acquisition branch selection and GitHub release parsing use A63's source
 comparisons and owned-server CLI regressions.
 File-URL decoding, archive reads and repository construction use A64's conversion
 and source-consumer comparisons.
+Repository redirect, credential and response policy uses A65's actual-source
+comparisons and production-client wire regressions.
 The earlier A54 parallel run observed an OAuth callback shutdown
 assertion failure at `src/auth/oauth_tests.rs:158`; that assertion passed in the
 serial run. Its intermittent cause is unknown; port reuse is an unverified
@@ -2002,7 +2006,7 @@ separate conversion orders. Native Windows filesystem execution is not establish
 by comparing its conversion through pure path objects.
 
 Authority validation remains necessary even when the authority is discarded for
-file selection. `file_url/authority.rs` checks bracket structure, IPv6 scope spelling
+file selection. `url_parts/authority.rs` checks bracket structure, IPv6 scope spelling
 and represented IPvFuture forms. Its NFKC delimiter classification is the nineteen
 non-ASCII Unicode 15.1 characters whose normalization introduces `/`, `?`, `#`, `@`
 or `:`. This avoids inheriting another library's Unicode table version. Attribution
@@ -2057,6 +2061,112 @@ are asserted in their tests. Rustfmt, whitespace checks, Clippy with warnings de
 and the Windows all-target cross-check passed. The upstream checkout remained clean
 at the pinned revision. These results do not close QG3 or QG5 for the remaining
 transport, platform and metadata contracts.
+
+### Repository HTTP redirect, credential and response policy
+
+Under A65, `src/plugin/index/transport/repository.rs` implements the request loop
+from `fetch_plugin_repo_bytes` in the pinned
+`src/hcli/lib/ida/plugin/repo/__init__.py`. The source was read directly from the
+local checkout at the revision recorded above. Its `is_plugin_repo_host` helper
+uses raw `urllib.parse` hostname rules before HTTPX normalizes the request URL.
+The shared `url_parts` adapter now supplies those pieces to both repository host
+classification and A64's file-URL conversion. In particular, a percent-encoded
+hostname does not become credential-eligible merely because a WHATWG parser would
+decode it to the repository host.
+
+Credential resolution occurs on the first eligible hop and is cached for that
+fetch, including an empty result. Eligible destinations are HTTPS on
+`plugins.hex-rays.com` or its subdomains. Requests to mirrors omit those headers.
+The generic repository fetch no longer injects `GITHUB_TOKEN` into GitHub requests;
+the source repository helper does not do so. The independent GitHub GraphQL client
+retains its explicitly configured token behavior.
+
+Only 301, 302, 303, 307 and 308 responses with a Location header are followed.
+An empty Location is still a redirect; its represented join preserves the base
+fragment. The loop permits eleven requests, counting the initial request and ten
+followed redirects. On the final response, redirect target construction and the
+original-HTTPS downgrade check precede exhaustion reporting, as in the source.
+A fetch that began with HTTP is not subject to that original-HTTPS check after an
+intermediate upgrade. Cookies use the existing HTTPX-compatible jar for one fetch
+and are not shared with the next fetch.
+
+The production client consumes and decodes response bodies before redirect and
+status decisions. Invalid compressed redirect or error bodies therefore fail at
+decoding rather than following a Location or presenting a status error. The native
+client disables automatic reqwest decompression and uses the existing shared
+gzip/deflate decoder. Its request advertises those two codecs.
+
+`PluginAccessDenied` preserves the initial URL, status, authentication state and
+optional repository name. Its display follows the source exception: absent
+credentials prompt login; authenticated 401 distinguishes rejected credentials;
+authenticated 403 identifies an entitlement denial. `load_named` attaches repository
+context; generic archive fetching remains unnamed. Other failures retain HTTP
+status and URL instead of translating every 401/403/404 into API authentication
+messages. Generic HTTP error text is native and does not reproduce HTTPX's complete
+`HTTPStatusError` presentation.
+
+Evidence:
+
+- 231 comparisons invoke the actual upstream fetch loop with HTTPX MockTransport.
+  They compare request URLs, selected request headers, credential-resolution counts,
+  returned bytes, error categories and all structured entitlement fields plus
+  diagnostic text. Cases span seventeen statuses, missing/empty/nonempty Location,
+  credentialed and mirror hosts, cached empty credentials, cross-host chains,
+  redirect counts around ten, original-scheme downgrade policy, fragments,
+  Latin-1/UTF-8 Location headers, cookie return and corrupted gzip responses.
+- 280 comparisons invoke the actual source host helper across five schemes,
+  fourteen authority forms and four suffixes. Percent encoding, userinfo, invalid
+  ports, bracket forms, Unicode delimiters, suffix spoofing and control cleanup
+  are represented. Invalid authority outcomes are compared as failures, not by
+  full exception text.
+- Three CLI regressions run 37 owned-server scenarios: thirty status/Location
+  combinations, six gzip/status combinations and one three-hop cookie session.
+  They exercise actual reqwest requests and complete repository snapshot output.
+  Loopback requests omit configured API and GitHub credentials. These HTTP fixtures
+  do not certify TLS credential delivery to actual repository hosts.
+
+The oracle runs with `-I -B` and a filesystem-mutation audit hook. Its initial run
+caught an upstream import attempting configuration migration; the audit rejected
+the write. The corrected fixture redirects source configuration discovery to a
+Rust-created configuration whose version already matches the pinned upstream.
+The only patched runtime boundaries are client construction, optional credential
+resolution and configuration-directory discovery. Python performs no file edits.
+The comparison found and corrected empty-Location fragment loss. All previous
+file-URL and direct-GitHub parsing comparisons passed after the shared URL-parts
+refactor.
+
+**High impact:** normalizing raw hosts before credential eligibility can change
+which requests carry credentials. **Medium impact:** resolving credentials at each
+eligible redirect repeats authentication work and can change state during a fetch.
+**Medium impact:** ignoring response decoding or cookies changes acquisition even
+when status and Location appear correct.
+
+These findings are bounded to the represented policy and wire cases. The native
+redirect join still uses `url::Url` except for the tested empty-Location adjustment;
+arbitrary HTTPX URL serialization and joining are not established. The existing
+native 30 s total request deadline differs from HTTPX's per-phase timeout contract.
+Proxy discovery, TLS trust, optional codecs, malformed framing, complete generic
+error text and native Windows execution remain open. The mock compares whether a
+User-Agent exists, not identity equality: Hy retains its own product/version.
+Named-error formatting is compared by supplying the name to the structured error;
+the oracle does not exercise native `load_named` against an eligible TLS server.
+
+For R requests (R ≤ 11), U aggregate URL/header bytes and B aggregate decoded body
+bytes, parsing and decoding take O(U + B) work, excluding codec-specific cost and
+cookie matching. For C stored cookies, each outgoing selection has O(C log C)
+sorting cost plus cookie/path byte comparisons. Retained storage is O(U + K + M)
+for K stored cookie bytes and the current maximum response M bytes, plus decoder
+state. No new byte quota or whole-fetch deadline is introduced. Authentication may
+perform separate work; the request limit does not bound its duration.
+
+The uninterrupted A65 serial all-target run passed 681 tests: 257 unit tests and
+424 integration tests across 62 suites, with nine existing opt-in tests ignored
+and no failures. It enabled both established source runtimes and the lint oracle,
+using the full command recorded under A61. The repository corpus sizes are asserted
+in their tests. Rustfmt, whitespace validation, Clippy with warnings denied and
+the Windows all-target cross-check passed. The source checkout remained clean
+at the pinned revision.
+These results do not close QG3 or QG5 for the remaining contracts.
 
 ### Lint archive discovery, validation and README locations
 

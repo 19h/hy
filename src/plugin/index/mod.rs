@@ -64,7 +64,13 @@ pub async fn load_named(
     source: &str,
     offline: bool,
 ) -> Result<LoadedRepository> {
-    let mut repository = load(source, offline).await?;
+    let mut repository = load(source, offline).await.map_err(|error| match error {
+        Error::PluginAccessDenied(mut denied) => {
+            denied.repository = name.map(str::to_owned);
+            Error::PluginAccessDenied(denied)
+        }
+        other => other,
+    })?;
     if let Some(name) = name.filter(|name| *name != "hexrays") {
         let before = repository.snapshot.plugins.len();
         repository.snapshot.plugins.retain(|plugin| {
@@ -140,7 +146,7 @@ mod tests {
     #[test]
     fn credential_scope_is_exact_and_https_only() {
         for host in ["https://plugins.hex-rays.com/a", "https://hexrays.plugins.hex-rays.com/a"] {
-            assert!(credential_host(&url::Url::parse(host).unwrap()));
+            assert!(credential_host(host).unwrap());
         }
         for host in [
             "http://plugins.hex-rays.com",
@@ -148,7 +154,7 @@ mod tests {
             "https://plugins.hex-rays.com.evil.test",
             "https://github.com",
         ] {
-            assert!(!credential_host(&url::Url::parse(host).unwrap()));
+            assert!(!credential_host(host).unwrap());
         }
     }
     #[test]

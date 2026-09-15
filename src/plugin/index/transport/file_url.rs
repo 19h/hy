@@ -10,7 +10,8 @@ use crate::error::Result;
 #[cfg(any(windows, test))]
 use crate::util::python_path::path::{Flavor, ParsedPath};
 
-mod authority;
+#[cfg(test)]
+use super::url_parts::authority;
 
 /// Return a native path only for the file scheme, before WHATWG URL parsing.
 pub(in crate::plugin::index) fn path(value: &str) -> Result<Option<PathBuf>> {
@@ -29,26 +30,9 @@ pub(in crate::plugin::index) fn path(value: &str) -> Result<Option<PathBuf>> {
 }
 
 fn raw_path(value: &str) -> Result<Option<String>> {
-    // urllib strips leading C0/space and removes embedded tab, CR and LF.
-    let cleaned: String = value
-        .trim_start_matches(|character: char| character <= '\u{20}')
-        .chars()
-        .filter(|character| !matches!(character, '\t' | '\r' | '\n'))
-        .collect();
-    let Some((scheme, mut remainder)) = cleaned.split_once(':') else {
-        return Ok(None);
-    };
-    if !scheme.eq_ignore_ascii_case("file") {
-        return Ok(None);
-    }
-    if let Some(netloc) = remainder.strip_prefix("//") {
-        let end = netloc.find(['/', '?', '#']).unwrap_or(netloc.len());
-        authority::validate(&netloc[..end])?;
-        remainder = &netloc[end..];
-    }
+    let parts = super::url_parts::Parts::parse(value)?;
     // file is absent from urllib's uses_params list: semicolons remain in paths.
-    let end = remainder.find(['?', '#']).unwrap_or(remainder.len());
-    Ok(Some(remainder[..end].to_owned()))
+    Ok((parts.scheme == "file").then_some(parts.path))
 }
 
 fn without_empty_or_local_authority(path: &str) -> &str {

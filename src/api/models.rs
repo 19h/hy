@@ -6,32 +6,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
-/// Deserialize a value that might be `null` in JSON into `T::default()`.
-/// Unlike `#[serde(default)]` alone, this handles explicit `null` values.
-fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Default + Deserialize<'de>,
-{
-    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
-}
-
-/// Deserialize an i64 that might arrive as a JSON string (e.g. `"1000"` instead of `1000`).
-fn string_or_i64<'de, D>(deserializer: D) -> Result<i64, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum StringOrNum {
-        Num(i64),
-        Str(String),
-    }
-    match StringOrNum::deserialize(deserializer)? {
-        StringOrNum::Num(n) => Ok(n),
-        StringOrNum::Str(s) => s.parse().map_err(serde::de::Error::custom),
-    }
-}
+use super::asset_models::Asset;
 
 // ── Auth ────────────────────────────────────────────────────────────────
 
@@ -189,36 +164,6 @@ pub struct ApiKeyToken {
     pub key: String,
 }
 
-// ── Assets / File Sharing ───────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Asset {
-    pub email: Option<String>,
-    #[serde(default)]
-    pub filename: String,
-    #[serde(default, deserialize_with = "null_as_default")]
-    pub size: u64,
-    pub key: String,
-    pub code: Option<String>,
-    pub created_at: Option<String>,
-    pub expires_at: Option<String>,
-    pub url: Option<String>,
-    #[serde(default, deserialize_with = "null_as_default")]
-    pub version: u32,
-    pub metadata: Option<HashMap<String, serde_json::Value>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PagedAssets {
-    #[serde(deserialize_with = "string_or_i64")]
-    pub offset: i64,
-    #[serde(deserialize_with = "string_or_i64")]
-    pub limit: i64,
-    #[serde(deserialize_with = "string_or_i64")]
-    pub total: i64,
-    pub items: Vec<Asset>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TreeNode {
     pub name: String,
@@ -243,9 +188,30 @@ pub struct Tag {
     pub version: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TagsResponse {
     pub tags: Vec<Tag>,
+}
+
+impl<'de> Deserialize<'de> for TagsResponse {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Response {
+            Wrapped {
+                tags: Vec<Tag>,
+            },
+            Direct(Vec<Tag>),
+        }
+        Ok(Self {
+            tags: match Response::deserialize(deserializer)? {
+                Response::Wrapped {
+                    tags,
+                }
+                | Response::Direct(tags) => tags,
+            },
+        })
+    }
 }
 
 #[allow(dead_code)]

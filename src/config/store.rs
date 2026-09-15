@@ -3,10 +3,10 @@
 //! Reads / writes `$XDG_CONFIG_HOME/hcli/config.json` (or the platform
 //! equivalent via the `dirs` crate).
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
+use indexmap::IndexMap;
 use serde_json::Value;
 
 use crate::config::Env;
@@ -23,15 +23,22 @@ pub struct ConfigStore {
 }
 
 impl ConfigStore {
+    /// Load before command dispatch; malformed user data must not become empty defaults.
+    pub fn initialize() -> Result<()> {
+        if STORE.get().is_none() {
+            let store = Self::open()?;
+            let _ = STORE.set(Mutex::new(store));
+        }
+        Ok(())
+    }
+
     // ── singleton access ────────────────────────────────────────────────
 
     /// Obtain a locked reference to the global config store.
     pub fn global() -> std::sync::MutexGuard<'static, Self> {
         STORE
-            .get_or_init(|| {
-                let store = Self::open().unwrap_or_else(|_| Self::empty());
-                Mutex::new(store)
-            })
+            .get()
+            .expect("configuration must be initialized before command dispatch")
             .lock()
             .expect("config store lock poisoned")
     }
@@ -53,9 +60,7 @@ impl ConfigStore {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            dirs::config_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join("hcli")
+            dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("hcli")
         }
     }
 
@@ -63,34 +68,58 @@ impl ConfigStore {
         Self::config_dir().join("config.json")
     }
 
-    fn empty() -> Self {
-        Self {
-            path: Self::config_path(),
-            data: Value::Object(serde_json::Map::new()),
-        }
+    pub(crate) fn read_snapshot() -> Result<Self> {
+        Self::open()
     }
 
     fn open() -> Result<Self> {
-        let path = Self::config_path();
+        Self::open_at(Self::config_path())
+    }
+
+    pub(crate) fn open_at(path: PathBuf) -> Result<Self> {
         if path.exists() {
             let text = std::fs::read_to_string(&path)?;
-            let data: Value =
-                serde_json::from_str(&text).unwrap_or(Value::Object(Default::default()));
-            let mut store = Self { path, data };
+            let data: Value = serde_json::from_str(&text)?;
+            if !data.is_object() {
+                return Err(crate::error::Error::Other("config root must be an object".into()));
+            }
+            let mut store = Self {
+                path,
+                data,
+            };
             store.migrate();
             Ok(store)
         } else {
-            Ok(Self::empty())
+            Ok(Self {
+                path,
+                data: Value::Object(serde_json::Map::new()),
+            })
         }
     }
 
     fn migrate(&mut self) {
-        let current = self.get_str("version").unwrap_or_default();
-        let target = &Env::global().version;
-        if current != *target {
-            self.set_str("version", target);
-            let _ = self.flush();
+        let env = Env::global();
+        for old in ["credentials", "login.email"] {
+            let new = format!("{}.{}", env.config_namespace, old);
+            if self.data.get(&new).is_none()
+                && let Some(value) = self.data.as_object_mut().and_then(|object| object.remove(old))
+            {
+                self.data[&new] = value;
+            }
         }
+        // Preserve the Rust port's earlier nested settings when adopting upstream's flat keys.
+        for (old, new) in [
+            ("ke.ida.instances", "ida.instances"),
+            ("ke.ida.default", "ida.default"),
+            ("ke.sources", "idb.sources"),
+        ] {
+            if let Some(value) = Self::take_legacy_path(&mut self.data, old)
+                && self.data.get(new).is_none()
+            {
+                self.data[new] = value;
+            }
+        }
+        self.data[format!("{}.version", env.binary_name)] = serde_json::json!(env.version);
     }
 
     // ── string accessors ────────────────────────────────────────────────
@@ -99,19 +128,8 @@ impl ConfigStore {
         self.data.get(key)?.as_str()
     }
 
-    pub fn set_str(&mut self, key: &str, value: &str) {
-        self.data
-            .as_object_mut()
-            .expect("root must be object")
-            .insert(key.to_owned(), Value::String(value.to_owned()));
-        let _ = self.flush();
-    }
-
-    pub fn remove(&mut self, key: &str) {
-        if let Some(obj) = self.data.as_object_mut() {
-            obj.remove(key);
-            let _ = self.flush();
-        }
+    pub fn set_str(&mut self, key: &str, value: &str) -> Result<()> {
+        self.set_value(key, Value::String(value.to_owned()))
     }
 
     // ── typed object accessors ──────────────────────────────────────────
@@ -120,12 +138,38 @@ impl ConfigStore {
         self.data.get(key)
     }
 
-    pub fn set_value(&mut self, key: &str, value: Value) {
-        self.data
-            .as_object_mut()
-            .expect("root must be object")
-            .insert(key.to_owned(), value);
-        let _ = self.flush();
+    pub fn set_value(&mut self, key: &str, value: Value) -> Result<()> {
+        self.set_values([(key.to_owned(), value)])
+    }
+
+    /// Commit related flat keys together; retain the old in-memory state on failure.
+    pub fn set_values(&mut self, values: impl IntoIterator<Item = (String, Value)>) -> Result<()> {
+        self.commit_changes(values.into_iter().map(|(key, value)| (key, Some(value))))
+    }
+
+    /// Apply related insertions and removals together; `None` removes a key.
+    pub fn commit_changes(
+        &mut self,
+        changes: impl IntoIterator<Item = (String, Option<Value>)>,
+    ) -> Result<()> {
+        let mut candidate = self.data.clone();
+        let object = candidate.as_object_mut().expect("validated configuration object");
+        for (key, value) in changes {
+            match value {
+                Some(value) => {
+                    object.insert(key, value);
+                }
+                None => {
+                    object.shift_remove(&key);
+                }
+            }
+        }
+        if candidate == self.data {
+            return Ok(());
+        }
+        self.flush(&candidate)?;
+        self.data = candidate;
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -144,9 +188,16 @@ impl ConfigStore {
         Some(current)
     }
 
+    fn take_legacy_path(root: &mut Value, dotted: &str) -> Option<Value> {
+        let (parent, key) = dotted.rsplit_once('.')?;
+        root.pointer_mut(&format!("/{}", parent.replace('.', "/")))?
+            .as_object_mut()?
+            .shift_remove(key)
+    }
+
     /// Read a nested value by dotted path.
     pub fn get_nested(&self, dotted: &str) -> Option<&Value> {
-        Self::resolve_path(&self.data, dotted)
+        self.data.get(dotted).or_else(|| Self::resolve_path(&self.data, dotted))
     }
 
     /// Read a nested string by dotted path.
@@ -154,8 +205,8 @@ impl ConfigStore {
         self.get_nested(dotted)?.as_str()
     }
 
-    /// Read a nested object as `HashMap<String, String>` by dotted path.
-    pub fn get_string_map(&self, dotted: &str) -> HashMap<String, String> {
+    /// Read a string mapping in configuration insertion order.
+    pub fn get_string_map(&self, dotted: &str) -> IndexMap<String, String> {
         self.get_nested(dotted)
             .and_then(|v| v.as_object())
             .map(|obj| {
@@ -166,57 +217,63 @@ impl ConfigStore {
             .unwrap_or_default()
     }
 
-    /// Write a value at a dotted path, creating intermediate objects as needed.
-    pub fn set_nested(&mut self, dotted: &str, value: Value) {
-        let parts: Vec<&str> = dotted.split('.').collect();
-        let mut current = &mut self.data;
-        for &part in &parts[..parts.len() - 1] {
-            if !current.get(part).is_some_and(|v| v.is_object()) {
-                current
-                    .as_object_mut()
-                    .expect("intermediate must be object")
-                    .insert(part.to_owned(), Value::Object(Default::default()));
-            }
-            current = current.get_mut(part).unwrap();
-        }
-        let last = parts.last().unwrap();
-        current
-            .as_object_mut()
-            .expect("parent must be object")
-            .insert((*last).to_owned(), value);
-        let _ = self.flush();
-    }
-
-    /// Remove a key at a dotted path.
-    pub fn remove_nested(&mut self, dotted: &str) {
-        let parts: Vec<&str> = dotted.split('.').collect();
-        if parts.len() == 1 {
-            self.remove(parts[0]);
-            return;
-        }
-        // Navigate to parent.
-        let mut current = &mut self.data;
-        for &part in &parts[..parts.len() - 1] {
-            match current.get_mut(part) {
-                Some(v) if v.is_object() => current = v,
-                _ => return, // Path doesn't exist, nothing to remove.
-            }
-        }
-        if let Some(obj) = current.as_object_mut() {
-            let last = parts.last().unwrap();
-            obj.remove(*last);
-        }
-        let _ = self.flush();
-    }
-
     // ── persistence ─────────────────────────────────────────────────────
 
-    fn flush(&self) -> Result<()> {
+    fn flush(&self, data: &Value) -> Result<()> {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let text = serde_json::to_string_pretty(&self.data)?;
-        std::fs::write(&self.path, text)?;
+        let text = serde_json::to_string_pretty(data)?;
+        use std::io::Write;
+        let parent = self.path.parent().unwrap();
+        let mut temp = tempfile::NamedTempFile::new_in(parent)?;
+        temp.write_all(text.as_bytes())?;
+        temp.persist(&self.path).map_err(|e| e.error)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn failed_writes_preserve_memory_and_successful_changes_commit_together() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.json");
+        let original = json!({"key": "original", "default": "key", "unrelated": [1, 2]});
+        std::fs::write(&path, serde_json::to_vec(&original).unwrap()).unwrap();
+        let mut store = ConfigStore {
+            path: path.clone(),
+            data: original.clone(),
+        };
+
+        // Replacing a directory with a file fails independently of user permissions.
+        let saved = directory.path().join("saved.json");
+        std::fs::rename(&path, &saved).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(store.set_str("key", "changed").is_err());
+        assert!(store.commit_changes([("key".into(), None)]).is_err());
+        assert!(
+            store.set_values([("first".into(), json!(1)), ("second".into(), json!(2))]).is_err()
+        );
+        assert_eq!(store.data, original);
+        assert_eq!(
+            serde_json::from_slice::<Value>(&std::fs::read(&saved).unwrap()).unwrap(),
+            original
+        );
+
+        std::fs::remove_dir(&path).unwrap();
+        std::fs::rename(&saved, &path).unwrap();
+        store
+            .commit_changes([("key".into(), Some(json!("changed"))), ("default".into(), None)])
+            .unwrap();
+        let expected = json!({"key": "changed", "unrelated": [1, 2]});
+        assert_eq!(store.data, expected);
+        assert_eq!(
+            serde_json::from_slice::<Value>(&std::fs::read(path).unwrap()).unwrap(),
+            expected
+        );
     }
 }

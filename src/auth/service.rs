@@ -1,14 +1,14 @@
 //! Central authentication service (singleton).
 
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
 
 use crate::auth::credentials::{CredentialType, Credentials, CredentialsConfig};
-use crate::auth::oauth::OAuthServer;
 use crate::config::{ConfigStore, Env};
 use crate::error::{Error, Result};
 
-const CONFIG_KEY: &str = "credentials";
+fn config_key() -> String {
+    format!("{}.credentials", Env::global().config_namespace)
+}
 
 /// Global auth service instance.
 static AUTH: OnceLock<Mutex<AuthService>> = OnceLock::new();
@@ -20,6 +20,7 @@ pub struct AuthService {
     current: Option<String>, // name of current credential
     forced: Option<String>,  // from --auth-credentials
     initialised: bool,
+    validated_token: Option<String>,
 }
 
 impl AuthService {
@@ -27,9 +28,7 @@ impl AuthService {
 
     /// Get a locked reference to the global service.
     pub fn global() -> std::sync::MutexGuard<'static, Self> {
-        AUTH.get_or_init(|| Mutex::new(Self::new()))
-            .lock()
-            .expect("auth service lock poisoned")
+        AUTH.get_or_init(|| Mutex::new(Self::new())).lock().expect("auth service lock poisoned")
     }
 
     fn new() -> Self {
@@ -38,38 +37,101 @@ impl AuthService {
             current: None,
             forced: None,
             initialised: false,
+            validated_token: None,
         }
     }
 
     // ── initialisation ──────────────────────────────────────────────────
 
     /// Load persisted credentials from the config store.
-    pub fn init(&mut self, forced_credentials: Option<&str>) {
+    pub fn init(&mut self, forced_credentials: Option<&str>) -> Result<()> {
         if self.initialised {
-            return;
+            return Ok(());
         }
+        self.load_config()?;
         self.forced = forced_credentials.map(String::from);
-        self.load_config();
         self.resolve_current();
         self.initialised = true;
+        Ok(())
     }
 
-    fn load_config(&mut self) {
+    fn load_config(&mut self) -> Result<()> {
         let store = ConfigStore::global();
-        if let Some(val) = store.get_value(CONFIG_KEY)
-            && let Ok(cfg) = serde_json::from_value::<CredentialsConfig>(val.clone()) {
-                self.config = cfg;
+        if let Some(value) = store.get_value(&config_key()).filter(|value| !value.is_null()) {
+            if !value.is_object() {
+                return Err(Error::Authentication(
+                    "invalid stored credentials: expected an object".into(),
+                ));
             }
+            self.config = serde_json::from_value(value.clone()).map_err(|error| {
+                Error::Authentication(format!("invalid stored credentials: {error}"))
+            })?;
+        }
+        Ok(())
     }
 
-    fn save_config(&self) {
-        let mut store = ConfigStore::global();
-        if let Ok(val) = serde_json::to_value(&self.config) {
-            store.set_value(CONFIG_KEY, val);
+    fn commit_config(&mut self, candidate: CredentialsConfig) -> Result<()> {
+        self.commit_state(candidate, None, None)
+    }
+
+    fn commit_state(
+        &mut self,
+        candidate: CredentialsConfig,
+        session: Option<&super::session::SupabaseSession>,
+        login_email: Option<&str>,
+    ) -> Result<()> {
+        let mut values = vec![(config_key(), Some(serde_json::to_value(&candidate)?))];
+        if let Some(session) = session {
+            let (key, value) = super::session::config_entry(session)?;
+            values.push((key, Some(value)));
+        } else if self.removes_legacy_session(&candidate) {
+            values.push((super::session::SUPABASE_SESSION_KEY.into(), None));
         }
+        if let Some(email) = login_email {
+            values.push((
+                format!("{}.login.email", Env::global().config_namespace),
+                Some(serde_json::json!(email)),
+            ));
+        }
+        ConfigStore::global().commit_changes(values)?;
+        self.config = candidate;
+        Ok(())
+    }
+
+    fn removes_legacy_session(&self, candidate: &CredentialsConfig) -> bool {
+        let removed: Vec<_> =
+            self.config
+                .credentials
+                .values()
+                .filter(|credential| {
+                    credential.cred_type == CredentialType::Interactive
+                        && candidate.credentials.get(&credential.name).is_none_or(|retained| {
+                            retained.cred_type != CredentialType::Interactive
+                        })
+                })
+                .collect();
+        if removed.is_empty() {
+            return false;
+        }
+        if !candidate
+            .credentials
+            .values()
+            .any(|credential| credential.cred_type == CredentialType::Interactive)
+        {
+            return true;
+        }
+        let Ok(Some(session)) = super::session::load_session() else {
+            return false;
+        };
+        let email = super::session::email_from_jwt(&session.access_token);
+        removed.iter().any(|credential| {
+            credential.token.as_deref() == Some(session.access_token.as_str())
+                || email.as_deref() == Some(credential.email.as_str())
+        })
     }
 
     fn resolve_current(&mut self) {
+        self.validated_token = None;
         let env = Env::global();
 
         // Environment API key always wins.
@@ -79,24 +141,25 @@ impl AuthService {
         }
 
         if let Some(ref forced) = self.forced
-            && self.config.credentials.contains_key(forced) {
-                self.current = Some(forced.clone());
-                return;
-            }
+            && self.config.credentials.contains_key(forced)
+        {
+            self.current = Some(forced.clone());
+            return;
+        }
 
         self.current = self.config.default.clone();
     }
 
     // ── queries ─────────────────────────────────────────────────────────
 
-    pub fn is_logged_in(&self) -> bool {
-        Env::global().api_key.is_some() || self.current_credentials().is_some()
+    /// May perform blocking token validation; call from a blocking worker.
+    pub fn is_logged_in(&mut self) -> bool {
+        self.api_key().is_some_and(|key| !key.is_empty())
+            || self.access_token().ok().flatten().is_some()
     }
 
     pub fn current_credentials(&self) -> Option<&Credentials> {
-        self.current
-            .as_deref()
-            .and_then(|name| self.config.credentials.get(name))
+        self.current.as_deref().and_then(|name| self.config.credentials.get(name))
     }
 
     pub fn list_credentials(&self) -> Vec<&Credentials> {
@@ -107,22 +170,8 @@ impl AuthService {
         self.config.default.as_deref()
     }
 
-    /// Determine the auth type in use.
-    pub fn auth_type(&self) -> (CredentialType, &'static str) {
-        if Env::global().api_key.is_some() {
-            return (CredentialType::Key, "env");
-        }
-        match self.current_credentials() {
-            Some(c) => {
-                let origin = if self.forced.is_some() {
-                    "forced"
-                } else {
-                    "default"
-                };
-                (c.cred_type, origin)
-            }
-            None => (CredentialType::Interactive, "none"),
-        }
+    pub(super) fn forced_name(&self) -> Option<&str> {
+        self.forced.as_deref()
     }
 
     /// Get the API key to use for requests.
@@ -133,318 +182,165 @@ impl AuthService {
         self.current_credentials()
             .filter(|c| c.cred_type == CredentialType::Key)
             .and_then(|c| c.token.clone())
+            .filter(|token| !token.is_empty())
     }
 
     /// Get the bearer token for interactive sessions.
     ///
     /// If the stored token is expired, tries to refresh it via the Supabase
     /// session stored in `"supabase.auth.token"`.
-    pub fn access_token(&mut self) -> Option<String> {
-        let cred = self.current_credentials()?;
+    pub fn access_token(&mut self) -> Result<Option<String>> {
+        let Some(cred) = self.current_credentials() else {
+            return Ok(None);
+        };
         if cred.cred_type != CredentialType::Interactive {
-            return None;
+            return Ok(None);
         }
 
-        // Try the stored token first — if it's not expired, use it directly.
-        if let Some(ref tok) = cred.token
-            && !crate::auth::session::is_token_expired_pub(tok) {
-                return Some(tok.clone());
+        let Some(token) = cred.token.as_deref().filter(|token| !token.is_empty()) else {
+            return Ok(None);
+        };
+        if self.validated_token.as_deref() == Some(token) {
+            return Ok(Some(token.to_owned()));
+        }
+        // GoTrue is authoritative even for opaque or expired-looking tokens.
+        // The legacy refresh extension runs only after the server rejects one.
+        let validation_error = match super::gotrue::GoTrueClient::new()?.user_email(token) {
+            Ok(_) => {
+                self.validated_token = Some(token.to_owned());
+                return Ok(self.validated_token.clone());
             }
+            Err(error) => error,
+        };
+        if !crate::auth::session::is_token_expired(token)
+            || crate::auth::session::load_session()?.is_none()
+        {
+            return Err(validation_error);
+        }
 
         // Token missing or expired — try refreshing from the Supabase session.
-        match crate::auth::session::ensure_fresh_token() {
-            Ok((fresh_token, email)) => {
-                // Update the credential in-memory and on disk.
-                let name = self.current.clone()?;
-                if let Some(c) = self.config.credentials.get_mut(&name) {
-                    c.token = Some(fresh_token.clone());
-                    if !email.is_empty() {
-                        c.email = email;
-                    }
-                    c.touch();
-                }
-                self.save_config();
-                Some(fresh_token)
-            }
-            Err(_) => {
-                // Refresh failed — return whatever we have (may be expired).
-                self.current_credentials().and_then(|c| c.token.clone())
-            }
+        let name = cred.name.clone();
+        let session = crate::auth::session::ensure_fresh_session(&cred.email)?;
+        let fresh_token = session.access_token.clone();
+        super::gotrue::GoTrueClient::new()?.user_email(&fresh_token)?;
+        let mut candidate = self.config.clone();
+        if let Some(credential) = candidate.credentials.get_mut(&name) {
+            credential.token = Some(fresh_token.clone());
+            credential.touch();
         }
+        self.commit_state(candidate, Some(&session), None)?;
+        self.validated_token = Some(fresh_token.clone());
+        Ok(Some(fresh_token))
     }
 
-    /// Get user email for the current credential.
-    pub fn user_email(&self) -> Option<&str> {
+    /// Upstream get_user touches managed credentials when resolving their identity.
+    /// In async command contexts an environment key uses upstream's placeholder.
+    pub fn get_user_email(&mut self) -> Result<Option<String>> {
         if Env::global().api_key.is_some() {
-            return Some("api-key-user");
+            return Ok(Some("api-key-user".into()));
         }
-        self.current_credentials().map(|c| c.email.as_str())
+        let Some(credential) = self.current_credentials().cloned() else {
+            return Ok(None);
+        };
+        let mut candidate = self.config.clone();
+        candidate.credentials.get_mut(&credential.name).expect("selected credential").touch();
+        self.commit_config(candidate)?;
+        Ok(Some(credential.email))
     }
 
     // ── mutations ───────────────────────────────────────────────────────
 
-    #[allow(dead_code)]
-    pub fn add_credentials(&mut self, cred: Credentials) {
-        self.config.add(cred);
-        self.save_config();
-    }
-
-    pub fn remove_credentials(&mut self, name: &str) -> bool {
-        let removed = self.config.remove(name);
-        if removed {
-            if self.current.as_deref() == Some(name) {
-                self.resolve_current();
-            }
-            self.save_config();
+    pub fn remove_credentials(&mut self, name: &str) -> Result<bool> {
+        let mut candidate = self.config.clone();
+        if !candidate.remove(name) {
+            return Ok(false);
         }
-        removed
+        self.commit_config(candidate)?;
+        self.resolve_current();
+        Ok(true)
     }
 
-    pub fn set_default(&mut self, name: &str) -> bool {
-        let ok = self.config.set_default(name);
-        if ok {
-            self.current = Some(name.to_owned());
-            self.save_config();
+    pub fn remove_all_credentials(&mut self) -> Result<usize> {
+        let count = self.config.credentials.len();
+        self.commit_config(CredentialsConfig::default())?;
+        self.resolve_current();
+        Ok(count)
+    }
+
+    pub fn set_default(&mut self, name: &str) -> Result<bool> {
+        let mut candidate = self.config.clone();
+        if !candidate.set_default(name) {
+            return Ok(false);
         }
-        ok
+        self.commit_config(candidate)?;
+        self.resolve_current();
+        Ok(true)
     }
 
-    /// Create or update interactive credentials after a successful OAuth flow.
-    pub fn upsert_interactive(
+    /// Create or update interactive credentials after a successful login.
+    pub(super) fn upsert_interactive(
         &mut self,
         email: &str,
         token: &str,
         name: Option<&str>,
-    ) -> Credentials {
-        // Check for existing interactive credential with same email.
-        if let Some(existing) = self
-            .config
-            .find_by_email_and_type(email, CredentialType::Interactive)
-            .cloned()
-        {
-            let cred = self.config.credentials.get_mut(&existing.name).unwrap();
-            cred.token = Some(token.to_owned());
-            cred.touch();
-            let result = cred.clone();
-            self.current = Some(result.name.clone());
-            self.config.set_default(&result.name);
-            self.save_config();
-            return result;
-        }
-
-        let base_name = name.unwrap_or(email);
-        let unique = self.config.unique_name(base_name);
-        let cred = Credentials::new(&unique, CredentialType::Interactive, token, email);
-        self.config.add(cred.clone());
-        self.current = Some(unique.clone());
-        self.config.set_default(&unique);
-        self.save_config();
-        cred
-    }
-
-    /// Add an API key credential (validates it by calling whoami).
-    pub fn add_api_key_credential(&mut self, name: &str, token: &str, email: &str) -> Credentials {
-        let _ = self.config.remove(name);
-        let cred = Credentials::new(name, CredentialType::Key, token, email);
-        self.config.add(cred.clone());
-        self.save_config();
-        cred
-    }
-
-    /// Logout: remove the named credential or just clear the current session.
-    pub fn logout_current(&mut self) {
-        if let Some(name) = self.current.take() {
-            // For interactive credentials we clear the session but keep the
-            // credential entry.  The Python version calls supabase sign_out;
-            // in the Rust rewrite we simply clear the token.
-            if let Some(c) = self.config.credentials.get_mut(&name)
-                && c.cred_type == CredentialType::Interactive {
-                    c.token = None;
-                }
-            self.save_config();
-        }
-    }
-
-    // ── OAuth login flow ────────────────────────────────────────────────
-
-    /// Perform an interactive OAuth login.  Returns the newly created credential
-    /// on success.
-    pub fn login_interactive_blocking(&mut self, name: Option<&str>) -> Result<Credentials> {
-        let env = Env::global();
-
-        // Build the OAuth URL via the Supabase auth endpoint.
-        let oauth_url = format!(
-            "{}/auth/v1/authorize?provider=google&redirect_to={}",
-            env.supabase_url,
-            env.oauth_redirect_url(),
-        );
-
-        eprintln!("Open this URL in your browser to continue login:\n  {oauth_url}");
-        let _ = open::that(&oauth_url);
-
-        // Start local server and wait for token.
-        let server = OAuthServer::new(env.oauth_server_port());
-        let tokens = server.run(Duration::from_secs(120))?;
-
-        match tokens {
-            Some(t) => {
-                // Decode the JWT to extract the user's email.
-                let email = crate::auth::session::email_from_jwt(&t.access_token)
-                    .unwrap_or_else(|| "unknown".into());
-
-                // Store the full Supabase session (with refresh token) so that
-                // future runs can refresh the access token without re-login.
-                if let Some(ref refresh) = t.refresh_token {
-                    let session = crate::auth::session::SupabaseSession {
-                        access_token: t.access_token.clone(),
-                        refresh_token: refresh.clone(),
-                        expires_in: 3600,
-                        expires_at: chrono::Utc::now().timestamp() + 3600,
-                        token_type: "bearer".into(),
-                        provider_token: None,
-                        provider_refresh_token: None,
-                        user: None,
-                    };
-                    crate::auth::session::save_session_pub(&session);
-                }
-
-                let cred = self.upsert_interactive(&email, &t.access_token, name);
-                Ok(cred)
-            }
-            None => Err(Error::OAuthFailed("Login timeout or cancelled".into())),
-        }
-    }
-
-    // ── Email OTP login flow ──────────────────────────────────────────────
-
-    /// Send an OTP code to the given email address.
-    pub fn send_otp(&self, email: &str) -> Result<()> {
-        let env = Env::global();
-        let url = format!("{}/auth/v1/otp", env.supabase_url);
-
-        let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .build()?;
-
-        let resp = client
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .header("apiKey", &env.supabase_anon_key)
-            .header(
-                "Authorization",
-                format!("Bearer {}", env.supabase_anon_key),
-            )
-            .json(&serde_json::json!({ "email": email }))
-            .send()?;
-
-        let status = resp.status();
-        if !status.is_success() {
-            let body = resp.text().unwrap_or_default();
-            return Err(Error::Authentication(format!(
-                "Failed to send OTP ({status}): {body}"
-            )));
-        }
-        Ok(())
-    }
-
-    /// Verify an OTP code and create credentials on success.
-    /// Returns the created/updated credential, or an error.
-    pub fn verify_otp(
-        &mut self,
-        email: &str,
-        otp: &str,
-        name: Option<&str>,
+        session: Option<&super::session::SupabaseSession>,
+        login_email: Option<&str>,
     ) -> Result<Credentials> {
-        let env = Env::global();
-        let url = format!("{}/auth/v1/verify", env.supabase_url);
-
-        let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .build()?;
-
-        let resp = client
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .header("apiKey", &env.supabase_anon_key)
-            .header(
-                "Authorization",
-                format!("Bearer {}", env.supabase_anon_key),
-            )
-            .json(&serde_json::json!({
-                "email": email,
-                "token": otp,
-                "type": "email"
-            }))
-            .send()?;
-
-        let status = resp.status();
-        if !status.is_success() {
-            let body = resp.text().unwrap_or_default();
-            return Err(Error::Authentication(format!(
-                "OTP verification failed ({status}): {body}"
-            )));
-        }
-
-        let session: crate::auth::session::SupabaseSession = resp.json().map_err(|e| {
-            Error::Authentication(format!("Failed to parse OTP response: {e}"))
-        })?;
-
-        // Save the full Supabase session for future token refresh.
-        crate::auth::session::save_session_pub(&session);
-
-        // Create or update interactive credentials.
-        let cred = self.upsert_interactive(email, &session.access_token, name);
-
-        // Persist the last-used email for convenience.
+        let mut candidate = self.config.clone();
+        let credential = if let Some(existing) =
+            candidate.find_by_email_and_type(email, CredentialType::Interactive).cloned()
         {
-            let mut store = ConfigStore::global();
-            store.set_str("login.email", email);
-        }
-
-        Ok(cred)
+            let mut credential = existing;
+            credential.token = Some(token.to_owned());
+            credential.touch();
+            credential
+        } else {
+            let name = candidate.unique_name(name.unwrap_or(email));
+            Credentials::new(name, CredentialType::Interactive, token, email)
+        };
+        candidate.add(credential.clone());
+        candidate.set_default(&credential.name);
+        self.commit_state(candidate, session, login_email)?;
+        self.current = Some(credential.name.clone());
+        self.validated_token = Some(token.to_owned());
+        Ok(credential)
     }
 
-    /// Show current login status to the console.
-    pub fn show_login_info(&self) {
-        use console::style;
+    /// Persist an API key after the caller has validated it with whoami.
+    pub fn add_api_key_credential(
+        &mut self,
+        name: &str,
+        token: &str,
+        email: &str,
+    ) -> Result<Credentials> {
+        let mut candidate = self.config.clone();
+        candidate.remove(name);
+        let credential = Credentials::new(name, CredentialType::Key, token, email);
+        candidate.add(credential.clone());
+        self.commit_config(candidate)?;
+        self.resolve_current();
+        Ok(credential)
+    }
 
-        if !self.is_logged_in() {
-            eprintln!("You are not logged in.");
-            return;
-        }
-
-        let env = Env::global();
-        if env.api_key.is_some() {
-            let email = self.user_email().unwrap_or("unknown");
-            eprintln!(
-                "You are logged in as {} using an API key from HCLI_API_KEY environment variable",
-                style(email).green()
-            );
-            return;
-        }
-
-        if let Some(cred) = self.current_credentials() {
-            if self.config.credentials.len() <= 1 {
-                eprintln!("You are logged in as {}", style(&cred.email).green());
-            } else {
-                let kind = match cred.cred_type {
-                    CredentialType::Key => format!("API key '{}'", cred.name),
-                    CredentialType::Interactive => {
-                        format!("interactive login '{}'", cred.name)
-                    }
-                };
-                let suffix = if self.forced.is_some() {
-                    " (forced via --auth-credentials)"
-                } else if self.default_name() == Some(cred.name.as_str()) {
-                    " (default)"
-                } else {
-                    ""
-                };
-                eprintln!(
-                    "You are logged in as {} using {kind}{suffix}",
-                    style(cred.label()).green()
-                );
+    /// End the interactive session while retaining the upstream credential record.
+    /// Remote sign-out is best effort; local persistence failures are reported.
+    pub fn logout_current(&mut self) -> Result<()> {
+        if let Some(credential) = self.current_credentials()
+            && credential.cred_type == CredentialType::Interactive
+        {
+            ConfigStore::global()
+                .commit_changes([(super::session::SUPABASE_SESSION_KEY.into(), None)])?;
+            if let Some(token) = credential.token.as_deref().filter(|token| !token.is_empty()) {
+                let result = super::gotrue::GoTrueClient::new().and_then(|client| {
+                    client.request(reqwest::Method::POST, "logout", Some(token))?.send()?;
+                    Ok(())
+                });
+                if let Err(error) = result {
+                    tracing::debug!(%error, "GoTrue sign-out unavailable");
+                }
             }
         }
+        self.validated_token = None;
+        Ok(())
     }
 }

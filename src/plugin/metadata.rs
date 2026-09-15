@@ -1,254 +1,180 @@
 //! Plugin metadata types (ida-plugin.json schema).
 
+use super::settings::PluginSetting;
+use super::{compatibility, parse_version, settings};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Full plugin metadata as described by `ida-plugin.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(remote = "Self", rename_all = "camelCase")]
 pub struct PluginMetadata {
     pub name: String,
     pub version: String,
+    pub description: Option<String>,
+    pub entry_point: String,
     #[serde(default)]
-    pub description: String,
-    pub entry_point: Option<String>,
-    pub author: Option<String>,
-    pub authors: Option<Vec<Contact>>,
+    pub authors: Vec<Contact>,
+    #[serde(default)]
+    pub maintainers: Vec<Contact>,
     pub license: Option<String>,
-    pub urls: Option<Urls>,
-    pub categories: Option<Vec<String>>,
-    pub keywords: Option<Vec<String>>,
-    pub ida_versions: Option<Vec<String>>,
-    pub platforms: Option<Vec<String>>,
+    pub urls: Urls,
+    #[serde(default)]
+    pub categories: Vec<String>,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(
+        default = "compatibility::all_ida_versions",
+        deserialize_with = "compatibility::deserialize_ida_versions"
+    )]
+    pub ida_versions: Vec<String>,
+    #[serde(
+        default = "compatibility::all_platforms",
+        deserialize_with = "compatibility::deserialize_platforms"
+    )]
+    pub platforms: Vec<String>,
     pub logo_path: Option<String>,
-    pub python_dependencies: Option<Vec<String>>,
-    pub settings: Option<HashMap<String, PluginSetting>>,
+    #[serde(default)]
+    pub python_dependencies: super::PythonDependencies,
+    #[serde(
+        default,
+        deserialize_with = "settings::setting_descriptors",
+        serialize_with = "settings::serialize_settings"
+    )]
+    pub settings: IndexMap<String, PluginSetting>,
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
+}
+
+// Remote derive supplies field decoding without duplicating the model's fields.
+// The trait implementation then enforces invariants for every metadata reader.
+impl<'de> Deserialize<'de> for PluginMetadata {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let metadata = Self::deserialize(deserializer)?;
+        super::validation::validate(&metadata).map_err(serde::de::Error::custom)?;
+        Ok(metadata)
+    }
+}
+
+impl Serialize for PluginMetadata {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        Self::serialize(self, serializer)
+    }
 }
 
 /// Author / contact information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contact {
-    pub name: String,
-    pub email: Option<String>,
-    pub url: Option<String>,
+    pub name: Option<String>,
+    pub email: String,
 }
 
 /// Plugin URLs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Urls {
     pub homepage: Option<String>,
-    pub repository: Option<String>,
-    pub documentation: Option<String>,
-    pub issues: Option<String>,
+    pub repository: String,
 }
 
-/// A single plugin setting descriptor.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginSetting {
-    #[serde(rename = "type")]
-    pub setting_type: String, // "string" | "boolean"
-    pub description: Option<String>,
-    pub default: Option<serde_json::Value>,
-    pub required: Option<bool>,
-    pub choices: Option<Vec<String>>,
-    pub pattern: Option<String>,
-    pub prompt: Option<String>,
-}
+impl PluginMetadata {
+    pub fn setting(&self, key: &str) -> crate::error::Result<&PluginSetting> {
+        self.settings.get(key).ok_or_else(|| {
+            crate::error::Error::NotFound(format!("plugin setting: {}.{key}", self.name))
+        })
+    }
 
-/// Wrapper with schema version.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PluginManifest {
-    #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
-    pub schema: Option<String>,
-    #[serde(flatten)]
-    pub metadata: PluginMetadata,
-}
+    /// The repository identity is independent of the archive's download URL.
+    pub fn normalized_host(&self) -> crate::error::Result<String> {
+        crate::plugin::index::normalize_host(&self.urls.repository)
+    }
 
-/// Minimal metadata for legacy / single-file plugins.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MinimalPluginMetadata {
-    pub name: String,
-    pub version: Option<String>,
-    pub path: String,
-}
+    /// Detect identity changes between inspection and staging of the same source.
+    pub fn verify_prepared_identity(&self, expected: &Self) -> crate::error::Result<()> {
+        use crate::error::Error;
 
-// ── compatibility helpers ───────────────────────────────────────────────
-
-/// Check whether a plugin is compatible with a given IDA version.
-pub fn is_ida_version_compatible(plugin: &PluginMetadata, ida_version: &str) -> bool {
-    match &plugin.ida_versions {
-        None => true, // no restriction → compatible
-        Some(versions) => {
-            if versions.is_empty() {
-                return true;
-            }
-            // Simple substring / prefix matching.
-            versions.iter().any(|spec| {
-                ida_version.starts_with(spec)
-                    || spec.starts_with(ida_version)
-                    || spec == "*"
-                    || spec == ">=3.0"
-            })
+        if !self.name.eq_ignore_ascii_case(&expected.name)
+            || self.normalized_host()? != expected.normalized_host()?
+            || parse_version(&self.version).is_none()
+            || parse_version(&self.version) != parse_version(&expected.version)
+        {
+            return Err(Error::PluginInstall(format!(
+                "plugin identity changed while preparing {}=={}",
+                expected.name, expected.version
+            )));
         }
+        Ok(())
     }
 }
 
-/// All known IDA platform identifiers.
-pub const PLATFORM_WINDOWS: &str = "win";
-pub const PLATFORM_LINUX: &str = "linux";
-pub const PLATFORM_MACOS_INTEL: &str = "macx64";
-pub const PLATFORM_MACOS_ARM: &str = "macarm";
-
-/// Check whether a plugin is compatible with the current platform.
-pub fn is_platform_compatible(plugin: &PluginMetadata) -> bool {
-    match &plugin.platforms {
-        None => true,
-        Some(platforms) => {
-            if platforms.is_empty() {
-                return true;
-            }
-            let current = current_platform();
-            platforms.iter().any(|p| p == current || p == "all")
-        }
-    }
-}
-
-fn current_platform() -> &'static str {
-    if cfg!(target_os = "windows") {
-        PLATFORM_WINDOWS
-    } else if cfg!(target_os = "macos") {
-        if cfg!(target_arch = "aarch64") {
-            PLATFORM_MACOS_ARM
-        } else {
-            PLATFORM_MACOS_INTEL
-        }
-    } else {
-        PLATFORM_LINUX
-    }
-}
-
-/// Read plugin metadata from a zip archive.
-pub fn read_metadata_from_archive(
-    archive_path: &std::path::Path,
-) -> crate::error::Result<PluginMetadata> {
-    let file = std::fs::File::open(archive_path)?;
-    let mut archive = zip::ZipArchive::new(file)?;
-
-    // Look for ida-plugin.json in root or one level deep.
-    for i in 0..archive.len() {
-        let entry = archive.by_index(i)?;
-        let name = entry.name().to_owned();
-        if name == "ida-plugin.json" || name.ends_with("/ida-plugin.json") {
-            let depth = name.matches('/').count();
-            if depth <= 1 {
-                let manifest: PluginManifest = serde_json::from_reader(entry)?;
-                return Ok(manifest.metadata);
-            }
-        }
-    }
-
-    Err(crate::error::Error::PluginInstall(
-        "ida-plugin.json not found in archive".into(),
-    ))
-}
-
-/// Read plugin metadata from a source directory containing `ida-plugin.json`.
-pub fn read_metadata_from_directory(
-    dir: &std::path::Path,
-) -> crate::error::Result<PluginMetadata> {
-    let manifest_path = dir.join("ida-plugin.json");
-    if !manifest_path.is_file() {
-        return Err(crate::error::Error::PluginInstall(format!(
-            "ida-plugin.json not found in {}",
-            dir.display()
-        )));
-    }
-    let text = std::fs::read_to_string(&manifest_path)?;
-    let manifest: PluginManifest = serde_json::from_str(&text)?;
-    Ok(manifest.metadata)
-}
-
-/// JSON Schema for `ida-plugin.json`, mirroring the schema emitted by the
-/// Python hcli (`hcli plugin schema`).
+/// Upstream's checked-in schema, pinned in docs/parity.md.
 pub fn ida_plugin_json_schema() -> serde_json::Value {
-    let contact = serde_json::json!({
-        "type": "object",
-        "properties": {
-            "name": {"type": "string"},
-            "email": {"type": "string"},
-            "url": {"type": "string"}
-        },
-        "required": ["name"]
-    });
+    serde_json::from_str(include_str!("../../schemas/ida-plugin.json"))
+        .expect("bundled plugin schema must be valid JSON")
+}
 
-    serde_json::json!({
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "title": "ida-plugin.json",
-        "description": "Metadata descriptor for IDA Pro plugins",
-        "type": "object",
-        "properties": {
-            "$schema": {"type": "string"},
-            "name": {
-                "type": "string",
-                "description": "Unique plugin name; used as the installation directory name"
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugin::PluginManifest;
+    use serde_json::json;
+
+    #[test]
+    fn manifest_round_trip_preserves_upstream_fields() {
+        let input = json!({
+            "IDAMetadataDescriptorVersion": 1,
+            "plugin": {
+                "name": "example",
+                "version": "1.0.0",
+                "entryPoint": "plugin.py",
+                "urls": {"repository": "https://github.com/example/plugin"},
+                "description": null,
+                "maintainers": [{"email": "maintainer@example.test"}],
+                "customMetadata": {"value": 42},
+                "settings": [{
+                    "key": "token",
+                    "name": "Access token",
+                    "type": "string",
+                    "required": true,
+                    "secret": true,
+                    "validation_pattern": "token-[a-z]+",
+                    "documentation": "A test token",
+                }],
             },
-            "version": {
-                "type": "string",
-                "description": "Plugin version (semantic versioning recommended)"
-            },
-            "description": {"type": "string"},
-            "entryPoint": {
-                "type": "string",
-                "description": "Plugin entry point (e.g. a .py file or native library)"
-            },
-            "author": {"type": "string"},
-            "authors": {"type": "array", "items": contact.clone()},
-            "license": {"type": "string"},
-            "urls": {
-                "type": "object",
-                "properties": {
-                    "homepage": {"type": "string"},
-                    "repository": {"type": "string"},
-                    "documentation": {"type": "string"},
-                    "issues": {"type": "string"}
-                }
-            },
-            "categories": {"type": "array", "items": {"type": "string"}},
-            "keywords": {"type": "array", "items": {"type": "string"}},
-            "idaVersions": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Compatible IDA versions or version ranges"
-            },
-            "platforms": {
-                "type": "array",
-                "items": {"type": "string", "enum": ["win", "linux", "macx64", "macarm", "all"]}
-            },
-            "logoPath": {"type": "string"},
-            "pythonDependencies": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "PEP 508 dependency specifiers"
-            },
-            "settings": {
-                "type": "object",
-                "additionalProperties": {
-                    "type": "object",
-                    "properties": {
-                        "type": {"type": "string", "enum": ["string", "boolean"]},
-                        "description": {"type": "string"},
-                        "default": {},
-                        "required": {"type": "boolean"},
-                        "choices": {"type": "array", "items": {"type": "string"}},
-                        "pattern": {"type": "string"},
-                        "prompt": {"type": "string"}
-                    },
-                    "required": ["type"]
-                }
-            }
-        },
-        "required": ["name", "version"]
-    })
+        });
+        let manifest: PluginManifest = serde_json::from_value(input).unwrap();
+        let serialized = serde_json::to_value(&manifest).unwrap();
+        assert_eq!(serialized["IDAMetadataDescriptorVersion"], 1);
+        assert_eq!(serialized["plugin"]["customMetadata"]["value"], 42);
+        assert_eq!(serialized["plugin"]["maintainers"][0]["email"], "maintainer@example.test");
+        let setting = &serialized["plugin"]["settings"][0];
+        assert_eq!(setting["key"], "token");
+        assert_eq!(setting["secret"], true);
+        assert_eq!(setting["validation_pattern"], "token-[a-z]+");
+        assert_eq!(setting["documentation"], "A test token");
+        serde_json::from_value::<PluginManifest>(serialized).unwrap();
+    }
+
+    #[test]
+    fn validates_settings_with_upstream_match_anchoring() {
+        let descriptor: PluginSetting = serde_json::from_value(json!({
+            "name": "Token", "required": false, "type": "string", "validation_pattern": "token-[a-z]+",
+        }))
+        .unwrap();
+        assert!(descriptor.validate_value("token", &json!("token-abc")).is_ok());
+        assert!(descriptor.validate_value("token", &json!("prefix-token-abc")).is_err());
+        assert!(descriptor.validate_value("token", &json!(false)).is_err());
+    }
+
+    #[test]
+    fn schema_describes_nested_manifests_and_setting_arrays() {
+        let schema = ida_plugin_json_schema();
+        assert_eq!(schema["properties"]["IDAMetadataDescriptorVersion"]["const"], 1);
+        assert_eq!(schema["$defs"]["PluginMetadata"]["properties"]["settings"]["type"], "array");
+        assert!(
+            schema["$defs"]["PluginMetadata"]["properties"]["platforms"]["items"]["enum"]
+                .as_array()
+                .unwrap()
+                .contains(&json!("windows-aarch64"))
+        );
+    }
 }

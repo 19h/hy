@@ -1,0 +1,36 @@
+query PluginReleases($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    defaultBranchRef {
+      target { ...CommitData }
+    }
+    releases(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
+      nodes {
+        publishedAt
+        releaseAssets(first: 50) {
+          nodes { name downloadUrl size contentType }
+        }
+        tag {
+          target {
+            ...CommitData
+            ... on Tag { target { ...CommitData } }
+          }
+        }
+      }
+    }
+    refs(refPrefix: "refs/tags/", first: 25, orderBy: {field: TAG_COMMIT_DATE, direction: DESC}) {
+      nodes {
+        name
+        target {
+          ...CommitData
+          ... on Tag { target { ...CommitData } }
+        }
+      }
+    }
+  }
+}
+
+fragment CommitData on Commit {
+  oid
+  zipballUrl
+  committedDate
+}

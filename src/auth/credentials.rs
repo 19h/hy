@@ -1,8 +1,8 @@
 //! Credential types and persistent credential configuration.
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// The kind of authentication a credential represents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,8 +28,10 @@ pub struct Credentials {
     #[serde(rename = "type")]
     pub cred_type: CredentialType,
     pub email: String,
-    pub created_at: DateTime<Utc>,
-    pub last_used: DateTime<Utc>,
+    // Upstream treats these as strings and emits an additional Z after +00:00.
+    // Preserve existing values verbatim instead of rejecting or rewriting them.
+    pub created_at: String,
+    pub last_used: String,
     pub token: Option<String>,
 }
 
@@ -41,12 +43,12 @@ impl Credentials {
         token: impl Into<String>,
         email: impl Into<String>,
     ) -> Self {
-        let now = Utc::now();
+        let now = Utc::now().to_rfc3339();
         Self {
             name: name.into(),
             cred_type,
             email: email.into(),
-            created_at: now,
+            created_at: now.clone(),
             last_used: now,
             token: Some(token.into()),
         }
@@ -62,15 +64,17 @@ impl Credentials {
 
     /// Touch the `last_used` timestamp.
     pub fn touch(&mut self) {
-        self.last_used = Utc::now();
+        self.last_used = Utc::now().to_rfc3339();
     }
 }
 
 /// Top-level credentials configuration persisted in the config store.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CredentialsConfig {
+    #[serde(default)]
     pub default: Option<String>,
-    pub credentials: BTreeMap<String, Credentials>,
+    #[serde(default)]
+    pub credentials: IndexMap<String, Credentials>,
 }
 
 impl CredentialsConfig {
@@ -85,7 +89,7 @@ impl CredentialsConfig {
 
     /// Remove a credential set by name.  Returns `true` if it existed.
     pub fn remove(&mut self, name: &str) -> bool {
-        if self.credentials.remove(name).is_some() {
+        if self.credentials.shift_remove(name).is_some() {
             if self.default.as_deref() == Some(name) {
                 self.default = self.credentials.keys().next().cloned();
             }
@@ -98,9 +102,7 @@ impl CredentialsConfig {
     /// Get the default credential set.
     #[allow(dead_code)]
     pub fn default_credentials(&self) -> Option<&Credentials> {
-        self.default
-            .as_deref()
-            .and_then(|name| self.credentials.get(name))
+        self.default.as_deref().and_then(|name| self.credentials.get(name))
     }
 
     /// Set the default by name.  Returns `false` if the name is unknown.
@@ -119,9 +121,7 @@ impl CredentialsConfig {
         email: &str,
         cred_type: CredentialType,
     ) -> Option<&Credentials> {
-        self.credentials
-            .values()
-            .find(|c| c.email == email && c.cred_type == cred_type)
+        self.credentials.values().find(|c| c.email == email && c.cred_type == cred_type)
     }
 
     /// Generate a unique name starting from `base`.

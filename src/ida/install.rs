@@ -1,162 +1,182 @@
-//! IDA installation (macOS, Linux, Windows).
+//! Execute native IDA installers and verify their output.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
+
+use tokio::process::Command;
 
 use crate::error::{Error, Result};
 use crate::util::io::check_free_space;
 
-/// Install IDA from a downloaded installer file.
-///
-/// Dispatches to the platform-appropriate installer logic.
-pub async fn install_ida(
-    installer_path: &Path,
-    install_dir: &Path,
-    accept_eula: bool,
-) -> Result<PathBuf> {
-    if !installer_path.exists() {
-        return Err(Error::FileNotFound(installer_path.to_path_buf()));
+pub async fn install_ida(installer: &Path, destination: &Path) -> Result<PathBuf> {
+    if !installer.is_file() {
+        return Err(Error::FileNotFound(installer.into()));
     }
-
-    std::fs::create_dir_all(install_dir)?;
-
-    // Check free space (rough estimate: 2x installer size).
-    let installer_size = std::fs::metadata(installer_path)?.len();
-    check_free_space(install_dir, installer_size * 2)?;
-
-    let ext = installer_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
-
-    match ext {
-        "zip" if cfg!(target_os = "macos") => install_ida_mac(installer_path, install_dir).await,
-        "run" if cfg!(target_os = "linux") => {
-            install_ida_unix(installer_path, install_dir, accept_eula).await
-        }
-        "exe" if cfg!(target_os = "windows") => {
-            install_ida_windows(installer_path, install_dir, accept_eula).await
-        }
-        _ => Err(Error::IdaInstallFailed(format!(
-            "Unsupported installer format: {ext}"
-        ))),
+    let installer = installer.canonicalize()?;
+    if std::fs::symlink_metadata(destination).is_ok() {
+        return Err(Error::IdaInstallFailed(format!(
+            "installation directory already exists: {}",
+            destination.display()
+        )));
     }
+    let expected_extension = if cfg!(target_os = "macos") {
+        "zip"
+    } else if cfg!(windows) {
+        "exe"
+    } else {
+        "run"
+    };
+    if installer.extension().and_then(|extension| extension.to_str()) != Some(expected_extension) {
+        return Err(Error::IdaInstallFailed(format!(
+            "expected a .{expected_extension} installer on this platform"
+        )));
+    }
+    let required = std::fs::metadata(&installer)?.len().checked_mul(3).ok_or_else(|| {
+        Error::IdaInstallFailed("installer size exceeds supported disk-space calculation".into())
+    })?;
+    check_free_space(destination, required)?;
+    if let Some(parent) = destination.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::create_dir(destination)?;
+    let destination = destination.canonicalize()?;
+    if cfg!(target_os = "macos") {
+        install_mac(&installer, &destination).await?;
+    } else {
+        install_native(&installer, &destination).await?;
+    }
+    verify_installation(&destination)?;
+    Ok(destination)
 }
 
-/// macOS: unzip .app.zip into the target directory.
-async fn install_ida_mac(zip_path: &Path, install_dir: &Path) -> Result<PathBuf> {
-    let status = Command::new("ditto")
-        .args(["-xk", &zip_path.to_string_lossy(), &install_dir.to_string_lossy()])
-        .status()?;
-
-    if !status.success() {
-        return Err(Error::IdaInstallFailed("ditto extraction failed".into()));
+async fn run(command: &mut Command, operation: &str) -> Result<()> {
+    command.kill_on_drop(true);
+    let output = tokio::time::timeout(std::time::Duration::from_secs(600), command.output())
+        .await
+        .map_err(|_| {
+            Error::IdaInstallFailed(format!("{operation} timed out after 600 seconds"))
+        })??;
+    if !output.status.success() {
+        return Err(Error::IdaInstallFailed(format!(
+            "{operation} failed ({}): {}{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        )));
     }
-
-    // Find the extracted .app bundle.
-    for entry in std::fs::read_dir(install_dir)?.flatten() {
-        let name = entry.file_name();
-        if name.to_string_lossy().ends_with(".app") {
-            return Ok(entry.path());
-        }
-    }
-
-    Err(Error::IdaInstallFailed(
-        "No .app bundle found after extraction".into(),
-    ))
+    Ok(())
 }
 
-/// Linux: run the .run installer with --unattendedmodeui none.
-async fn install_ida_unix(
-    run_path: &Path,
-    install_dir: &Path,
-    accept_eula: bool,
-) -> Result<PathBuf> {
-    // Make executable.
+fn installer_command(installer: &Path, destination: &Path, debug_log: &Path) -> Command {
+    let mut command = Command::new(installer);
+    command.args(["--mode", "unattended", "--debugtrace"]).arg(debug_log);
+    if cfg!(windows) {
+        command.args(["--install_python", "0"]);
+    }
+    command.arg("--prefix").arg(destination);
+    command
+}
+
+async fn install_native(installer: &Path, destination: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(run_path)?.permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(run_path, perms)?;
+
+        let mut permissions = std::fs::metadata(installer)?.permissions();
+        permissions.set_mode(permissions.mode() | 0o100);
+        std::fs::set_permissions(installer, permissions)?;
+        let home =
+            dirs::home_dir().ok_or_else(|| Error::Other("home directory is unavailable".into()))?;
+        std::fs::create_dir_all(home.join(".local/share/applications"))?;
     }
-
-    let mut cmd = Command::new(run_path.as_os_str());
-    cmd.arg("--unattendedmodeui")
-        .arg("none")
-        .arg("--mode")
-        .arg("unattended")
-        .arg("--prefix")
-        .arg(install_dir.as_os_str());
-
-    if accept_eula {
-        cmd.arg("--installpassword").arg("");
-    }
-
-    let status = cmd.status()?;
-    if !status.success() {
-        return Err(Error::IdaInstallFailed(format!(
-            "Installer exited with code {}",
-            status.code().unwrap_or(-1)
-        )));
-    }
-
-    Ok(install_dir.to_path_buf())
+    let debug_log = destination.join("installer-debug.log");
+    run(&mut installer_command(installer, destination, &debug_log), "installer execution").await
 }
 
-/// Windows: run the .exe installer silently.
-async fn install_ida_windows(
-    exe_path: &Path,
-    install_dir: &Path,
-    accept_eula: bool,
-) -> Result<PathBuf> {
-    let mut cmd = Command::new(exe_path.as_os_str());
-    cmd.arg("--unattendedmodeui")
-        .arg("none")
-        .arg("--mode")
-        .arg("unattended")
-        .arg("--prefix")
-        .arg(install_dir.as_os_str());
-
-    if accept_eula {
-        cmd.arg("--installpassword").arg("");
+async fn install_mac(installer: &Path, destination: &Path) -> Result<()> {
+    let unpack = tempfile::tempdir()?;
+    let output = tempfile::tempdir()?;
+    // Validate member paths before handing extraction to the system utility.
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(installer)?)?;
+    for index in 0..archive.len() {
+        if archive.by_index(index)?.enclosed_name().is_none() {
+            return Err(Error::IdaInstallFailed(
+                "installer archive contains an unsafe path".into(),
+            ));
+        }
     }
-
-    let status = cmd.status()?;
-    if !status.success() {
-        return Err(Error::IdaInstallFailed(format!(
-            "Installer exited with code {}",
-            status.code().unwrap_or(-1)
-        )));
+    run(
+        Command::new("unzip").arg("-qq").arg(installer).arg("-d").arg(unpack.path()),
+        "installer extraction",
+    )
+    .await?;
+    let roots = std::fs::read_dir(unpack.path())?.collect::<std::io::Result<Vec<_>>>()?;
+    let [root] = roots.as_slice() else {
+        return Err(Error::IdaInstallFailed(
+            "installer archive must contain exactly one application".into(),
+        ));
+    };
+    let executable = ["osx-arm64", "osx-x86_64"]
+        .iter()
+        .map(|name| root.path().join("Contents/MacOS").join(name))
+        .find(|path| path.is_file())
+        .ok_or_else(|| {
+            Error::IdaInstallFailed("installer executable not found in application".into())
+        })?;
+    let debug_log = unpack.path().join("installer-debug.log");
+    run(&mut installer_command(&executable, output.path(), &debug_log), "installer execution")
+        .await?;
+    let products = std::fs::read_dir(output.path())?.collect::<std::io::Result<Vec<_>>>()?;
+    let [product] = products.as_slice() else {
+        return Err(Error::IdaInstallFailed(
+            "installer must produce exactly one installation directory".into(),
+        ));
+    };
+    if !product.path().is_dir() {
+        return Err(Error::IdaInstallFailed("installer output is not a directory".into()));
     }
-
-    Ok(install_dir.to_path_buf())
+    run(Command::new("ditto").arg(product.path()).arg(destination), "installation copy").await
 }
 
-/// Detect version from an IDA installation directory.
-pub fn detect_ida_version(install_dir: &Path) -> Option<String> {
-    // Try reading from python/ida_pro.py docstring.
-    let sdk_file = install_dir.join("python").join("ida_pro.py");
-    if sdk_file.exists()
-        && let Ok(content) = std::fs::read_to_string(&sdk_file) {
-            // Look for version pattern like "IDA SDK v9.2" in docstring.
-            for line in content.lines().take(10) {
-                if let Some(rest) = line.strip_prefix("IDA SDK v") {
-                    let version = rest.trim().trim_matches('"');
-                    if !version.is_empty() {
-                        return Some(version.to_owned());
-                    }
-                }
+fn verify_installation(destination: &Path) -> Result<()> {
+    let mut pending = vec![destination.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(directory)? {
+            let entry = entry?;
+            let kind = entry.file_type()?;
+            if kind.is_file() && entry.file_name() == "ida.hlp" {
+                return Ok(());
+            }
+            if kind.is_dir() {
+                pending.push(entry.path());
             }
         }
+    }
+    Err(Error::IdaInstallFailed("installation failed: ida.hlp was not created".into()))
+}
 
-    // Fallback: extract from directory name.
-    install_dir
-        .file_name()
-        .and_then(|n| n.to_str())
-        .and_then(|name| {
-            // Extract version-like patterns: "IDA Pro 9.2", "ida-9.2", etc.
-            let re = regex::Regex::new(r"(\d+\.\d+(?:\.\d+)?)").ok()?;
-            re.find(name).map(|m| m.as_str().to_owned())
-        })
+pub fn is_idalib_capable(installation: &Path) -> bool {
+    let directory = super::executable_dir(installation);
+    let filename = if cfg!(windows) {
+        "idalib.dll"
+    } else if cfg!(target_os = "macos") {
+        "libidalib.dylib"
+    } else {
+        "libidalib.so"
+    };
+    directory.join(filename).is_file()
+}
+
+/// Use the supported idapro/ida_registry API with this installation explicitly selected.
+pub async fn accept_eula(installation: &Path) -> Result<()> {
+    let interpreter = crate::config::Env::global()
+        .current_ida_python_exe
+        .as_ref()
+        .map(PathBuf::from)
+        .or_else(|| super::python::find_command("python3"))
+        .or_else(|| super::python::find_command("python"))
+        .ok_or_else(|| Error::Other("Python with idapro is unavailable".into()))?;
+    let mut command = super::python::command(&interpreter);
+    command.arg("-c").arg("import idapro\nimport ida_registry\nfor version in range(90, 95):\n    ida_registry.reg_write_int('EULA %d' % version, 1)\n")
+        .env("IDADIR", super::executable_dir(installation));
+    run(&mut command, "EULA acceptance").await
 }

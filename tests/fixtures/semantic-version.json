@@ -1,0 +1,701 @@
+{
+  "oracle": "semantic_version 2.10.0 (upstream uv.lock)",
+  "versions": [
+    {
+      "input": "0",
+      "normalized": "0.0.0"
+    },
+    {
+      "input": "1",
+      "normalized": "1.0.0"
+    },
+    {
+      "input": "1.2",
+      "normalized": "1.2.0"
+    },
+    {
+      "input": "1.2.3",
+      "normalized": "1.2.3"
+    },
+    {
+      "input": "1.2.4",
+      "normalized": "1.2.4"
+    },
+    {
+      "input": "1.3.0",
+      "normalized": "1.3.0"
+    },
+    {
+      "input": "2.0.0",
+      "normalized": "2.0.0"
+    },
+    {
+      "input": "01.002.0003",
+      "normalized": "1.2.3"
+    },
+    {
+      "input": "2025.09.24",
+      "normalized": "2025.9.24"
+    },
+    {
+      "input": "1.2.3rc1",
+      "normalized": "1.2.3-rc1"
+    },
+    {
+      "input": "1.2.3-rc.1",
+      "normalized": "1.2.3-rc.1"
+    },
+    {
+      "input": "1.2.3.4",
+      "normalized": "1.2.3+4"
+    },
+    {
+      "input": "1.2.3+linux",
+      "normalized": "1.2.3+linux"
+    },
+    {
+      "input": "1.2.3+windows",
+      "normalized": "1.2.3+windows"
+    },
+    {
+      "input": "1.2.3-rc.1+build",
+      "normalized": "1.2.3-rc.1+build"
+    },
+    {
+      "input": "1.0.0-alpha",
+      "normalized": "1.0.0-alpha"
+    },
+    {
+      "input": "1.0.1-alpha",
+      "normalized": "1.0.1-alpha"
+    },
+    {
+      "input": "1.1.0-alpha",
+      "normalized": "1.1.0-alpha"
+    },
+    {
+      "input": "2.0.0-alpha",
+      "normalized": "2.0.0-alpha"
+    },
+    {
+      "input": "0.2.3",
+      "normalized": "0.2.3"
+    },
+    {
+      "input": "0.2.4",
+      "normalized": "0.2.4"
+    },
+    {
+      "input": "0.3.0",
+      "normalized": "0.3.0"
+    },
+    {
+      "input": "0.0.1",
+      "normalized": "0.0.1"
+    },
+    {
+      "input": "0.0.2",
+      "normalized": "0.0.2"
+    },
+    {
+      "input": "1.2.3.4+5_6",
+      "normalized": "1.2.3+4.5-6"
+    },
+    {
+      "input": "1.2.3-",
+      "normalized": "1.2.3"
+    },
+    {
+      "input": "v1.2.3",
+      "normalized": null
+    },
+    {
+      "input": " 1.2.3",
+      "normalized": null
+    },
+    {
+      "input": "1.2.3-01",
+      "normalized": null
+    },
+    {
+      "input": "bad",
+      "normalized": null
+    }
+  ],
+  "specifications": [
+    {
+      "expression": "*",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": ">=*",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "1",
+      "valid": true,
+      "matches": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        16,
+        17,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "1.2",
+      "valid": true,
+      "matches": [
+        2,
+        3,
+        4,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "==1.2.3",
+      "valid": true,
+      "matches": [
+        3,
+        7,
+        11,
+        12,
+        13,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "==1.2.3+linux",
+      "valid": true,
+      "matches": [
+        12
+      ]
+    },
+    {
+      "expression": "==1.2.3+",
+      "valid": true,
+      "matches": [
+        3,
+        7,
+        25
+      ]
+    },
+    {
+      "expression": "!=1.2.3",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        2,
+        4,
+        5,
+        6,
+        8,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ]
+    },
+    {
+      "expression": "!=1.2.3-",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        2,
+        4,
+        5,
+        6,
+        8,
+        9,
+        10,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ]
+    },
+    {
+      "expression": "!=1.2.3+",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        2,
+        4,
+        5,
+        6,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24
+      ]
+    },
+    {
+      "expression": ">1",
+      "valid": true,
+      "matches": [
+        6,
+        8
+      ]
+    },
+    {
+      "expression": "<=1",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": ">1.2",
+      "valid": true,
+      "matches": [
+        5,
+        6,
+        8,
+        18
+      ]
+    },
+    {
+      "expression": "<=1.2",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "<1.2.3",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        2,
+        15,
+        16,
+        17,
+        19,
+        20,
+        21,
+        22,
+        23
+      ]
+    },
+    {
+      "expression": "<1.2.3-",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        2,
+        9,
+        10,
+        14,
+        15,
+        16,
+        17,
+        19,
+        20,
+        21,
+        22,
+        23
+      ]
+    },
+    {
+      "expression": ">=1.2.3",
+      "valid": true,
+      "matches": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        11,
+        12,
+        13,
+        18,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "~1.2",
+      "valid": true,
+      "matches": [
+        2,
+        3,
+        4,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "~=1.2",
+      "valid": true,
+      "matches": [
+        2,
+        3,
+        4,
+        5,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "~=1.2.3",
+      "valid": true,
+      "matches": [
+        3,
+        4,
+        7,
+        11,
+        12,
+        13,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "^0.2.3",
+      "valid": true,
+      "matches": [
+        19,
+        20
+      ]
+    },
+    {
+      "expression": "^0.0.1",
+      "valid": true,
+      "matches": [
+        22
+      ]
+    },
+    {
+      "expression": "^1.0.0-alpha",
+      "valid": true,
+      "matches": []
+    },
+    {
+      "expression": "~1.0.0-alpha",
+      "valid": true,
+      "matches": []
+    },
+    {
+      "expression": "~=1.2.0-alpha",
+      "valid": true,
+      "matches": []
+    },
+    {
+      "expression": "==1.*",
+      "valid": true,
+      "matches": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        16,
+        17,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "!=1.2.*",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        5,
+        6,
+        8,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ]
+    },
+    {
+      "expression": "1.*.2",
+      "valid": true,
+      "matches": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        16,
+        17,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": ">=1.2,<2",
+      "valid": true,
+      "matches": [
+        2,
+        3,
+        4,
+        5,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "!=1.2-",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        5,
+        6,
+        8,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ]
+    },
+    {
+      "expression": "!=1.2.3+linux",
+      "valid": true,
+      "matches": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ]
+    },
+    {
+      "expression": "==01.2.3",
+      "valid": false,
+      "matches": []
+    },
+    {
+      "expression": ">=1.2.3+build",
+      "valid": false,
+      "matches": []
+    },
+    {
+      "expression": "==1.2-rc",
+      "valid": false,
+      "matches": []
+    },
+    {
+      "expression": "invalid",
+      "valid": false,
+      "matches": []
+    }
+  ]
+}

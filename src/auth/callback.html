@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hex-Rays login</title>
+</head>
+<body>
+  <p id="status">Receiving login response…</p>
+  <script>
+    async function receiveLogin() {
+      const status = document.getElementById("status");
+      const parameters = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = parameters.get("access_token");
+      if (!accessToken) {
+        status.textContent = "No login token received. Return to the terminal and try again.";
+        return;
+      }
+      try {
+        const response = await fetch("/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            access_token: accessToken,
+            refresh_token: parameters.get("refresh_token"),
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Token submission failed");
+        }
+        status.textContent = "Login response received. Return to the terminal to finish.";
+      } catch {
+        status.textContent = "Could not submit the login response. Return to the terminal and try again.";
+      }
+    }
+    receiveLogin();
+  </script>
+</body>
+</html>

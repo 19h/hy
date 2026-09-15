@@ -19,8 +19,14 @@ pub struct LogoutArgs {
 }
 
 pub async fn run(args: LogoutArgs) -> Result<()> {
+    tokio::task::spawn_blocking(move || run_blocking(args)).await.map_err(|error| {
+        crate::error::Error::Authentication(format!("logout worker failed: {error}"))
+    })?
+}
+
+fn run_blocking(args: LogoutArgs) -> Result<()> {
     let mut auth = AuthService::global();
-    auth.init(None);
+    auth.init(None)?;
 
     let sources = auth.list_credentials().len();
 
@@ -37,18 +43,7 @@ pub async fn run(args: LogoutArgs) -> Result<()> {
             .unwrap_or(false);
 
         if confirm {
-            // Collect names first to avoid borrow issues.
-            let names: Vec<String> = auth
-                .list_credentials()
-                .iter()
-                .map(|c| c.name.clone())
-                .collect();
-            let mut removed = 0;
-            for name in &names {
-                if auth.remove_credentials(name) {
-                    removed += 1;
-                }
-            }
+            let removed = auth.remove_all_credentials()?;
             fmt::success(&format!("Removed {removed} credentials."));
         } else {
             fmt::warning("Logout cancelled.");
@@ -57,15 +52,19 @@ pub async fn run(args: LogoutArgs) -> Result<()> {
     }
 
     if let Some(ref name) = args.name {
-        let exists = auth
-            .list_credentials()
-            .iter()
-            .any(|c| c.name == *name);
+        let exists = auth.list_credentials().iter().any(|c| c.name == *name);
         if !exists {
             fmt::error(&format!("Credentials '{name}' not found."));
             return Ok(());
         }
-        if auth.remove_credentials(name) {
+        let confirm = Confirm::new()
+            .with_prompt(format!("Remove credentials '{name}'?"))
+            .default(false)
+            .interact()
+            .unwrap_or(false);
+        if !confirm {
+            fmt::warning("Logout cancelled.");
+        } else if auth.remove_credentials(name)? {
             fmt::success(&format!("Removed credentials '{name}'."));
         }
         return Ok(());
@@ -73,12 +72,8 @@ pub async fn run(args: LogoutArgs) -> Result<()> {
 
     // Single source: auto-remove.
     if sources == 1 {
-        let name = auth
-            .list_credentials()
-            .first()
-            .map(|c| c.name.clone())
-            .unwrap();
-        if auth.remove_credentials(&name) {
+        let name = auth.list_credentials().first().map(|c| c.name.clone()).unwrap();
+        if auth.remove_credentials(&name)? {
             fmt::success("Logged out.");
         }
         return Ok(());
@@ -105,12 +100,14 @@ pub async fn run(args: LogoutArgs) -> Result<()> {
             .interact()
             .unwrap_or(false);
         if confirm {
-            if auth.remove_credentials(&name) {
+            if auth.remove_credentials(&name)? {
                 fmt::success(&format!("Removed credentials '{name}'."));
             }
         } else {
             fmt::warning("Logout cancelled.");
         }
+    } else {
+        fmt::warning("Logout cancelled.");
     }
 
     Ok(())

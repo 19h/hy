@@ -5,6 +5,16 @@ use std::path::PathBuf;
 /// Top-level error type for all hcli operations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("child process exited with status {0}")]
+    ChildExit(i32),
+    #[error("{0}")]
+    PythonPackages(String),
+    #[error("{0}")]
+    IdaProbe(String),
+    #[error("{0}")]
+    PythonNotFound(String),
+    #[error("{0}")]
+    UnicodeDecode(String),
     // ── API errors ──────────────────────────────────────────────────────
     #[error("Authentication failed: {0}")]
     Authentication(String),
@@ -19,7 +29,10 @@ pub enum Error {
     RateLimit,
 
     #[error("API error ({status}): {message}")]
-    Api { status: u16, message: String },
+    Api {
+        status: u16,
+        message: String,
+    },
 
     // ── Auth errors ─────────────────────────────────────────────────────
     #[error("Not logged in — run `hy login` first")]
@@ -73,6 +86,9 @@ pub enum Error {
     #[error("IDA installation failed: {0}")]
     IdaInstallFailed(String),
 
+    #[error("Failed to launch IDA: {0}")]
+    IdaLaunch(#[source] Box<Error>),
+
     // ── Update errors ───────────────────────────────────────────────────
     #[error("Update failed: {0}")]
     UpdateFailed(String),
@@ -100,18 +116,24 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 impl Error {
     /// Construct an API error from an HTTP response status and body.
     pub fn from_status(status: u16, body: &str) -> Self {
+        let message = serde_json::from_str::<serde_json::Value>(body)
+            .ok()
+            .and_then(|value| value.get("message")?.as_str().map(String::from));
+        Self::from_status_message(status, message)
+    }
+
+    pub(crate) fn from_status_message(status: u16, message: Option<String>) -> Self {
         match status {
             401 => Self::Authentication("Authentication failed".into()),
             403 => Self::Forbidden("Access forbidden".into()),
             404 => Self::NotFound("Resource not found".into()),
             429 => Self::RateLimit,
             _ => {
-                // Try to extract a message field from JSON body.
-                let message = serde_json::from_str::<serde_json::Value>(body)
-                    .ok()
-                    .and_then(|v| v.get("message")?.as_str().map(String::from))
-                    .unwrap_or_else(|| format!("HTTP {status}"));
-                Self::Api { status, message }
+                let message = message.unwrap_or_else(|| format!("HTTP {status}"));
+                Self::Api {
+                    status,
+                    message,
+                }
             }
         }
     }

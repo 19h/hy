@@ -1,17 +1,18 @@
-//! `hcli update` command.
+//! Native executable update selection and confirmation.
 
-use clap::Args;
+use clap::{Args, ValueEnum};
 use dialoguer::Confirm;
-use semver::VersionReq;
 
 use crate::config::Env;
-use crate::error::Result;
-use crate::update::{compatible_version, get_assets, update_binary, GitHubRepo, parse_version};
+use crate::error::{Error, Result};
+use crate::update::{GitHubRepo, compatible_version, get_assets, update_binary};
 use crate::util::fmt;
 use crate::util::io::{arch_name, executable_path, is_binary, os_name};
 
 #[derive(Debug, Args)]
 pub struct UpdateArgs {
+    #[arg(short = 'm', long, value_enum, default_value = "auto", hide = true)]
+    pub mode: UpdateMode,
     /// Force update
     #[arg(short, long)]
     pub force: bool,
@@ -25,64 +26,64 @@ pub struct UpdateArgs {
     pub include_prereleases: bool,
 }
 
-pub async fn run(args: UpdateArgs) -> Result<()> {
-    let env = Env::global();
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum UpdateMode {
+    Auto,
+    Binary,
+    Pypi,
+}
 
-    if !is_binary() {
-        eprintln!("\nTo update, run:");
-        eprintln!("  uv tool upgrade ida-hcli");
-        eprintln!("or");
-        eprintln!("  pipx upgrade ida-hcli");
+pub async fn run(args: UpdateArgs) -> Result<()> {
+    tokio::task::spawn_blocking(move || run_blocking(args))
+        .await
+        .map_err(|error| Error::UpdateFailed(format!("update worker failed: {error}")))?
+}
+
+fn run_blocking(args: UpdateArgs) -> Result<()> {
+    let env = Env::global();
+    if matches!(args.mode, UpdateMode::Pypi) {
+        return Err(Error::UpdateFailed(
+            "PyPI update mode is unavailable for the native Rust executable".into(),
+        ));
+    }
+    if matches!(args.mode, UpdateMode::Auto) && !is_binary() {
+        fmt::info(
+            "Development build: update the source checkout and rebuild with cargo build --release.",
+        );
         return Ok(());
     }
 
     fmt::info("Checking for updates...");
 
     let repo = GitHubRepo::from_url(&env.github_url)?;
-    let _current = parse_version(&env.version);
 
-    let op = if args.force { ">=" } else { ">" };
+    let op = if args.force {
+        ">="
+    } else {
+        ">"
+    };
     let req_str = format!("{op}{}", env.version);
-    let req = VersionReq::parse(&req_str)
-        .map_err(|e| crate::error::Error::UpdateFailed(format!("bad version req: {e}")))?;
-
-    let latest = compatible_version(&repo, &req, args.include_prereleases)?;
+    let latest = compatible_version(&repo, &req_str, args.include_prereleases)?;
 
     let Some(latest) = latest else {
-        fmt::success(&format!(
-            "Already using the latest version ({})",
-            env.version
-        ));
+        fmt::success(&format!("Already using the latest version ({})", env.version));
         return Ok(());
     };
 
-    eprintln!(
-        "Update available: {} -> {}",
-        env.version, latest
-    );
-
     // Find matching asset for this platform.
-    let mask = regex::Regex::new(&format!(
-        ".*-{}-{}.*",
-        os_name(),
-        arch_name()
-    ))
-    .unwrap();
+    let mask = regex::Regex::new(&format!(".*-{}-{}.*", os_name(), arch_name())).unwrap();
 
-    let tag = format!("v{latest}");
-    let assets = get_assets(&repo, &tag, &mask)?;
+    let assets = get_assets(&repo, &latest.tag, &mask)?;
 
     if assets.len() != 1 {
-        fmt::error(&format!(
-            "Expected 1 asset for this platform, found {}",
-            assets.len()
-        ));
         return Ok(());
     }
 
+    eprintln!("Update available: {} -> {}", env.version, latest.version);
+
     if !args.auto_install {
         let confirm = Confirm::new()
-            .with_prompt(format!("Install update to {latest}?"))
+            .with_prompt(format!("Install update to {}?", latest.version))
             .default(true)
             .interact()
             .unwrap_or(false);
@@ -93,14 +94,8 @@ pub async fn run(args: UpdateArgs) -> Result<()> {
     }
 
     let binary = executable_path();
-    if update_binary(&assets[0], &repo, &binary)? {
-        fmt::success(&format!("Successfully updated to {latest}"));
-    } else {
-        fmt::success(&format!(
-            "Already using the latest version ({})",
-            env.version
-        ));
-    }
+    update_binary(&assets[0], &repo, &binary)?;
+    fmt::success(&format!("Successfully updated to {}", latest.version));
 
     Ok(())
 }

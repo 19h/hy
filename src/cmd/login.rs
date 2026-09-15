@@ -20,8 +20,14 @@ pub struct LoginArgs {
 }
 
 pub async fn run(args: LoginArgs) -> Result<()> {
+    tokio::task::spawn_blocking(move || run_blocking(args)).await.map_err(|error| {
+        crate::error::Error::Authentication(format!("login worker failed: {error}"))
+    })?
+}
+
+fn run_blocking(args: LoginArgs) -> Result<()> {
     let mut auth = AuthService::global();
-    auth.init(None);
+    auth.init(None)?;
 
     // Already logged in?
     if auth.is_logged_in() && !args.force {
@@ -36,10 +42,7 @@ pub async fn run(args: LoginArgs) -> Result<()> {
 
         if sources.len() <= 1 {
             // Single credential — simplified prompt.
-            fmt::success(&format!(
-                "You are already logged in as {}.",
-                current.email
-            ));
+            fmt::success(&format!("You are already logged in as {}.", current.email));
             let add_another = Confirm::new()
                 .with_prompt("Would you like to login as another user?")
                 .default(false)
@@ -51,10 +54,7 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         } else {
             // Multiple credentials — more detailed.
             fmt::success("You are already logged in.");
-            eprintln!(
-                "Current source: {} ({})",
-                current.name, current.email
-            );
+            eprintln!("Current source: {} ({})", current.name, current.email);
             let add_another = Confirm::new()
                 .with_prompt("Would you like to add another credentials?")
                 .default(false)
@@ -82,7 +82,7 @@ pub async fn run(args: LoginArgs) -> Result<()> {
         0 => {
             // Google OAuth
             fmt::info("Starting OAuth login...");
-            let cred = auth.login_interactive_blocking(args.name.as_deref())?;
+            let cred = auth.login_interactive_blocking(args.name.as_deref(), args.force)?;
             fmt::success(&format!("Logged in as {}", cred.email));
             Some(cred)
         }
@@ -90,7 +90,12 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             // Email OTP
             let last_email = {
                 let store = ConfigStore::global();
-                store.get_str("login.email").map(String::from)
+                store
+                    .get_str(&format!(
+                        "{}.login.email",
+                        crate::config::Env::global().config_namespace
+                    ))
+                    .map(String::from)
             };
 
             let email: String = Input::new()
@@ -107,7 +112,7 @@ pub async fn run(args: LoginArgs) -> Result<()> {
             fmt::info(&format!("Sending OTP to {email}..."));
 
             if args.force {
-                auth.logout_current();
+                auth.logout_current()?;
             }
 
             auth.send_otp(&email)?;
@@ -118,16 +123,9 @@ pub async fn run(args: LoginArgs) -> Result<()> {
                 .interact_text()
                 .map_err(|_| crate::error::Error::Other("Cancelled".into()))?;
 
-            match auth.verify_otp(&email, &otp, args.name.as_deref()) {
-                Ok(cred) => {
-                    fmt::success(&format!("Logged in as {}", cred.email));
-                    Some(cred)
-                }
-                Err(_) => {
-                    fmt::error("Login failed. Invalid OTP.");
-                    return Ok(());
-                }
-            }
+            let cred = auth.verify_otp(&email, &otp, args.name.as_deref())?;
+            fmt::success(&format!("Logged in as {}", cred.email));
+            Some(cred)
         }
     };
 
@@ -135,31 +133,22 @@ pub async fn run(args: LoginArgs) -> Result<()> {
     if let Some(ref cred) = cred {
         if creds_before == 0 {
             // First login — automatically set as default.
-            let _ = auth.set_default(&cred.name);
+            let _ = auth.set_default(&cred.name)?;
         } else {
             // Additional credentials — ask before overwriting default.
-            fmt::success(&format!(
-                "Credentials '{}' created!",
-                cred.label()
-            ));
+            fmt::success(&format!("Credentials '{}' created!", cred.label()));
             eprintln!("Email: {}", cred.email);
             eprintln!("Type: {}", cred.cred_type);
 
             let set_default = Confirm::new()
-                .with_prompt(format!(
-                    "Set '{}' as the default credentials?",
-                    cred.name
-                ))
+                .with_prompt(format!("Set '{}' as the default credentials?", cred.name))
                 .default(true)
                 .interact()
                 .unwrap_or(false);
 
             if set_default {
-                let _ = auth.set_default(&cred.name);
-                fmt::success(&format!(
-                    "'{}' set as default credentials.",
-                    cred.name
-                ));
+                let _ = auth.set_default(&cred.name)?;
+                fmt::success(&format!("'{}' set as default credentials.", cred.name));
             }
 
             eprintln!();

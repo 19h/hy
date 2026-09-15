@@ -1,0 +1,11 @@
+Set {name} for your user account using one of these methods:
+
+  PowerShell:
+    {command}
+
+  GUI:
+    Start > "Edit environment variables for your account" > New
+    Name:  {name}
+    Value: {value}
+
+Restart IDA and any open terminals for the change to take effect.

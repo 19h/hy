@@ -1,5 +1,14 @@
 //! String processing utilities.
 
+/// Python str.isspace includes four information separators beyond Unicode White_Space.
+pub fn python_whitespace(character: char) -> bool {
+    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
+}
+
+pub fn python_trim(value: &str) -> &str {
+    value.trim_matches(python_whitespace)
+}
+
 /// Extract the domain portion of an email address.
 #[allow(dead_code)]
 pub fn email_domain(email: &str) -> &str {
@@ -41,7 +50,13 @@ pub fn slugify(text: &str, sep: char) -> String {
     let s: String = text
         .to_lowercase()
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { sep })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c
+            } else {
+                sep
+            }
+        })
         .collect();
     // Collapse repeated separators and trim.
     let sep_str = sep.to_string();
@@ -66,7 +81,11 @@ pub fn levenshtein(a: &str, b: &str) -> usize {
     for i in 1..=m {
         curr[0] = i;
         for j in 1..=n {
-            let cost = if a[i - 1] == b[j - 1] { 0 } else { 1 };
+            let cost = if a[i - 1] == b[j - 1] {
+                0
+            } else {
+                1
+            };
             curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);

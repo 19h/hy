@@ -11,11 +11,15 @@ pub fn ida_user_dir() -> PathBuf {
     let env = Env::global();
 
     if let Some(ref d) = env.hcli_idausr {
-        return PathBuf::from(d);
+        return std::env::split_paths(d).next().unwrap_or_default();
     }
     if let Some(ref d) = env.idausr {
         // IDAUSR can be a search path; take the first component.
-        let sep = if cfg!(windows) { ';' } else { ':' };
+        let sep = if cfg!(windows) {
+            ';'
+        } else {
+            ':'
+        };
         return PathBuf::from(d.split(sep).next().unwrap_or(d));
     }
 
@@ -23,24 +27,9 @@ pub fn ida_user_dir() -> PathBuf {
     if cfg!(target_os = "macos") {
         dirs::home_dir().unwrap_or_default().join(".idapro")
     } else if cfg!(target_os = "windows") {
-        dirs::home_dir()
-            .unwrap_or_default()
-            .join("AppData")
-            .join("Hex-Rays")
-            .join("IDA Pro")
+        dirs::home_dir().unwrap_or_default().join("AppData").join("Hex-Rays").join("IDA Pro")
     } else {
         dirs::home_dir().unwrap_or_default().join(".idapro")
-    }
-}
-
-/// Default IDA installation directory per platform.
-pub fn default_install_dir() -> PathBuf {
-    if cfg!(target_os = "macos") {
-        PathBuf::from("/Applications")
-    } else if cfg!(target_os = "windows") {
-        PathBuf::from(r"C:\Program Files\IDA Pro")
-    } else {
-        dirs::home_dir().unwrap_or_default().join("ida")
     }
 }
 
@@ -97,9 +86,7 @@ pub fn ida_binary_path(install_dir: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Resolve the executable inside a macOS app bundle. Falls back to the
-/// bundle path itself if no binary is found (so callers can still report
-/// a sensible path).
+/// Resolve the executable inside a macOS app bundle.
 fn macos_bundle_binary(bundle: &Path) -> Option<PathBuf> {
     let macos_dir = bundle.join("Contents").join("MacOS");
     for name in &["ida", "ida64", "ida32"] {
@@ -108,58 +95,13 @@ fn macos_bundle_binary(bundle: &Path) -> Option<PathBuf> {
             return Some(p);
         }
     }
-    // Any executable in Contents/MacOS as a last resort.
-    if let Ok(entries) = std::fs::read_dir(&macos_dir) {
-        for entry in entries.flatten() {
-            if entry.path().is_file() {
-                return Some(entry.path());
-            }
-        }
-    }
-    bundle.exists().then(|| bundle.to_path_buf())
-}
-
-/// Launch IDA with an optional file argument.
-///
-/// On macOS, app bundles are launched through LaunchServices (`open -n -a`)
-/// which escapes sandbox restrictions inherited from protocol handlers —
-/// but only when the bundle path actually ends in `.app`. Non-bundle
-/// installations invoke the binary directly.
-pub fn launch_ida(ida_bin: &Path, file: Option<&Path>) -> std::io::Result<()> {
-    let bin_str = ida_bin.to_string_lossy();
-
-    if cfg!(target_os = "macos") {
-        let app_bundle = if let Some(pos) = bin_str.find("/Contents/MacOS/") {
-            Some(&bin_str[..pos])
-        } else if bin_str.ends_with(".app") {
-            Some(bin_str.as_ref())
-        } else {
-            None
-        };
-
-        if let Some(bundle) = app_bundle
-            && bundle.ends_with(".app") {
-                let mut cmd = std::process::Command::new("open");
-                cmd.arg("-n").arg("-a").arg(bundle);
-                if let Some(f) = file {
-                    cmd.arg("--args").arg(f);
-                }
-                cmd.spawn()?;
-                return Ok(());
-            }
-    }
-
-    let mut cmd = std::process::Command::new(ida_bin);
-    if let Some(f) = file {
-        cmd.arg(f);
-    }
-    cmd.spawn()?;
-    Ok(())
+    None
 }
 
 /// Locate the `idat` (headless / text-mode) binary.
 #[allow(dead_code)]
 pub fn idat_path(install_dir: &Path) -> Option<PathBuf> {
+    let install_dir = executable_dir(install_dir);
     let name = if cfg!(target_os = "windows") {
         "idat64.exe"
     } else {
@@ -179,85 +121,80 @@ pub fn idat_path(install_dir: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Find IDA installations in standard locations for the current platform.
-pub fn find_standard_installations() -> Vec<PathBuf> {
-    let mut results = Vec::new();
-
-    if cfg!(target_os = "macos") {
-        // /Applications/IDA*
-        if let Ok(entries) = std::fs::read_dir("/Applications") {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str.starts_with("IDA")
-                    && name_str.ends_with(".app")
-                    && entry.path().is_dir()
-                {
-                    results.push(entry.path());
-                }
-            }
-        }
-    } else if cfg!(target_os = "windows") {
-        for base in &[r"C:\Program Files", r"C:\Program Files (x86)"] {
-            if let Ok(entries) = std::fs::read_dir(base) {
-                for entry in entries.flatten() {
-                    let name = entry.file_name();
-                    if name.to_string_lossy().contains("IDA") && entry.path().is_dir() {
-                        results.push(entry.path());
-                    }
-                }
-            }
-        }
-    } else {
-        // Linux: ~/ida*, /opt/ida*
-        if let Some(home) = dirs::home_dir()
-            && let Ok(entries) = std::fs::read_dir(&home) {
-                for entry in entries.flatten() {
-                    let name = entry.file_name();
-                    if name.to_string_lossy().starts_with("ida") && entry.path().is_dir() {
-                        results.push(entry.path());
-                    }
-                }
-            }
-        if let Ok(entries) = std::fs::read_dir("/opt") {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                if name.to_string_lossy().starts_with("ida") && entry.path().is_dir() {
-                    results.push(entry.path());
-                }
-            }
-        }
-    }
-
-    results.sort();
-    results
+/// Installation path together with the source that selected it.
+#[derive(Debug)]
+pub struct ResolvedInstallDir {
+    pub path: PathBuf,
+    pub source: String,
 }
 
-/// Determine the current IDA installation directory from environment or config.
+pub fn resolve_install_dir() -> crate::error::Result<ResolvedInstallDir> {
+    let environment = Env::global();
+    for (value, source) in [
+        (&environment.current_ida_install_dir, "$HCLI_CURRENT_IDA_INSTALL_DIR"),
+        (&environment.idadir, "$IDADIR"),
+    ] {
+        if let Some(path) = value {
+            return Ok(ResolvedInstallDir {
+                path: normalize_install_dir(Path::new(path)),
+                source: source.into(),
+            });
+        }
+    }
+    {
+        let store = crate::config::ConfigStore::global();
+        if let Some(name) = store.get_nested_str("ida.default")
+            && let Some(path) = store.get_string_map("ida.instances").get(name)
+        {
+            let path = normalize_install_dir(Path::new(path));
+            if ida_binary_path(&path).is_some() {
+                return Ok(ResolvedInstallDir {
+                    path,
+                    source: format!("hcli default instance '{name}'"),
+                });
+            }
+        }
+    }
+    let config = crate::plugin::read_ida_config()?;
+    let configured = config["Paths"]["ida-install-dir"]
+        .as_str()
+        .or_else(|| config["paths"]["ida_install_dir"].as_str())
+        .ok_or(crate::error::Error::IdaNotFound)?;
+    let path = normalize_install_dir(Path::new(configured));
+    if !path.is_dir() {
+        return Err(crate::error::Error::Other(
+            "ida-config.json: ida-install-dir does not exist".into(),
+        ));
+    }
+    Ok(ResolvedInstallDir {
+        path,
+        source: ida_user_dir().join("ida-config.json").display().to_string(),
+    })
+}
+
+/// Convenience lookup for callers that treat an unconfigured installation as absent.
 pub fn current_install_dir() -> Option<PathBuf> {
-    let env = Env::global();
-    if let Some(ref d) = env.current_ida_install_dir {
-        return Some(PathBuf::from(d));
-    }
-    if let Some(ref d) = env.idadir {
-        return Some(PathBuf::from(d));
-    }
+    resolve_install_dir().ok().map(|resolved| resolved.path)
+}
 
-    // Try to read from ida-config.json
-    let config_path = ida_user_dir().join("ida-config.json");
-    if config_path.exists()
-        && let Ok(text) = std::fs::read_to_string(&config_path)
-            && let Ok(val) = serde_json::from_str::<serde_json::Value>(&text)
-                && let Some(dir) = val
-                    .get("paths")
-                    .and_then(|p| p.get("ida_install_dir"))
-                    .and_then(|v| v.as_str())
-                {
-                    let path = PathBuf::from(dir);
-                    if path.exists() {
-                        return Some(path);
-                    }
-                }
+pub fn normalize_install_dir(path: &Path) -> PathBuf {
+    let mut path = path.to_path_buf();
+    if path.is_file() {
+        path.pop();
+    }
+    if path.ends_with("Contents/MacOS") {
+        path.pop();
+        path.pop();
+    }
+    path
+}
 
-    None
+pub fn executable_dir(path: &Path) -> PathBuf {
+    let normalized = normalize_install_dir(path);
+    let bundle = normalized.join("Contents/MacOS");
+    if bundle.is_dir() {
+        bundle
+    } else {
+        normalized
+    }
 }

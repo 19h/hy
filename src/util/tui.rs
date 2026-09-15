@@ -11,9 +11,27 @@ use dialoguer::theme::ColorfulTheme;
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 
+mod raw_mode;
+pub(crate) use raw_mode::RawMode;
+
+pub fn is_interactive() -> bool {
+    use std::io::IsTerminal;
+    std::io::stdin().is_terminal() && std::io::stderr().is_terminal()
+}
+
 /// The shared prompt theme.
 pub fn theme() -> ColorfulTheme {
     ColorfulTheme::default()
+}
+
+/// Settings prompts return Ctrl-C as an error so installation cleanup can run.
+pub fn setting_theme() -> inquire::ui::RenderConfig<'static> {
+    use inquire::ui::{Color, RenderConfig, Styled};
+    if std::env::var_os("NO_COLOR").is_some() {
+        RenderConfig::empty()
+    } else {
+        RenderConfig::default().with_prompt_prefix(Styled::new("?").with_fg(Color::LightCyan))
+    }
 }
 
 /// Themed yes/no prompt. Returns `default` when the prompt is cancelled
@@ -45,16 +63,6 @@ pub fn multi_select(prompt: &str, items: &[String]) -> Option<Vec<usize>> {
         .interact_opt()
         .ok()
         .flatten()
-}
-
-/// Themed free-text input with a default value.
-pub fn input(prompt: &str, default: &str) -> String {
-    dialoguer::Input::with_theme(&theme())
-        .with_prompt(prompt)
-        .default(default.to_string())
-        .allow_empty(true)
-        .interact_text()
-        .unwrap_or_else(|_| default.to_string())
 }
 
 /// A byte-transfer progress bar with the shared style.
@@ -114,11 +122,8 @@ impl Table {
         let cols = self.headers.len();
 
         // Natural column widths (ANSI-aware).
-        let mut widths: Vec<usize> = self
-            .headers
-            .iter()
-            .map(|h| console::measure_text_width(h))
-            .collect();
+        let mut widths: Vec<usize> =
+            self.headers.iter().map(|h| console::measure_text_width(h)).collect();
         for row in &self.rows {
             for (i, cell) in row.iter().enumerate().take(cols) {
                 widths[i] = widths[i].max(console::measure_text_width(cell));
@@ -132,11 +137,7 @@ impl Table {
         let mut total: usize = widths.iter().sum::<usize>() + chrome;
         while total > term_width {
             // Clamp the widest column; stop once everything is small.
-            let (idx, _) = widths
-                .iter()
-                .enumerate()
-                .max_by_key(|(_, w)| **w)
-                .unwrap();
+            let (idx, _) = widths.iter().enumerate().max_by_key(|(_, w)| **w).unwrap();
             if widths[idx] <= 8 {
                 break;
             }

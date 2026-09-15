@@ -3,14 +3,14 @@
 //! Mirrors the hidden `hcli asset` group: upload an asset to an arbitrary
 //! bucket with validated metadata, or delete an asset by key.
 
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
+use indexmap::IndexMap;
 use serde::Deserialize;
 
-use crate::api::ApiClient;
-use crate::error::Result;
+use crate::api::{ApiClient, UploadOptions, asset_path};
+use crate::error::{Error, Result};
 use crate::util::{fmt, tui};
 
 #[derive(Debug, Subcommand)]
@@ -29,11 +29,14 @@ pub struct AssetPutArgs {
     #[arg(short, long)]
     pub bucket: String,
     /// Attach metadata as KEY=VALUE (repeatable), e.g. -m version=9.2 -m category=ida-free
-    #[arg(short, long = "metadata")]
+    #[arg(short, long = "metadata", required = true)]
     pub metadata: Vec<String>,
     /// Comma-separated list of allowed segments (e.g. segment1,segment2)
     #[arg(long)]
     pub allowed_segments: Option<String>,
+    /// Comma-separated licence editions, addon codes, or any_edition
+    #[arg(long)]
+    pub allowed_editions: Option<String>,
     /// Comma-separated list of allowed email addresses
     #[arg(long)]
     pub allowed_emails: Option<String>,
@@ -57,15 +60,23 @@ pub struct AssetDeleteArgs {
 /// Bucket configuration with required-metadata schema.
 #[derive(Debug, Deserialize)]
 struct Bucket {
-    #[serde(default, rename = "requiredMetadata")]
-    required_metadata: HashMap<String, RequiredField>,
+    #[serde(rename = "filename")]
+    _filename: String,
+    #[serde(rename = "metadata")]
+    _metadata: BucketMetadata,
+    #[serde(rename = "requiredMetadata")]
+    required_metadata: IndexMap<String, RequiredField>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BucketMetadata {
+    #[serde(rename = "name")]
+    _name: String,
 }
 
 #[derive(Debug, Deserialize)]
 struct RequiredField {
-    #[serde(default)]
     description: String,
-    #[serde(default)]
     example: String,
 }
 
@@ -77,109 +88,62 @@ pub async fn run(cmd: AssetCommands) -> Result<()> {
 }
 
 async fn run_put(args: AssetPutArgs) -> Result<()> {
-    use sha2::{Digest, Sha256};
-
     if !args.path.is_file() {
-        fmt::error(&format!("Not a file: {}", args.path.display()));
-        return Ok(());
+        return Err(Error::Other(format!("not a file: {}", args.path.display())));
     }
-
     let client = ApiClient::new()?;
-
-    // Fetch the bucket schema and enforce required metadata.
-    let bucket: Bucket = match client
-        .get_json(&format!("/api/assets/buckets/{}", args.bucket))
-        .await
-    {
-        Ok(b) => b,
-        Err(_) => {
-            fmt::error(&format!("Bucket '{}' does not exist.", args.bucket));
-            return Ok(());
-        }
+    let bucket: Bucket = client.get_json(&format!("/api/assets/buckets/{}", args.bucket)).await?;
+    let metadata = parse_metadata(&args.metadata, &bucket)?;
+    let options = UploadOptions {
+        force: args.force,
+        metadata: Some(metadata),
+        allowed_segments: permission_list(args.allowed_segments),
+        allowed_emails: permission_list(args.allowed_emails),
+        allowed_editions: permission_list(args.allowed_editions),
+        ..Default::default()
     };
+    let uploaded = client.upload_asset(&args.bucket, &args.path, options).await?;
+    fmt::success("File uploaded successfully!");
+    eprintln!("  Bucket:  {}", args.bucket);
+    eprintln!("  Key:     {}", uploaded.key);
+    eprintln!("  Version: {}", uploaded.version);
+    Ok(())
+}
 
+fn parse_metadata(
+    items: &[String],
+    bucket: &Bucket,
+) -> Result<serde_json::Map<String, serde_json::Value>> {
     let mut metadata = serde_json::Map::new();
-    for item in &args.metadata {
-        let Some((key, val)) = item.split_once('=') else {
-            fmt::error(&format!("Metadata '{item}' is not in KEY=VALUE format."));
-            return Ok(());
-        };
-        metadata.insert(key.to_owned(), serde_json::Value::String(val.to_owned()));
+    for item in items {
+        let (key, value) = item.split_once('=').ok_or_else(|| {
+            Error::Other(format!("Metadata '{item}' is not in KEY=VALUE format."))
+        })?;
+        metadata.insert(key.to_owned(), serde_json::Value::String(value.to_owned()));
     }
-
-    let missing: Vec<&String> = bucket
+    let missing: Vec<&str> = bucket
         .required_metadata
         .keys()
-        .filter(|k| !metadata.contains_key(*k))
+        .filter(|key| !metadata.contains_key(*key))
+        .map(String::as_str)
         .collect();
     if !missing.is_empty() {
-        fmt::error(&format!(
-            "Missing required metadata fields: {}",
-            missing
-                .iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
-        fmt::warning("Required fields:");
         for (key, field) in &bucket.required_metadata {
             eprintln!("    - {key}: {} (example: {})", field.description, field.example);
         }
-        return Ok(());
+        return Err(Error::Other(format!(
+            "Missing required metadata fields: {}",
+            missing.join(", ")
+        )));
     }
+    Ok(metadata)
+}
 
-    let meta = std::fs::metadata(&args.path)?;
-    let filename = args
-        .path
-        .file_name()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .to_string();
-
-    let bytes = std::fs::read(&args.path)?;
-    let checksum = format!("{:x}", Sha256::digest(&bytes));
-    drop(bytes);
-
-    let mut upload_data = serde_json::json!({
-        "filename": filename,
-        "size": meta.len(),
-        "force": args.force,
-        "status": "active",
-        "checksum": checksum,
-        "metadata": metadata,
-    });
-    if let Some(ref segments) = args.allowed_segments {
-        upload_data["allowed_segments"] =
-            serde_json::json!(segments.split(',').map(str::trim).collect::<Vec<_>>());
-    }
-    if let Some(ref emails) = args.allowed_emails {
-        upload_data["allowed_emails"] =
-            serde_json::json!(emails.split(',').map(str::trim).collect::<Vec<_>>());
-    }
-
-    // Request an upload URL, stream the file, then confirm.
-    let resp: serde_json::Value = client
-        .post_json(&format!("/api/assets/{}", args.bucket), &upload_data)
-        .await?;
-    let upload_url = resp.get("url").and_then(|v| v.as_str());
-    let key = resp.get("key").and_then(|v| v.as_str()).unwrap_or_default();
-    let version = resp.get("version").and_then(|v| v.as_i64()).unwrap_or(0);
-
-    if let Some(url) = upload_url {
-        client.put_file(url, &args.path).await?;
-        let _: serde_json::Value = client
-            .post_json(
-                &format!("/api/assets/{}/{key}", args.bucket),
-                &serde_json::json!({}),
-            )
-            .await?;
-    }
-
-    fmt::success("File uploaded successfully!");
-    eprintln!("  Bucket:  {}", args.bucket);
-    eprintln!("  Key:     {key}");
-    eprintln!("  Version: {version}");
-    Ok(())
+/// Match upstream's CSV handling: empty input is absent; individual values are preserved.
+fn permission_list(value: Option<String>) -> Option<Vec<String>> {
+    value
+        .filter(|value| !value.is_empty())
+        .map(|value| value.split(',').map(String::from).collect())
 }
 
 async fn run_delete(args: AssetDeleteArgs) -> Result<()> {
@@ -192,14 +156,11 @@ async fn run_delete(args: AssetDeleteArgs) -> Result<()> {
             false,
         )
     {
-        fmt::warning("Deletion cancelled.");
-        return Ok(());
+        return Err(Error::Other("Deletion cancelled.".into()));
     }
 
     let client = ApiClient::new()?;
-    let _: serde_json::Value = client
-        .delete_json(&format!("/api/assets/{}/{}", args.bucket, args.key))
-        .await?;
+    let _: serde_json::Value = client.delete_json(&asset_path(&args.bucket, &args.key)).await?;
 
     fmt::success("Asset deleted successfully!");
     eprintln!("  Bucket: {}", args.bucket);

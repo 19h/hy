@@ -1,7 +1,21 @@
 //! General-purpose utilities.
 
 pub mod cache;
+pub mod cookies;
+pub mod files;
 pub mod fmt;
+pub mod http_body;
+pub mod http_headers;
 pub mod io;
+pub mod json_encoding;
+pub mod json_numbers;
+pub mod python_datetime;
+pub mod python_integer;
+pub mod python_path;
+pub mod python_regex;
+pub mod python_repr;
+pub mod python_sort;
+pub mod python_zip;
+pub mod realpath;
 pub mod strings;
 pub mod tui;

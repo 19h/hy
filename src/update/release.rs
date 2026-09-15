@@ -1,196 +1,178 @@
-//! GitHub release discovery, download, and binary replacement.
+//! GitHub release discovery with preserved tags and upstream selection order.
 
-use std::path::{Path, PathBuf};
-
-use regex::Regex;
 use reqwest::blocking::Client;
-use semver::{Version, VersionReq};
+use semver::Version;
 use serde::Deserialize;
 
 use crate::config::Env;
 use crate::error::{Error, Result};
-use crate::util::io::check_free_space;
 
-/// Minimal representation of a GitHub release asset.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReleaseAsset {
     pub id: u64,
     pub name: String,
     pub size: u64,
-    pub browser_download_url: String,
 }
 
-/// Minimal representation of a GitHub release.
-#[allow(dead_code)]
-#[derive(Debug, Clone, Deserialize)]
-pub struct Release {
-    pub tag_name: String,
-    pub prerelease: bool,
-    pub draft: bool,
-    pub assets: Vec<ReleaseAsset>,
+impl ReleaseAsset {
+    pub fn is_valid(&self) -> bool {
+        self.id > 0 && self.size > 0 && !self.name.trim().is_empty()
+    }
 }
 
-/// GitHub repo coordinates.
-#[derive(Debug, Clone)]
+#[derive(Debug, Deserialize)]
+struct Release {
+    tag_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ReleaseAssets {
+    assets: Option<Vec<serde_json::Value>>,
+}
+
+pub struct ReleaseVersion {
+    pub version: Version,
+    pub tag: String,
+}
+
+#[derive(Debug)]
 pub struct GitHubRepo {
-    pub owner: String,
-    pub repo: String,
-    pub token: Option<String>,
+    owner: String,
+    repo: String,
 }
 
 impl GitHubRepo {
-    /// Parse from a GitHub URL like `https://github.com/Owner/Repo`.
-    pub fn from_url(url: &str) -> Result<Self> {
-        let parsed =
-            url::Url::parse(url).map_err(|e| Error::Other(format!("Invalid GitHub URL: {e}")))?;
-        let mut segments = parsed
-            .path_segments()
-            .ok_or_else(|| Error::Other("GitHub URL has no path segments".into()))?;
-        let owner = segments
-            .next()
-            .ok_or_else(|| Error::Other("Missing owner in GitHub URL".into()))?
-            .to_owned();
-        let repo = segments
-            .next()
-            .ok_or_else(|| Error::Other("Missing repo in GitHub URL".into()))?
-            .trim_end_matches(".git")
-            .to_owned();
-
+    pub fn from_url(source: &str) -> Result<Self> {
+        let path = if let Some(path) = source.strip_prefix("git@github.com:") {
+            path.to_owned()
+        } else {
+            let url = url::Url::parse(source)
+                .map_err(|error| Error::UpdateFailed(format!("invalid GitHub URL: {error}")))?;
+            if url.scheme() != "https" || url.host_str() != Some("github.com") {
+                return Err(Error::UpdateFailed("expected an HTTPS or SSH GitHub URL".into()));
+            }
+            url.path().trim_matches('/').to_owned()
+        };
+        let path = path.strip_suffix(".git").unwrap_or(&path);
+        let (owner, repo) = path
+            .split_once('/')
+            .ok_or_else(|| Error::UpdateFailed("GitHub URL requires owner/repository".into()))?;
+        let valid = |part: &str| {
+            !part.is_empty()
+                && part != "."
+                && part != ".."
+                && part.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
+        };
+        if !valid(owner) || !valid(repo) {
+            return Err(Error::UpdateFailed("invalid GitHub owner/repository".into()));
+        }
         Ok(Self {
-            owner,
-            repo,
-            token: Env::global().github_token.clone(),
+            owner: owner.into(),
+            repo: repo.into(),
         })
     }
 
-    fn api_url(&self, path: &str) -> String {
+    pub(super) fn api_url(&self, path: &str) -> String {
         format!(
             "{}/repos/{}/{}{path}",
-            Env::global().github_api_url,
+            Env::global().github_api_url.trim_end_matches('/'),
             self.owner,
             self.repo
         )
     }
 
-    fn client(&self) -> Result<Client> {
-        let mut builder = Client::builder()
-            .user_agent(format!("hcli/{}", Env::global().version))
-            .timeout(std::time::Duration::from_secs(30));
+    pub(super) fn client(&self) -> Result<Client> {
+        Ok(Client::builder()
+            .user_agent(concat!("hy/", env!("CARGO_PKG_VERSION")))
+            .timeout(std::time::Duration::from_secs(30))
+            .build()?)
+    }
 
-        if let Some(ref token) = self.token {
-            builder = builder.default_headers({
-                let mut h = reqwest::header::HeaderMap::new();
-                h.insert(
-                    reqwest::header::AUTHORIZATION,
-                    format!("Bearer {token}").parse().unwrap(),
-                );
-                h
-            });
+    pub(super) fn get(&self, client: &Client, path: &str) -> reqwest::blocking::RequestBuilder {
+        let request = client.get(self.api_url(path));
+        match &Env::global().github_token {
+            Some(token) => request.bearer_auth(token),
+            None => request,
         }
-
-        builder.build().map_err(Error::from)
     }
 }
 
-/// Fetch all releases from a GitHub repository.
-pub fn get_releases(repo: &GitHubRepo) -> Result<Vec<Release>> {
-    let client = repo.client()?;
-    let mut all = Vec::new();
-    let mut page = 1u32;
-
-    loop {
-        let url = repo.api_url(&format!("/releases?per_page=100&page={page}"));
-        let resp: Vec<Release> = client.get(&url).send()?.json()?;
-        if resp.is_empty() {
-            break;
-        }
-        all.extend(resp);
-        page += 1;
-    }
-
-    Ok(all)
-}
-
-/// Get all available versions, filtering out drafts.
-pub fn available_versions(repo: &GitHubRepo) -> Result<Vec<Version>> {
-    let releases = get_releases(repo)?;
-    let mut versions: Vec<Version> = releases
-        .iter()
-        .filter(|r| !r.draft)
-        .filter_map(|r| super::version::parse_version(&r.tag_name))
-        .collect();
-    versions.sort();
-    versions.reverse();
-    Ok(versions)
-}
-
-/// Find the latest version matching a version requirement.
 pub fn compatible_version(
     repo: &GitHubRepo,
-    req: &VersionReq,
+    requirement: &str,
     include_dev: bool,
-) -> Result<Option<Version>> {
-    let versions = available_versions(repo)?;
-    Ok(versions
-        .into_iter()
-        .find(|v| req.matches(v) && (include_dev || !super::version::is_dev_version(v))))
+) -> Result<Option<ReleaseVersion>> {
+    if !crate::plugin::valid_specification(requirement) {
+        return Err(Error::UpdateFailed(format!("invalid version requirement: {requirement}")));
+    }
+    let client = repo.client()?;
+    let mut latest: Option<ReleaseVersion> = None;
+    for page in 1.. {
+        let data: serde_json::Value =
+            repo.get(&client, &format!("/releases?per_page=100&page={page}")).send()?.json()?;
+        let Some(items) = data.as_array() else {
+            break;
+        };
+        if items.contains(&serde_json::Value::String("message".into())) {
+            break;
+        }
+        let releases: Vec<Release> = serde_json::from_value(data)?;
+        let last_page = releases.len() < 100;
+        for release in releases {
+            consider_release(&mut latest, release, requirement, include_dev);
+        }
+        if last_page {
+            break;
+        }
+    }
+    Ok(latest)
 }
 
-/// Get assets for a specific release tag, filtered by regex.
-pub fn get_assets(repo: &GitHubRepo, tag: &str, mask: &Regex) -> Result<Vec<ReleaseAsset>> {
+fn consider_release(
+    latest: &mut Option<ReleaseVersion>,
+    release: Release,
+    requirement: &str,
+    include_dev: bool,
+) {
+    let Some(tag) = release.tag_name else {
+        return;
+    };
+    let Some(version) = super::version::parse_version(&tag) else {
+        return;
+    };
+    if (!include_dev && super::version::is_dev_tag(&tag))
+        || !crate::plugin::version_matches(&version.to_string(), requirement)
+    {
+        return;
+    }
+    // Upstream's stable sort selects the last equal-precedence release.
+    if latest.as_ref().is_none_or(|previous| !version.cmp_precedence(&previous.version).is_lt()) {
+        *latest = Some(ReleaseVersion {
+            version,
+            tag,
+        });
+    }
+}
+
+pub fn get_assets(repo: &GitHubRepo, tag: &str, mask: &regex::Regex) -> Result<Vec<ReleaseAsset>> {
     let client = repo.client()?;
-    let url = repo.api_url(&format!("/releases/tags/{tag}"));
-    let release: Release = client.get(&url).send()?.json()?;
+    const TAG_ESCAPE: &percent_encoding::AsciiSet =
+        &percent_encoding::CONTROLS.add(b' ').add(b'/').add(b'?').add(b'#').add(b'%');
+    let encoded_tag = percent_encoding::utf8_percent_encode(tag, TAG_ESCAPE);
+    let data: serde_json::Value =
+        repo.get(&client, &format!("/releases/tags/{encoded_tag}")).send()?.json()?;
+    if data.get("message").is_some() {
+        return Ok(Vec::new());
+    }
+    let release: ReleaseAssets = serde_json::from_value(data)?;
     Ok(release
         .assets
+        .unwrap_or_default()
         .into_iter()
-        .filter(|a| mask.is_match(&a.name))
+        .filter_map(|value| serde_json::from_value::<ReleaseAsset>(value).ok())
+        .filter(|asset| asset.is_valid() && mask.is_match(&asset.name))
         .collect())
 }
 
-/// Download a release asset to a temporary file.
-pub fn download_asset(repo: &GitHubRepo, asset: &ReleaseAsset) -> Result<PathBuf> {
-    let client = repo.client()?;
-    let tmp_dir = tempfile::tempdir()?;
-    let target = tmp_dir.keep().join(&asset.name);
-
-    check_free_space(target.parent().unwrap_or(Path::new(".")), asset.size)?;
-
-    let mut resp = client
-        .get(&asset.browser_download_url)
-        .header(reqwest::header::ACCEPT, "application/octet-stream")
-        .send()?;
-
-    let mut file = std::fs::File::create(&target)?;
-    std::io::copy(&mut resp, &mut file)?;
-
-    Ok(target)
-}
-
-/// Atomically replace the running binary with a downloaded update.
-pub fn update_binary(asset: &ReleaseAsset, repo: &GitHubRepo, binary_path: &Path) -> Result<bool> {
-    let downloaded = download_asset(repo, asset)?;
-
-    // On Windows: rename current → .bak, move new → current.
-    if cfg!(target_os = "windows") {
-        let backup = binary_path.with_extension("exe.bak");
-        let _ = std::fs::remove_file(&backup);
-        std::fs::rename(binary_path, &backup)?;
-        std::fs::rename(&downloaded, binary_path)?;
-    } else {
-        // Unix: overwrite in place (or rename).
-        #[cfg(unix)]
-        {
-            let perms = std::fs::metadata(binary_path)?.permissions();
-            std::fs::rename(&downloaded, binary_path)?;
-            std::fs::set_permissions(binary_path, perms)?;
-        }
-        #[cfg(not(unix))]
-        {
-            std::fs::rename(&downloaded, binary_path)?;
-        }
-    }
-
-    Ok(true)
-}
+#[cfg(test)]
+mod tests;

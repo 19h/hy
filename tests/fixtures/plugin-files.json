@@ -1,0 +1,582 @@
+{
+  "provenance": {
+    "revision": "92df5b10c8b2e860a10bbfd8595c8bc2b7c3b64f",
+    "archive": "src/hcli/lib/ida/plugin/__init__.py:validate_metadata_in_plugin_archive",
+    "directory": "src/hcli/lib/ida/plugin/install.py:validate_metadata_in_plugin_directory"
+  },
+  "cases": [
+    {
+      "name": "bare native windows-x86_64",
+      "entry": "native",
+      "platforms": [
+        "windows-x86_64"
+      ],
+      "files": [
+        "native.dll"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "explicit native windows-x86_64",
+      "entry": "native.dll",
+      "platforms": [
+        "windows-x86_64"
+      ],
+      "files": [
+        "native.dll"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "wrong extension windows-x86_64",
+      "entry": "native",
+      "platforms": [
+        "windows-x86_64"
+      ],
+      "files": [
+        "native.so"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "bare native windows-aarch64",
+      "entry": "native",
+      "platforms": [
+        "windows-aarch64"
+      ],
+      "files": [
+        "native.dll"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "explicit native windows-aarch64",
+      "entry": "native.dll",
+      "platforms": [
+        "windows-aarch64"
+      ],
+      "files": [
+        "native.dll"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "wrong extension windows-aarch64",
+      "entry": "native",
+      "platforms": [
+        "windows-aarch64"
+      ],
+      "files": [
+        "native.so"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "bare native linux-x86_64",
+      "entry": "native",
+      "platforms": [
+        "linux-x86_64"
+      ],
+      "files": [
+        "native.so"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "explicit native linux-x86_64",
+      "entry": "native.so",
+      "platforms": [
+        "linux-x86_64"
+      ],
+      "files": [
+        "native.so"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "wrong extension linux-x86_64",
+      "entry": "native",
+      "platforms": [
+        "linux-x86_64"
+      ],
+      "files": [
+        "native.dll"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "bare native linux-aarch64",
+      "entry": "native",
+      "platforms": [
+        "linux-aarch64"
+      ],
+      "files": [
+        "native.so"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "explicit native linux-aarch64",
+      "entry": "native.so",
+      "platforms": [
+        "linux-aarch64"
+      ],
+      "files": [
+        "native.so"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "wrong extension linux-aarch64",
+      "entry": "native",
+      "platforms": [
+        "linux-aarch64"
+      ],
+      "files": [
+        "native.dll"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "bare native macos-x86_64",
+      "entry": "native",
+      "platforms": [
+        "macos-x86_64"
+      ],
+      "files": [
+        "native.dylib"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "explicit native macos-x86_64",
+      "entry": "native.dylib",
+      "platforms": [
+        "macos-x86_64"
+      ],
+      "files": [
+        "native.dylib"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "wrong extension macos-x86_64",
+      "entry": "native",
+      "platforms": [
+        "macos-x86_64"
+      ],
+      "files": [
+        "native.so"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "bare native macos-aarch64",
+      "entry": "native",
+      "platforms": [
+        "macos-aarch64"
+      ],
+      "files": [
+        "native.dylib"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "explicit native macos-aarch64",
+      "entry": "native.dylib",
+      "platforms": [
+        "macos-aarch64"
+      ],
+      "files": [
+        "native.dylib"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "wrong extension macos-aarch64",
+      "entry": "native",
+      "platforms": [
+        "macos-aarch64"
+      ],
+      "files": [
+        "native.so"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "complete cross platform",
+      "entry": "native",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "native.so",
+        "native.dll",
+        "native.dylib"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "incomplete cross platform",
+      "entry": "native",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "native.so",
+        "native.dll"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "macOS universal bare",
+      "entry": "native",
+      "platforms": [
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "native.dylib"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "macOS universal explicit",
+      "entry": "native.dylib",
+      "platforms": [
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "native.dylib"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "empty native platforms",
+      "entry": "native",
+      "platforms": [],
+      "files": [
+        "native.so"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "native absent",
+      "entry": "native",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [],
+      "logo": null,
+      "archive": false,
+      "directory": false
+    },
+    {
+      "name": "native exact only",
+      "entry": "native",
+      "platforms": [
+        "linux-x86_64"
+      ],
+      "files": [
+        "native"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "nested Python",
+      "entry": "src/plugin.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "src/plugin.py"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "missing Python",
+      "entry": "plugin.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [],
+      "logo": null,
+      "archive": false,
+      "directory": false
+    },
+    {
+      "name": "Python ignores native extension",
+      "entry": "plugin.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "plugin.py.so"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": false
+    },
+    {
+      "name": "uppercase Python is native",
+      "entry": "plugin.PY",
+      "platforms": [
+        "linux-x86_64"
+      ],
+      "files": [
+        "plugin.PY"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": true
+    },
+    {
+      "name": "nested native",
+      "entry": "bin/native",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "bin/native.so",
+        "bin/native.dll",
+        "bin/native.dylib"
+      ],
+      "logo": null,
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "present logo",
+      "entry": "plugin.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "plugin.py",
+        "images/logo.svg"
+      ],
+      "logo": "images/logo.svg",
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "missing logo",
+      "entry": "plugin.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "plugin.py"
+      ],
+      "logo": "images/logo.svg",
+      "archive": false,
+      "directory": false
+    },
+    {
+      "name": "empty logo",
+      "entry": "plugin.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "plugin.py"
+      ],
+      "logo": "",
+      "archive": true,
+      "directory": true
+    },
+    {
+      "name": "non ASCII entry",
+      "entry": "plügïn.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "plügïn.py"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": false
+    },
+    {
+      "name": "non ASCII logo",
+      "entry": "plugin.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "plugin.py",
+        "lögo.svg"
+      ],
+      "logo": "lögo.svg",
+      "archive": false,
+      "directory": false
+    },
+    {
+      "name": "parent traversal entry",
+      "entry": "../plugin.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "../plugin.py"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": false
+    },
+    {
+      "name": "parent traversal logo",
+      "entry": "plugin.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "plugin.py",
+        "../logo.svg"
+      ],
+      "logo": "../logo.svg",
+      "archive": false,
+      "directory": false
+    },
+    {
+      "name": "absolute entry",
+      "entry": "/plugin.py",
+      "platforms": [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-x86_64",
+        "macos-aarch64"
+      ],
+      "files": [
+        "/plugin.py"
+      ],
+      "logo": null,
+      "archive": false,
+      "directory": false
+    }
+  ]
+}

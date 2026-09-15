@@ -3,6 +3,7 @@
 //! All environment-driven settings are read once at startup and exposed
 //! through the [`Env`] singleton.  Values fall back to compiled-in defaults.
 
+use super::ke::KeSettings;
 use std::sync::OnceLock;
 
 /// Global environment configuration singleton.
@@ -12,6 +13,7 @@ static ENV: OnceLock<Env> = OnceLock::new();
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Env {
+    pub ke: KeSettings,
     // ── API ─────────────────────────────────────────────────────────────
     pub api_key: Option<String>,
     pub api_url: String,
@@ -31,11 +33,11 @@ pub struct Env {
     // ── Versioning / identity ───────────────────────────────────────────
     pub version: String,
     pub binary_name: String,
+    pub config_namespace: String,
     pub version_extra: String,
     pub mode: String,
     pub debug: bool,
     pub disable_updates: bool,
-    pub quiet: bool,
 
     // ── IDA-specific ────────────────────────────────────────────────────
     pub idausr: Option<String>,
@@ -56,7 +58,8 @@ impl Env {
     /// Build an `Env` from the actual process environment.
     fn from_environment() -> Self {
         Self {
-            api_key: var_opt("HCLI_API_KEY"),
+            ke: KeSettings::from_environment(),
+            api_key: var_opt("HCLI_API_KEY").filter(|key| !key.is_empty()),
             api_url: var_or("HCLI_API_URL", "https://api.eu.hex-rays.com"),
             cloud_url: var_or("HCLI_CLOUD_URL", "https://api.hcli.run"),
             portal_url: var_or("HCLI_PORTAL_URL", "https://my.hex-rays.com"),
@@ -64,10 +67,7 @@ impl Env {
 
             github_token: var_opt("GITHUB_TOKEN").or_else(|| var_opt("GH_TOKEN")),
             github_api_url: var_or("GITHUB_API_URL", "https://api.github.com"),
-            github_url: var_or(
-                "HCLI_GITHUB_URL",
-                "https://github.com/HexRaysSA/ida-hcli",
-            ),
+            github_url: var_or("HCLI_GITHUB_URL", env!("CARGO_PKG_REPOSITORY")),
 
             supabase_anon_key: var_or(
                 "HCLI_SUPABASE_ANON_KEY",
@@ -76,12 +76,12 @@ impl Env {
             supabase_url: var_or("HCLI_SUPABASE_URL", "https://auth.hex-rays.com"),
 
             version: var_or("HCLI_VERSION", env!("CARGO_PKG_VERSION")),
-            binary_name: var_or("HCLI_BINARY_NAME", "hcli"),
+            binary_name: var_or("HCLI_BINARY_NAME", "hy"),
+            config_namespace: var_or("HCLI_CONFIG_NAMESPACE", "hcli"),
             version_extra: var_or("HCLI_VERSION_EXTRA", ""),
             mode: var_or("HCLI_MODE", "user"),
             debug: var_bool("HCLI_DEBUG"),
             disable_updates: var_bool("HCLI_DISABLE_UPDATES"),
-            quiet: false, // set at runtime via CLI flag
 
             idausr: var_opt("IDAUSR"),
             idadir: var_opt("IDADIR"),
@@ -117,10 +117,7 @@ fn var_opt(key: &str) -> Option<String> {
 }
 
 fn var_or(key: &str, default: &str) -> String {
-    std::env::var(key)
-        .ok()
-        .filter(|v| !v.is_empty())
-        .unwrap_or_else(|| default.to_owned())
+    std::env::var(key).ok().filter(|v| !v.is_empty()).unwrap_or_else(|| default.to_owned())
 }
 
 fn var_bool(key: &str) -> bool {

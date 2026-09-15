@@ -7,6 +7,9 @@ use crate::auth::AuthService;
 use crate::error::Result;
 use crate::util::fmt;
 
+mod dates;
+mod default;
+
 #[derive(Debug, Subcommand)]
 pub enum AuthCommands {
     /// List all stored credentials
@@ -61,6 +64,9 @@ pub struct KeyInstallArgs {
     /// Name for the credentials
     #[arg(short, long)]
     pub name: Option<String>,
+    /// Name for the installed API key credentials
+    #[arg(long)]
+    pub key_name: Option<String>,
     /// Set as default credentials
     #[arg(long)]
     pub set_default: bool,
@@ -69,9 +75,11 @@ pub struct KeyInstallArgs {
 pub async fn run(cmd: AuthCommands) -> Result<()> {
     match cmd {
         AuthCommands::List => run_list().await,
-        AuthCommands::Switch(args) => run_switch(args).await,
-        AuthCommands::Default(args) => run_default(args).await,
-        AuthCommands::Key { command } => run_key(command).await,
+        AuthCommands::Switch(args) => run_local(move || run_switch(args)).await,
+        AuthCommands::Default(args) => default::run(args).await,
+        AuthCommands::Key {
+            command,
+        } => run_key(command).await,
     }
 }
 
@@ -79,7 +87,7 @@ pub async fn run(cmd: AuthCommands) -> Result<()> {
 
 async fn run_list() -> Result<()> {
     let mut auth = AuthService::global();
-    auth.init(None);
+    auth.init(None)?;
 
     let creds = auth.list_credentials();
     if creds.is_empty() {
@@ -89,9 +97,7 @@ async fn run_list() -> Result<()> {
     }
 
     let default_name = auth.default_name().map(String::from);
-    let current_name = auth
-        .current_credentials()
-        .map(|c| c.name.clone());
+    let current_name = auth.current_credentials().map(|c| c.name.clone());
 
     eprintln!("Credentials ({}):\n", creds.len());
 
@@ -103,7 +109,8 @@ async fn run_list() -> Result<()> {
         b_default.cmp(&a_default).then(a.name.cmp(&b.name))
     });
 
-    let mut table = crate::util::tui::Table::new(&["Label", "Type", "Status", "Created", "Last Used"]);
+    let mut table =
+        crate::util::tui::Table::new(&["Label", "Type", "Status", "Created", "Last Used"]);
     for c in &sorted {
         let mut status_parts = Vec::new();
         if current_name.as_deref() == Some(c.name.as_str()) {
@@ -119,23 +126,15 @@ async fn run_list() -> Result<()> {
             status_parts.join(", ").green().to_string()
         };
 
-        table.add_row(vec![
-            c.label(),
-            format!("{}", c.cred_type),
-            status,
-            fmt::format_datetime(&c.created_at.to_rfc3339()),
-            fmt::format_datetime(&c.last_used.to_rfc3339()),
-        ]);
+        let (created, last_used) = dates::credentials(&c.created_at, &c.last_used);
+        table.add_row(vec![c.label(), format!("{}", c.cred_type), status, created, last_used]);
     }
     table.print();
 
     eprintln!();
     if let Some(ref name) = current_name {
-        let email = sorted
-            .iter()
-            .find(|c| c.name == *name)
-            .map(|c| c.email.as_str())
-            .unwrap_or("?");
+        let email =
+            sorted.iter().find(|c| c.name == *name).map(|c| c.email.as_str()).unwrap_or("?");
         fmt::success(&format!("Current: {name} ({email})"));
     } else {
         fmt::error("No active credentials");
@@ -151,9 +150,15 @@ async fn run_list() -> Result<()> {
 
 // ── auth switch ─────────────────────────────────────────────────────────
 
-async fn run_switch(args: SwitchArgs) -> Result<()> {
+async fn run_local(operation: impl FnOnce() -> Result<()> + Send + 'static) -> Result<()> {
+    tokio::task::spawn_blocking(operation).await.map_err(|error| {
+        crate::error::Error::Authentication(format!("authentication worker failed: {error}"))
+    })?
+}
+
+fn run_switch(args: SwitchArgs) -> Result<()> {
     let mut auth = AuthService::global();
-    auth.init(None);
+    auth.init(None)?;
 
     let creds = auth.list_credentials();
     if creds.is_empty() {
@@ -183,7 +188,7 @@ async fn run_switch(args: SwitchArgs) -> Result<()> {
             fmt::warning(&format!("'{name}' is already the default credentials."));
             return Ok(());
         }
-        if auth.set_default(name) {
+        if auth.set_default(name)? {
             fmt::success(&format!("Switched default credentials to '{name}'."));
             auth.show_login_info();
         } else {
@@ -193,15 +198,11 @@ async fn run_switch(args: SwitchArgs) -> Result<()> {
     }
 
     // Interactive selection.
-    let items: Vec<String> = creds
-        .iter()
-        .map(|c| format!("{} ({})", c.label(), c.cred_type))
-        .collect();
+    let items: Vec<String> =
+        creds.iter().map(|c| format!("{} ({})", c.label(), c.cred_type)).collect();
 
-    let default_idx = creds
-        .iter()
-        .position(|c| default_name.as_deref() == Some(c.name.as_str()))
-        .unwrap_or(0);
+    let default_idx =
+        creds.iter().position(|c| default_name.as_deref() == Some(c.name.as_str())).unwrap_or(0);
 
     let selection = Select::new()
         .with_prompt("Select new default credentials")
@@ -216,74 +217,12 @@ async fn run_switch(args: SwitchArgs) -> Result<()> {
     };
 
     let name = creds[idx].name.clone();
-    if auth.set_default(&name) {
+    if auth.set_default(&name)? {
         fmt::success(&format!("Switched default credentials to '{name}'."));
         eprintln!();
         auth.show_login_info();
     } else {
         fmt::error(&format!("Failed to switch to credentials '{name}'."));
-    }
-
-    Ok(())
-}
-
-// ── auth default ────────────────────────────────────────────────────────
-
-async fn run_default(args: DefaultArgs) -> Result<()> {
-    let mut auth = AuthService::global();
-    auth.init(None);
-
-    if let Some(name) = args.name {
-        // Set new default.
-        let creds = auth.list_credentials();
-        if creds.is_empty() {
-            fmt::warning("No credentials found.");
-            eprintln!("Use 'hy login' or 'hy auth key install' to add credentials.");
-            return Ok(());
-        }
-
-        let names: Vec<String> = creds.iter().map(|c| c.name.clone()).collect();
-        if !names.contains(&name) {
-            fmt::error(&format!("Credentials '{name}' not found."));
-            eprintln!("Available credentials: {}", names.join(", "));
-            return Ok(());
-        }
-
-        // Check if already default.
-        if auth.default_name() == Some(name.as_str()) {
-            fmt::warning(&format!("'{name}' is already the default credentials."));
-            return Ok(());
-        }
-
-        if auth.set_default(&name) {
-            fmt::success(&format!("Set '{name}' as the default credentials."));
-            eprintln!();
-            auth.show_login_info();
-        } else {
-            fmt::error(&format!("Failed to set '{name}' as default credentials."));
-        }
-    } else {
-        // Show current default.
-        if let Some(name) = auth.default_name() {
-            if let Some(c) = auth.current_credentials() {
-                fmt::success(&format!("Default credentials: {name}"));
-                eprintln!("Email: {}", c.email);
-                eprintln!("Type: {}", c.cred_type);
-            } else {
-                fmt::warning(&format!(
-                    "Default set to '{name}' but source not found."
-                ));
-            }
-        } else {
-            fmt::warning("No default credentials set.");
-        }
-
-        // Show available sources.
-        let creds = auth.list_credentials();
-        if !creds.is_empty() {
-            let names: Vec<String> = creds.iter().map(|c| c.name.clone()).collect();
-            eprintln!("\nAvailable sources: {}", names.join(", "));
-        }
     }
 
     Ok(())
@@ -311,11 +250,8 @@ async fn run_key_list() -> Result<()> {
     for k in &keys {
         table.add_row(vec![
             k.name.clone(),
-            fmt::format_datetime(&k.created_at),
-            k.last_used_at
-                .as_deref()
-                .map(fmt::format_datetime)
-                .unwrap_or_else(|| "Never".into()),
+            dates::key_created(&k.created_at),
+            dates::key_last_used(k.last_used_at.as_deref()),
             k.request_count.to_string(),
         ]);
     }
@@ -347,9 +283,7 @@ async fn run_key_create(args: KeyCreateArgs) -> Result<()> {
     // Check for duplicate name.
     let existing_keys: Vec<crate::api::ApiKey> = client.get_json("/api/keys").await?;
     if existing_keys.iter().any(|k| k.name == key_name) {
-        fmt::error(&format!(
-            "An API key with name '{key_name}' already exists."
-        ));
+        fmt::error(&format!("An API key with name '{key_name}' already exists."));
         return Ok(());
     }
 
@@ -380,49 +314,36 @@ async fn run_key_create(args: KeyCreateArgs) -> Result<()> {
 
     if install {
         fmt::info("Installing API key as credentials...");
-        let email =
-            match crate::api::ApiClient::validate_api_key(&token.key).await {
-                Ok(email) => email,
-                Err(e) => {
-                    fmt::error(&format!("Failed to validate API key: {e}"));
-                    return Ok(());
-                }
-            };
+        let email = match crate::api::ApiClient::validate_api_key(&token.key).await {
+            Ok(email) => email,
+            Err(e) => {
+                fmt::error(&format!("Failed to validate API key: {e}"));
+                return Ok(());
+            }
+        };
 
         let mut auth = AuthService::global();
-        auth.init(None);
-        let cred = auth.add_api_key_credential(&key_name, &token.key, &email);
+        auth.init(None)?;
+        let cred = auth.add_api_key_credential(&key_name, &token.key, &email)?;
 
         let creds_count = auth.list_credentials().len();
         if creds_count <= 1 {
             // First credential — auto set default.
-            fmt::success(&format!(
-                "API key credentials installed for {}",
-                cred.email
-            ));
+            fmt::success(&format!("API key credentials installed for {}", cred.email));
         } else {
-            fmt::success(&format!(
-                "API key credentials '{}' created!",
-                cred.name
-            ));
+            fmt::success(&format!("API key credentials '{}' created!", cred.name));
             eprintln!("Email: {}", cred.email);
 
             // Ask about default.
             let set_default = Confirm::new()
-                .with_prompt(format!(
-                    "Set '{}' as the default credentials?",
-                    cred.name
-                ))
+                .with_prompt(format!("Set '{}' as the default credentials?", cred.name))
                 .default(true)
                 .interact()
                 .unwrap_or(false);
 
             if set_default {
-                auth.set_default(&cred.name);
-                fmt::success(&format!(
-                    "'{}' set as default credentials.",
-                    cred.name
-                ));
+                auth.set_default(&cred.name)?;
+                fmt::success(&format!("'{}' set as default credentials.", cred.name));
             }
         }
     } else {
@@ -447,10 +368,7 @@ async fn run_key_revoke() -> Result<()> {
         .iter()
         .map(|k| {
             let created = &k.created_at[..10.min(k.created_at.len())];
-            format!(
-                "{} (Created: {}, Requests: {})",
-                k.name, created, k.request_count
-            )
+            format!("{} (Created: {}, Requests: {})", k.name, created, k.request_count)
         })
         .collect();
 
@@ -469,10 +387,7 @@ async fn run_key_revoke() -> Result<()> {
 
     // Confirm revocation.
     let confirmed = Confirm::new()
-        .with_prompt(format!(
-            "Do you want to revoke the key named '{}'?",
-            selected.name
-        ))
+        .with_prompt(format!("Do you want to revoke the key named '{}'?", selected.name))
         .default(false)
         .interact()
         .unwrap_or(false);
@@ -484,21 +399,20 @@ async fn run_key_revoke() -> Result<()> {
 
     fmt::info(&format!("Revoking API key '{}'...", selected.name));
     let empty = serde_json::json!({});
-    let _: serde_json::Value = client
-        .post_json(&format!("/api/keys/revoke/{}", selected.name), &empty)
-        .await?;
+    let _: serde_json::Value =
+        client.post_json(&format!("/api/keys/revoke/{}", selected.name), &empty).await?;
     fmt::success(&format!("API key '{}' has been revoked.", selected.name));
 
     Ok(())
 }
 
 async fn run_key_install(args: KeyInstallArgs) -> Result<()> {
-    let mut auth = AuthService::global();
-    auth.init(None);
-
-    // Show current status.
-    if let Some(c) = auth.current_credentials() {
-        eprintln!("Current credentials: {} ({})", c.name, c.email);
+    {
+        let mut auth = AuthService::global();
+        auth.init(None)?;
+        if let Some(credentials) = auth.current_credentials() {
+            eprintln!("Current credentials: {} ({})", credentials.name, credentials.email);
+        }
     }
 
     // Get key from arg or prompt.
@@ -518,18 +432,10 @@ async fn run_key_install(args: KeyInstallArgs) -> Result<()> {
 
     // Validate the key by calling /api/whoami.
     fmt::info("Validating API key...");
-    let email = match crate::api::ApiClient::validate_api_key(&key).await {
-        Ok(email) => email,
-        Err(e) => {
-            fmt::error(&format!(
-                "Failed to validate API key or get user information: {e}"
-            ));
-            return Ok(());
-        }
-    };
+    let email = crate::api::ApiClient::validate_api_key(&key).await?;
 
     // Get name from arg or prompt.
-    let name = if let Some(n) = args.name {
+    let name = if let Some(n) = args.key_name.or(args.name) {
         n
     } else {
         Input::new()
@@ -539,8 +445,12 @@ async fn run_key_install(args: KeyInstallArgs) -> Result<()> {
             .map_err(|_| crate::error::Error::Other("Cancelled".into()))?
     };
 
-    // Install the credential.
-    let cred = auth.add_api_key_credential(&name, &key, &email);
+    run_local(move || finish_key_install(&name, &key, &email, args.set_default)).await
+}
+
+fn finish_key_install(name: &str, key: &str, email: &str, set_default: bool) -> Result<()> {
+    let mut auth = AuthService::global();
+    let cred = auth.add_api_key_credential(name, key, email)?;
     fmt::success(&format!("API key '{}' created!", cred.name));
     eprintln!("Email: {}", cred.email);
     eprintln!("Type: {}", cred.cred_type);
@@ -550,28 +460,19 @@ async fn run_key_install(args: KeyInstallArgs) -> Result<()> {
     if creds.len() <= 1 {
         // First source — automatically default.
         fmt::success("Set as default credentials.");
-    } else if args.set_default {
-        auth.set_default(&cred.name);
-        fmt::success(&format!(
-            "'{}' set as default credentials.",
-            cred.label()
-        ));
+    } else if set_default {
+        auth.set_default(&cred.name)?;
+        fmt::success(&format!("'{}' set as default credentials.", cred.label()));
     } else {
         let set_default = Confirm::new()
-            .with_prompt(format!(
-                "Use '{}' as the default credentials?",
-                cred.label()
-            ))
+            .with_prompt(format!("Use '{}' as the default credentials?", cred.label()))
             .default(true)
             .interact()
             .unwrap_or(false);
 
         if set_default {
-            auth.set_default(&cred.name);
-            fmt::success(&format!(
-                "'{}' set as default credentials.",
-                cred.label()
-            ));
+            auth.set_default(&cred.name)?;
+            fmt::success(&format!("'{}' set as default credentials.", cred.label()));
         } else if let Some(default) = auth.default_name() {
             eprintln!("Default credentials remains: {default}");
         }
@@ -579,6 +480,5 @@ async fn run_key_install(args: KeyInstallArgs) -> Result<()> {
 
     eprintln!();
     auth.show_login_info();
-
     Ok(())
 }

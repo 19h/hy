@@ -16,6 +16,12 @@ fn repository() -> Value {
 
 pub(super) fn all() -> Vec<Value> {
     let mut cases = Vec::new();
+    for name in ["owner/space name", "o/q\"uote", "o/one\\two", "o/r#hash"] {
+        cases.push(json!({
+            "repositories": [name],
+            "response": {"data": {"repo0": repository()}},
+        }));
+    }
     for count in [0, 1, 2, 9, 10, 11, 20, 21] {
         let names: Vec<_> =
             (0..count).map(|index| format!("owner-{index}/repo.name_{index}")).collect();

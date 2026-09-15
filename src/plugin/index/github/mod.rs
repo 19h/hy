@@ -1,7 +1,6 @@
 //! Discover GitHub plugin releases and tags, then index their distribution and source archives.
 
-use std::collections::BTreeSet;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
@@ -11,13 +10,12 @@ use crate::error::{Error, Result};
 
 mod acquisition;
 mod cache;
+mod discovery;
 mod graphql;
 mod http;
 mod metadata;
 mod models;
 mod retry;
-
-use models::SearchResponse;
 
 const METADATA_LIFETIME: Duration = Duration::from_secs(86_400);
 
@@ -50,34 +48,6 @@ impl Client {
         Ok(response.json().await?)
     }
 
-    async fn candidates(&self) -> Result<BTreeSet<String>> {
-        let key = self.cache_key("candidates");
-        if let Some(bytes) = cache::read(&key, Some(METADATA_LIFETIME))? {
-            return Ok(serde_json::from_slice(&bytes)?);
-        }
-        let mut repositories = BTreeSet::new();
-        for query in ["filename:ida-plugin.json", "filename:ida-plugin.json fork:true"] {
-            for page in 1.. {
-                let response: SearchResponse = self
-                    .json(self.http.get(format!("{}/search/code", self.base)).query(&[
-                        ("q", query.to_owned()),
-                        ("per_page", "100".into()),
-                        ("page", page.to_string()),
-                    ]))
-                    .await?;
-                let count = response.items.len();
-                for item in response.items {
-                    repositories.insert(normalize_repository(&item.repository.full_name)?);
-                }
-                if count < 100 {
-                    break;
-                }
-            }
-        }
-        cache::write(&key, &serde_json::to_vec(&repositories)?)?;
-        Ok(repositories)
-    }
-
     async fn archive(&self, archive: &acquisition::Archive) -> Result<Option<Vec<u8>>> {
         let key = self.cache_key(&archive.cache_resource());
         if let Some(bytes) = cache::read(&key, None)? {
@@ -106,32 +76,6 @@ impl Client {
     }
 }
 
-fn normalize_repository(value: &str) -> Result<String> {
-    let parts: Vec<_> = value.split('/').collect();
-    if parts.len() != 2
-        || parts.iter().any(|part| {
-            part.is_empty()
-                || matches!(*part, "." | "..")
-                || !part.bytes().all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
-        })
-    {
-        return Err(Error::Other(format!("invalid GitHub repository: {value}")));
-    }
-    Ok(value.to_lowercase())
-}
-
-fn read_list(path: Option<&Path>) -> Result<BTreeSet<String>> {
-    let Some(path) = path else {
-        return Ok(BTreeSet::new());
-    };
-    std::fs::read_to_string(path)?
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .map(normalize_repository)
-        .collect()
-}
-
 pub async fn load(options: &Options, offline: bool) -> Result<LoadedRepository> {
     let token = crate::config::Env::global()
         .github_token
@@ -143,12 +87,9 @@ pub async fn load(options: &Options, offline: bool) -> Result<LoadedRepository> 
         token,
         offline,
     };
-    let extra = read_list(options.repositories_file.as_deref())?;
-    let ignored = read_list(options.ignored_file.as_deref())?;
-    let mut repositories = client.candidates().await?;
-    repositories.extend(extra);
-    repositories.retain(|repository| !ignored.contains(repository));
-    let mut repositories: Vec<_> = repositories.into_iter().collect();
+    let extra = discovery::read_list(options.repositories_file.as_deref())?;
+    let ignored = discovery::read_list(options.ignored_file.as_deref())?;
+    let mut repositories = discovery::select(client.candidates().await?, extra, ignored)?;
     client.warm_releases(&repositories).await?;
     repositories.sort_by(|left, right| left.split_once('/').cmp(&right.split_once('/')));
     let mut loaded = LoadedRepository::empty();

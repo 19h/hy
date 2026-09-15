@@ -6,6 +6,8 @@ mod acquisition;
 mod batching;
 #[path = "github_catalogue/cache.rs"]
 mod cache;
+#[path = "github_catalogue/discovery.rs"]
+mod discovery;
 #[path = "github_catalogue/models.rs"]
 mod models;
 mod support;
@@ -280,6 +282,10 @@ fn explicit_github_source_reports_missing_token_and_invalid_lists() {
     assert!(String::from_utf8_lossy(&missing_token.stderr).contains("GitHub token required"));
     let list = sandbox.path().join("repositories.txt");
     fs::write(&list, "../invalid\n").unwrap();
+    let server = Server::start(|request, _| {
+        assert!(request.path.starts_with("/search/code?"));
+        Response::json(json!({"items": []}))
+    });
     let output = sandbox
         .command(&[
             "plugin",
@@ -291,10 +297,12 @@ fn explicit_github_source_reports_missing_token_and_invalid_lists() {
             "snapshot",
         ])
         .env("GITHUB_TOKEN", "fixture-token")
+        .env("GITHUB_API_URL", &server.url)
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid GitHub repository"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Invalid path component"));
+    assert_eq!(server.requests().len(), 2);
 }
 
 #[test]

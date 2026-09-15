@@ -48,6 +48,7 @@ impl Client {
     }
 
     fn cached_releases(&self, name: &str) -> Result<Option<Repository>> {
+        super::discovery::validate_cache_name(name)?;
         let key = self.cache_key(&format!("releases-v3/{name}"));
         cache::read(&key, Some(METADATA_LIFETIME))?
             .map(|bytes| serde_json::from_slice(&bytes).map_err(Into::into))

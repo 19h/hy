@@ -9,7 +9,7 @@ mod cases;
 #[test]
 fn aliased_queries_and_batch_envelopes_match_the_upstream_graphql_client() {
     let cases = cases::all();
-    assert_eq!(cases.len(), 113);
+    assert_eq!(cases.len(), 117);
     let expected: Vec<_> = cases.iter().map(observe).collect();
     let Some(python) = std::env::var_os("HY_TEST_BUNDLE_ORACLE_PYTHON") else {
         return;

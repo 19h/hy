@@ -15,13 +15,8 @@ pub(super) fn request(repositories: &[String]) -> Result<Value> {
         let (owner, name) = repository
             .split_once('/')
             .ok_or_else(|| Error::Other(format!("invalid GitHub repository: {repository}")))?;
-        writeln!(
-            query,
-            "repo{index}: repository(owner: {}, name: {}) {{",
-            json!(owner),
-            json!(name)
-        )
-        .expect("writing to String cannot fail");
+        writeln!(query, "repo{index}: repository(owner: \"{owner}\", name: \"{name}\") {{")
+            .expect("writing to String cannot fail");
         query.push_str(include_str!("releases.graphql"));
         query.push_str("\n}\n");
     }

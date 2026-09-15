@@ -77,21 +77,6 @@ pub struct Commit {
     pub zipball_url: String,
 }
 
-#[derive(Deserialize)]
-pub struct SearchResponse {
-    pub items: Vec<SearchItem>,
-}
-
-#[derive(Deserialize)]
-pub struct SearchItem {
-    pub repository: SearchRepository,
-}
-
-#[derive(Deserialize)]
-pub struct SearchRepository {
-    pub full_name: String,
-}
-
 pub(super) fn truthy(value: &Value) -> bool {
     match value {
         Value::Null => false,

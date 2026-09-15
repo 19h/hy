@@ -1,10 +1,13 @@
 //! Ordered catalogue acquisition and the logical identities of archive caches.
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 
+use crate::error::Result;
 use crate::util::pydantic_integer::Integer;
+use crate::util::python_path;
 
-use super::models::Repository;
+use super::{cache, models::Repository};
 
 const FIRST_RELEASE_DATE: &str = "2025-09-01";
 const MAX_ASSET_BYTES: i64 = 104_857_600;
@@ -99,20 +102,23 @@ impl Archive {
         }
     }
 
-    pub fn cache_resource(&self) -> String {
-        let parts = match &self.kind {
+    pub fn cache_path(&self) -> Result<PathBuf> {
+        let (owner, repo) = super::discovery::parse_repository(&self.repository)?;
+        match &self.kind {
             Kind::Asset {
                 tag,
                 name,
                 ..
-            } => vec!["asset", &self.repository, tag, name],
+            } => Ok(python_path::join(
+                &cache::directory(&[owner, repo, "release-assets", tag])?,
+                name,
+            )),
             Kind::Source {
                 commit,
-            } => vec!["source", &self.repository, commit],
-        };
-        // Delimiter-bearing names remain distinct; old URL-only entries cannot
-        // establish which release asset or commit supplied their bytes.
-        format!("archive-v2/{}", serde_json::to_string(&parts).expect("string array serializes"))
+            } => {
+                Ok(cache::directory(&[owner, repo, "source-archives", commit])?.join("source.zip"))
+            }
+        }
     }
 
     pub fn exceeds_download_limit(&self) -> bool {

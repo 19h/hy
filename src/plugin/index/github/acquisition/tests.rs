@@ -28,13 +28,7 @@ fn planned_archive_calls_match_upstream_collection_order_and_multiplicity() {
                 .collect();
             Plan::from_repositories(repositories)
                 .into_archives()
-                .map(|archive| {
-                    let resource = archive.cache_resource();
-                    let identity: Value =
-                        serde_json::from_str(resource.strip_prefix("archive-v2/").unwrap())
-                            .unwrap();
-                    json!({"identity":identity, "url":archive.url})
-                })
+                .map(|archive| json!({"identity": identity(&archive), "url": archive.url}))
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -64,24 +58,37 @@ fn planned_archive_calls_match_upstream_collection_order_and_multiplicity() {
 }
 
 #[test]
-fn cache_identity_uses_asset_coordinates_or_commit_without_size_or_url() {
-    let asset = |tag: &str, name: &str, size: i64, url: &str| Archive {
-        repository: "owner/repo".into(),
-        url: url.into(),
-        kind: Kind::Asset {
-            tag: tag.into(),
-            name: name.into(),
-            size: size.into(),
-        },
-    };
-    let first = asset("v1", "a.zip", 1, "https://old.test/a");
-    let changed = asset("v1", "a.zip", 104_857_601, "https://new.test/a");
-    assert_eq!(first.cache_resource(), changed.cache_resource());
-    assert!(!first.exceeds_download_limit());
-    assert!(changed.exceeds_download_limit());
-    assert_ne!(first.cache_resource(), asset("v2", "a.zip", 1, &first.url).cache_resource());
-    assert_ne!(
-        asset("a/b", "c", 1, "").cache_resource(),
-        asset("a", "b/c", 1, "").cache_resource()
-    );
+fn size_checks_preserve_signed_arbitrary_precision_boundaries() {
+    for (size, oversized) in [
+        ("-184467440737095516160", false),
+        ("-1", false),
+        ("0", false),
+        ("104857600", false),
+        ("104857601", true),
+        ("184467440737095516160", true),
+    ] {
+        let archive = Archive {
+            repository: "owner/repo".into(),
+            url: "https://example.test/asset".into(),
+            kind: Kind::Asset {
+                tag: "v1".into(),
+                name: "plugin.zip".into(),
+                size: serde_json::from_str(size).unwrap(),
+            },
+        };
+        assert_eq!(archive.exceeds_download_limit(), oversized, "{size}");
+    }
+}
+
+fn identity(archive: &Archive) -> Value {
+    match &archive.kind {
+        Kind::Asset {
+            tag,
+            name,
+            ..
+        } => json!(["asset", archive.repository, tag, name]),
+        Kind::Source {
+            commit,
+        } => json!(["source", archive.repository, commit]),
+    }
 }

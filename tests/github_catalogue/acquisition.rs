@@ -46,8 +46,7 @@ fn snapshot(sandbox: &Sandbox, server: &Server) -> std::process::Output {
 
 fn expire_release_metadata(sandbox: &Sandbox) {
     let mut changed = 0;
-    for entry in fs::read_dir(sandbox.path().join("cache/github-catalogue")).unwrap() {
-        let path = entry.unwrap().path();
+    for path in cache_files(sandbox) {
         if serde_json::from_slice::<Value>(&fs::read(&path).unwrap())
             .ok()
             .is_some_and(|value| value.get("releases").is_some())

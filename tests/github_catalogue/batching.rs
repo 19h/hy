@@ -55,9 +55,8 @@ fn only_uncached_metadata_is_warmed_in_batches_of_ten() {
         assert_success(&run(&sandbox, &server));
         assert_eq!(server.requests().len(), initial.len());
         if count > 0 {
-            let entry = fs::read_dir(sandbox.path().join("cache/github-catalogue"))
-                .unwrap()
-                .map(|entry| entry.unwrap().path())
+            let entry = cache_files(&sandbox)
+                .into_iter()
                 .find(|path| {
                     serde_json::from_slice::<Value>(&fs::read(path).unwrap())
                         .ok()

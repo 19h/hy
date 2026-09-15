@@ -17,8 +17,8 @@ const PAGE_SIZE: usize = 100;
 
 impl Client {
     pub(super) async fn candidates(&self) -> Result<BTreeSet<String>> {
-        let key = self.cache_key("candidates");
-        if let Some(bytes) = cache::read(&key, Some(METADATA_LIFETIME))? {
+        let path = cache::candidates_path()?;
+        if let Some(bytes) = cache::read(&path, Some(METADATA_LIFETIME))? {
             let names: Vec<String> = serde_json::from_slice(&bytes)?;
             return Ok(lowercase(names));
         }
@@ -41,7 +41,7 @@ impl Client {
         }
         let repositories = lowercase(repositories);
         // Upstream publishes discovery before selected names are parsed.
-        cache::write(&key, &serde_json::to_vec(&repositories)?)?;
+        cache::write_json(&cache::candidates_path()?, &repositories)?;
         Ok(repositories)
     }
 }
@@ -120,7 +120,7 @@ fn lowercase(names: impl IntoIterator<Item = String>) -> BTreeSet<String> {
     names.into_iter().map(|name| name.to_lowercase()).collect()
 }
 
-fn parse_repository(name: &str) -> Result<(&str, &str)> {
+pub(super) fn parse_repository(name: &str) -> Result<(&str, &str)> {
     name.split_once('/').filter(|(_, repo)| !repo.contains('/')).ok_or_else(|| {
         Error::GitHubValue(format!(
             "invalid repository format: {name}. Expected format: owner/repo"
@@ -128,23 +128,11 @@ fn parse_repository(name: &str) -> Result<(&str, &str)> {
     })
 }
 
-pub(super) fn validate_cache_name(name: &str) -> Result<()> {
+#[cfg(test)]
+fn validate_cache_name(name: &str) -> Result<()> {
     let (owner, repo) = parse_repository(name)?;
     for part in [owner, repo] {
-        let reason = if part.is_empty() || matches!(part, "." | "..") {
-            Some("")
-        } else if !part.is_ascii() {
-            Some(" Must contain only ASCII characters")
-        } else if part.contains(['\t', '\n', '\r']) {
-            Some(" Cannot contain tabs or newlines")
-        } else if part.contains(['/', '\\']) {
-            Some(" Cannot contain slashes")
-        } else {
-            None
-        };
-        if let Some(reason) = reason {
-            return Err(Error::GitHubValue(format!("Invalid path component: '{part}'.{reason}")));
-        }
+        cache::validate_component(part)?;
     }
     if name.contains('\0') {
         return Err(Error::GitHubValue("embedded null byte".into()));

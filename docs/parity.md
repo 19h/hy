@@ -14,6 +14,10 @@ The package version alone does not establish behavioral parity.
 
 ## Assumption register
 
+Rows describe the evidence available for their semantic group. Later groups
+explicitly supersede earlier implementation limits; the feature matrix records
+the current remaining scope.
+
 | ID | Assumption | Falsification probe | Dependent conclusions |
 |---|---|---|---|
 | A1 | Upstream v0.18.1 approximates the last port. | Find a recorded port SHA or behavior introduced after that tag in the original Rust tree. | Attribution of changes to “since the port”; current behavioral comparisons do not depend on A1. |
@@ -92,6 +96,7 @@ The package version alone does not establish behavioral parity.
 | A72 | Catalogue cache reads use stable owned filesystem paths and CPython 3.13's existence policy; metadata times are representable binary64 epoch seconds. | Probe concurrent replacement, permission changes, sub-microsecond expiry boundaries, alternate filesystems, malformed model coercion and native Windows execution. | 33 macOS source-getter comparisons and four CLI tests cover represented hit/miss/error outcomes, strict expiry, future dates, deletion-before-refresh and propagation of read/decoding failures. Source deletion is intercepted; Rust performs the actual fixture mutations. Cache layout, write semantics, full JSON/model grammar and race equivalence remain open. |
 | A73 | Catalogue model conversion receives serde-representable JSON and uses upstream's Pydantic models under A45. Integer coercion reuses the parser previously validated against locked Pydantic 2.12.5. | Probe nonstandard JSON constants, surrogate strings, deep JSON/resource failures, numeric boundaries beyond the represented Pydantic 2.13.5 corpus, cache formatting/path aliases and concurrent migration. | 910 actual-model comparisons cover GraphQL conversion and complete cached model values; 37,498 locked integer comparisons remain valid. Three CLI tests cover required-field failure, coercion/alias/size behavior and metadata cache migration. Old partial metadata needs an online refresh; complete lexical, diagnostic and filesystem equivalence remains open. |
 | A74 | Search results and candidate caches contain repository-name strings; list contents are valid UTF-8 with Unicode scalar values. Pagination fits unsigned 64-bit page numbers. | Probe non-string `full_name` values, unusual candidate-cache root types, Unicode-version casing changes, nonstandard JSON, lexical/non-UTF-8 file paths and platform-dependent cache-name aliases. | 165 actual-source discovery projections and three CLI tests cover list splitting/filtering, selection order, represented cache-component validation, search query/header construction and pagination. The GraphQL query corpus expands to 117 cases. Complete malformed-value failure order, physical cache layout and command diagnostic equivalence remain open. |
+| A75 | Catalogue cache interoperability uses stable owned paths, represented A73 models and the configured HCLI cache root. Source write operations are intercepted; actual fixture writes are performed only by Rust. | Probe native Windows, concurrent readers/writers, permission changes, partial writes, non-UTF-8 roots, unusual filesystem aliases and nonstandard JSON/model values. | 47 source path/text projections and five CLI tests cover shared locations, formatting, direct getter interoperability, cache-key skip boundaries, missing asset parents and file-symlink publication. Native token/origin partitions and atomic cache replacement are removed. Legacy hashed files remain unused and retained; exact concurrent/partial-I/O and all-platform equivalence remain open. |
 
 ## Implemented contracts and remaining coverage
 
@@ -131,7 +136,7 @@ imply that every upstream edge case or supported operating system was tested.
 | Repository snapshot envelopes | Dedicated wire models require the plugin list, plugin host, archive URL/hash and complete versioned descriptor. Snapshot version defaults to literal 1; shared schema-version decoding accepts source literal coercions. Location descriptors reuse the local manifest model and serialize their required version while excluding $schema. Version maps preserve input document order, including equal-precedence selection. Exports sort keys, indent by four spaces, escape non-ASCII strings and apply source number formatting. Bundle and installation downloads share case-sensitive hash verification. | Depends on A52/A53. Full metadata coercion, duplicate-key/nonstandard JSON behavior, exact validation reports, repository initialization and broader version-selection behavior remain open. Sorting exported keys can change a version tie after re-import, as upstream does. |
 | Pip offline mode | Group `--offline` changes pip's index policy without disabling repository transport. It requires `--pip-find-links` or an explicit bundle repository, except for upstream's repository-free command groups. A local HTTP fixture verifies repository/archive fetches while pip receives `--no-index`. | Full upstream pip environment classification remains open. The existing Rust search `--offline` and status alias remain separate command options. |
 | Plugin bundles | Separate target, manifest, inspection, publication, download and CLI source-resolution modules. Repository packaging verifies hashes, fetches per platform, groups archives in first-seen order and names them from the first exact-name descriptor. Installation uses archive metadata under A54. All archive repositories share catalogue grouping and ordering under A55/A56; bundle locations retain member URLs and fetch through an owned reader. A57 preserves duplicate name order and last-member lookup; A58 integrates wheelhouse extraction and A59 integrates installation reads. Selected Python, inherited pip sources and 30 platform/Python targets are supported. macOS tag sequences match packaging 26.0 from the upstream lockfile. Downloads use their own source-option order, omit installation-only flags, inherit stdin/environment/cwd and preserve raw decoded failure streams. Bundle consumption flattens wheel files, rejects duplicate basenames, checks target availability even without dependencies, and respects custom sources. | Depends on A41–A50/A54–A59. Real pip wheel resolution, all multi-plugin/native archive combinations, whole-document JSON/model-error equivalence, broader acquisition/loading/selection/reference grammar, compressed-stream partial-write behavior and cross-spec staging order remain open. Tests use fixture wheels and interpreters. |
-| GitHub catalogue | `--repo github`, extra/ignored repository lists, code-search discovery including forks, GraphQL release/tag metadata, distribution and source archives, date/type/size filtering, source identity checks, and account/origin-partitioned caches. Metadata expires after 86,400 seconds; archive bytes persist. A69 adds nested retries and proactive waits. A70 collects metadata before acquisition, orders global asset/source phases, preserves repeated release entries, deduplicates tag URLs within a repository and uses release/name or commit cache identities. Cache lookup precedes the asset download-size check. A71 warms metadata in ten-repository GraphQL batches, preserves partial NOT_FOUND results and validates each complete batch before cache publication. A72 propagates cache read/decoding failures, accepts future-dated entries and removes expired metadata before refresh. A73 validates complete release/tag/commit/asset models, unwraps one annotated tag, applies represented coercions and preserves signed arbitrary-precision sizes. A74 aligns list splitting/filtering, name selection order, search pagination and represented request construction. | Non-string discovery values, unusual candidate-cache roots, complete JSON lexical behavior, exhaustive model coercion/diagnostics, upstream cache paths/text formatting, write semantics and filesystem aliases/races, urllib redirect semantics, additional ValueError/network-error mappings, HTTP failure diagnostics, live private repositories and native Windows remain unverified or incomplete. |
+| GitHub catalogue | Extra/ignored lists, discovery including forks, complete release/tag/commit/asset models, distribution/source archives, date/type/size filters and source identity checks. A69–A74 cover nested retries, ten-repository GraphQL batches, partial results, validation/publication order, global asset/source phases, duplicate retention, cache-before-size behavior, expiry/error rules and list/search selection. A75 uses upstream shared cache paths and JSON text, validates archive cache keys and publishes through direct file writes. Metadata expires after 86,400 seconds; archive bytes persist across tokens. | Non-string discovery values, unusual candidate-cache roots, complete JSON lexical behavior, exhaustive model coercion/diagnostics, concurrent/partial I/O and unusual filesystem aliases, urllib redirect semantics, additional ValueError/network-error mappings, HTTP failure diagnostics, live private repositories and native Windows remain unverified or incomplete. |
 | Python commands | Exec/script argument passthrough; separate typed doctor and explain reports; environment creation, dependency migration and persistent environment variable configuration. Explicit pip source/offline/build-isolation options and environment-check override. The Python group accepts --no-python-environment-check before the leaf; identically named arguments after exec remain child arguments. | Explain collector edge cases, IDA probe model validation, exhaustive path conversion, subprocess environment/signal behavior and cross-platform configuration edge cases remain open. Creation-specific discovery, doctor policy and execution/install guards and explain reports are covered separately below. Hy reports its own Python interpreter as not applicable because it is native Rust. |
 | Python explain report | Separate report records, installation/runtime collectors, ordered notes and complete text rendering. Overrides preserve their absent IDA probe; version collection resolves independently and uses the bounded version helper. Embedded virtualenv details come from the probe's VIRTUAL_ENV. Mismatch checks cover activated/requested roots before the final interpreter, deduplicating normalized roots. PATH candidates preserve order, deduplicate resolved aliases and exclude uv overlays. Known-installation versions use SDK/directory metadata, while selected-version reporting retains override/registry/SDK/binary/directory provenance. | Depends on A39 and acquisition/model limits under A38. The tested observations and source text rules match; full collector error handling, discovery/metadata equivalence, native Windows, noncanonical paths and terminal Rich behavior remain unverified. Native runtime identity is explicit; no fictitious HCLI Python version or own-venv branch is supplied. |
 | Python doctor | Separate state collection, filesystem observations, ordered findings, setup patterns, context notes and rendering. Version and pip are independent 10 s observations shared with creation; pip remains unknown when the resolution probe marks a managed base interpreter. Explicit HCLI overrides bypass additional IDA probing. All ten checker finding IDs and twelve pattern categories follow source precedence, including early return for a missing override interpreter and a separate unresolved-Python report. Findings retain complete details and concrete hints; arbitrary minimum-version and installation-platform findings were removed. Text groups errors before warnings and includes setup, fixes and context notes. | Depends on A33. The collector uses the selection policy covered under A37 and native installation metadata helpers. Native paths, missing-user-directory handling, live IDA execution, subprocess decoding and Rich wrapping/styling are not fully certified. A native executable has no sys.prefix environment to exclude from shell-venv discovery. |
@@ -793,8 +798,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 279 unit tests and 450
-integration tests on macOS: 729 passed, no failures. A74 records this validation;
+The latest uninterrupted serial all-target run passed 280 unit tests and 455
+integration tests on macOS: 735 passed, no failures. A75 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -843,6 +848,9 @@ Catalogue model conversion uses A73's complete upstream model projections,
 shared-integer comparisons and CLI validation/cache migration regressions.
 Catalogue discovery uses A74's source list/selection/search projections and
 CLI pagination, filtering and candidate-cache publication regressions.
+Catalogue cache interoperability uses A75's source path/text projections, actual
+source getter reads and CLI filesystem/publication regressions. Snapshot JSON
+formatting now shares the tested formatter with catalogue metadata.
 The earlier A54 parallel run observed an OAuth callback shutdown
 assertion failure at `src/auth/oauth_tests.rs:158`; that assertion passed in the
 serial run. Its intermittent cause is unknown; port reuse is an unverified
@@ -3019,6 +3027,106 @@ cross-compilation passed. Logs are `/tmp/hy-github-discovery-source.log`,
 The source log records the initial 113-case GraphQL corpus; the full run includes
 the final 117-case expansion. The upstream checkout remained clean at its pinned
 revision. Full project parity remains open.
+
+### GitHub catalogue cache interoperability and publication
+
+Under A75, catalogue caches use the upstream physical layout beneath the configured
+HCLI cache root. The primary contracts are `get_cache_directory` and
+`validate_path_component` in `src/hcli/lib/util/cache.py`, plus all candidate,
+release-metadata, release-asset and source-archive cache getters/setters in the
+pinned `src/hcli/lib/ida/plugin/repo/github.py`.
+
+| Resource | Relative cache path |
+| --- | --- |
+| Candidate repository list | `candidate_repos.json` |
+| Complete repository metadata | `<owner>/<repo>/releases.json` |
+| Release asset | `<owner>/<repo>/release-assets/<release-tag>/<asset-name>` |
+| Source archive | `<owner>/<repo>/source-archives/<commit>/source.zip` |
+
+Token/API-origin hashing is removed. Different tokens and native API-origin
+overrides now consult the same files under a shared root. Existing upstream files
+are read directly; no conversion or network request is required for represented
+fresh, complete entries. Legacy `github-catalogue` hashes are retained but are not
+consulted. If no upstream-layout entry exists, acquisition must populate it;
+offline-only operation cannot recover data solely from those legacy hashes.
+This supersedes the account/origin partition and versioned native metadata-key
+descriptions under A70–A74.
+
+Cache-directory lookup validates components and creates directories before checking
+for files, including cold read misses. Owner, repository, release-tag and commit
+components follow the source ASCII/dot/separator rules. Invalid archive cache keys
+raise the represented ValueError and are skipped by the catalogue caller before
+downloading that archive. Metadata-key failures remain fatal. Asset filenames
+are joined with the shared pathlib spelling helper; they are not cache-directory
+components. Their extra parent directories are not created by publication.
+
+Publication writes directly to the destination, following existing file symlinks;
+atomic temporary-file replacement is removed for these caches. The source cache
+directory is looked up again before a fresh archive is published. Filesystem
+errors propagate, while represented ValueError failures anywhere in an archive
+getter are skipped. A75 retains A72's missing/read/error, expiry and clock rules.
+These changes do not certify every partial-write or concurrent replacement state.
+
+Candidate and metadata JSON now use recursively sorted keys, two-space indentation,
+ASCII escapes, source integer spelling and no appended newline. Native Windows
+text publication translates layout newlines to CRLF. The formatter moved to
+`util/json_format.rs`; snapshot output still uses four spaces and retains its
+existing integer-limit check. Catalogue models contain integer sizes and no float
+fields, so the snapshot formatter's Pydantic nonfinite-to-null policy is not
+exercised by valid catalogue records.
+
+Evidence:
+
+- 47 read-only source comparisons cover 36 directory-component cases, seven
+  filename joins and four complete candidate/metadata JSON texts. Actual source
+  setters generate the text with `Path.write_text` intercepted; mkdir is also
+  intercepted. The path corpus includes invalid components, spaces/punctuation,
+  nested/parent/dot/absolute asset filenames and Unicode filenames. These are
+  path/text projections, not execution of source writes or arbitrary external paths.
+- A CLI writes candidates, complete metadata, release bytes and source bytes to
+  the source layout. Actual upstream getters then read those files and validate
+  the model and both archive SHA-256 values. Only mkdir calls for already existing
+  directories are intercepted. A second native invocation changes both token and
+  API origin and performs no network requests.
+- A CLI fixture preloads upstream-format candidate/metadata files and a source ZIP;
+  Hy constructs the expected plugin catalogue without contacting its HTTP endpoint.
+- Four invalid release-tag scenarios skip the asset before its HTTP request while
+  acquiring the valid source archive.
+- A nested asset filename downloads successfully but fails publication without
+  creating the missing filename parent; the release cache directory remains.
+- A Unix dangling-file-symlink fixture verifies that candidate publication retains
+  the symlink and creates its target. Existing expiry, cache-corruption, metadata
+  batching and acquisition tests were updated to use the shared layout.
+- Snapshot's 1,112,064-Unicode-scalar and 90-layout/number comparisons continue to
+  exercise the shared formatting implementation.
+
+Bounded findings: **high impact** — tokens sharing a cache root now reuse the same
+discovery and archive entries, matching upstream. **High impact** — release/commit
+cache-key validation can suppress a download even when its URL and metadata are
+otherwise valid. **Medium impact** — direct writes preserve file-symlink behavior
+and can expose partial output on failure. **Medium impact** — a missing nested
+asset parent remains a publication error after downloading. **Medium impact** —
+legacy-only native caches require refresh into the shared layout. **Low impact** —
+legacy files remain on disk until separately removed.
+
+Path construction scans O(P) component/filename bytes. Reading/writing B payload
+bytes takes O(B) work and retained buffers; JSON output retains O(B) text/model
+storage plus key sorting, with integer-conversion costs described under A73.
+Directory and file operations add filesystem-dependent costs. No lock, quota or
+new deadline is introduced. JSON lexical/model limits, concurrent and partial I/O,
+unusual OS aliases, native Windows behavior, urllib transport and remaining
+discovery/diagnostic differences keep QG3 and QG5 open.
+
+The uninterrupted A75 serial all-target run passed 735 tests: 280 unit tests and
+455 integration tests across 62 suites, with nine existing opt-in tests ignored
+and no failures. All five A73 source-oracle environment variables were retained.
+Formatting, whitespace checks, Clippy with warnings denied and Windows all-target
+cross-compilation passed. Logs are `/tmp/hy-github-cache-layout-source-final.log`,
+`/tmp/hy-github-cache-layout-cli-final.log`, `/tmp/hy-github-cache-layout-full.log`,
+`/tmp/hy-github-cache-layout-clippy.log` and
+`/tmp/hy-github-cache-layout-windows.log`. The full run includes the final test
+refactoring and signed asset-size boundary assertions. The upstream checkout
+remained clean at its pinned revision. Full project parity remains open.
 
 ### Lint archive discovery, validation and README locations
 

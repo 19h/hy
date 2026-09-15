@@ -48,15 +48,13 @@ impl Client {
     }
 
     fn cached_releases(&self, name: &str) -> Result<Option<Repository>> {
-        super::discovery::validate_cache_name(name)?;
-        let key = self.cache_key(&format!("releases-v3/{name}"));
-        cache::read(&key, Some(METADATA_LIFETIME))?
+        let path = cache::metadata_path(name)?;
+        cache::read(&path, Some(METADATA_LIFETIME))?
             .map(|bytes| serde_json::from_slice(&bytes).map_err(Into::into))
             .transpose()
     }
 
     fn store_releases(&self, name: &str, repository: &Repository) -> Result<()> {
-        let key = self.cache_key(&format!("releases-v3/{name}"));
-        cache::write(&key, &serde_json::to_vec(repository)?)
+        cache::write_json(&cache::metadata_path(name)?, repository)
     }
 }

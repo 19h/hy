@@ -49,24 +49,14 @@ impl Fixture {
             }
         });
         assert_success(&run(&sandbox, &server));
-        let mut candidates = None;
-        let mut releases = None;
-        let mut archive = None;
-        for entry in fs::read_dir(sandbox.path().join("cache/github-catalogue")).unwrap() {
-            let path = entry.unwrap().path();
-            match serde_json::from_slice::<Value>(&fs::read(&path).unwrap()) {
-                Ok(Value::Array(_)) => candidates = Some(path),
-                Ok(Value::Object(_)) => releases = Some(path),
-                _ => archive = Some(path),
-            }
-        }
+        let root = sandbox.path().join("cache");
         Self {
             sandbox,
             server,
             reject_requests,
-            candidates: candidates.unwrap(),
-            releases: releases.unwrap(),
-            archive: archive.unwrap(),
+            candidates: root.join("candidate_repos.json"),
+            releases: root.join("owner/repo/releases.json"),
+            archive: root.join("owner/repo/source-archives/source/source.zip"),
         }
     }
 

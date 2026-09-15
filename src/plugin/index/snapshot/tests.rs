@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use super::write_value;
+use crate::util::json_format::sorted_ascii;
 
 #[test]
 fn snapshot_strings_match_every_unicode_scalar_value() {
@@ -52,14 +52,7 @@ fn snapshot_layout_and_numbers_match_the_source_serialization_pipeline() {
 }
 
 fn verify(values: &[Value], digest: &str) {
-    let expected: Vec<_> = values
-        .iter()
-        .map(|value| {
-            let mut output = String::new();
-            write_value(value, 0, &mut output);
-            output
-        })
-        .collect();
+    let expected: Vec<_> = values.iter().map(|value| sorted_ascii(value, "    ")).collect();
     if let Some(python) = std::env::var_os("HY_TEST_BUNDLE_ORACLE_PYTHON") {
         let source =
             std::env::var_os("HY_TEST_HCLI_SOURCE").map(std::path::PathBuf::from).unwrap_or_else(

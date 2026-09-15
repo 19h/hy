@@ -24,15 +24,9 @@ fn metadata(base: &str) -> Value {
 }
 
 fn metadata_cache(sandbox: &Sandbox) -> std::path::PathBuf {
-    fs::read_dir(sandbox.path().join("cache/github-catalogue"))
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .find(|path| {
-            serde_json::from_slice::<Value>(&fs::read(path).unwrap())
-                .ok()
-                .is_some_and(|value| value.get("default_branch").is_some())
-        })
-        .unwrap()
+    let path = sandbox.path().join("cache/owner/repo/releases.json");
+    assert!(path.is_file());
+    path
 }
 
 #[test]
@@ -52,7 +46,7 @@ fn invalid_required_release_fields_fail_before_publication_or_download() {
         assert!(!output.status.success(), "{field}");
         assert!(output.stdout.is_empty());
         assert_eq!(server.requests().len(), 3);
-        assert_eq!(fs::read_dir(sandbox.path().join("cache/github-catalogue")).unwrap().count(), 1);
+        assert_eq!(cache_files(&sandbox).len(), 1);
     }
 }
 
@@ -127,8 +121,9 @@ fn incomplete_legacy_metadata_is_retained_and_refreshed_into_the_canonical_schem
     assert_success(&snapshot(&sandbox, &server));
     let current = metadata_cache(&sandbox);
     let legacy_key = format!("{}\nfixture-token\nreleases-v2/owner/repo", server.url);
-    let legacy =
-        current.parent().unwrap().join(format!("{:x}", Sha256::digest(legacy_key.as_bytes())));
+    let legacy_root = sandbox.path().join("cache/github-catalogue");
+    fs::create_dir_all(&legacy_root).unwrap();
+    let legacy = legacy_root.join(format!("{:x}", Sha256::digest(legacy_key.as_bytes())));
     let old_bytes = br#"{"releases":{"nodes":[]}}"#;
     fs::write(&legacy, old_bytes).unwrap();
     fs::remove_file(&current).unwrap();

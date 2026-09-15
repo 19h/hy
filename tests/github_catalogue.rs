@@ -6,6 +6,8 @@ mod acquisition;
 mod batching;
 #[path = "github_catalogue/cache.rs"]
 mod cache;
+#[path = "github_catalogue/cache_layout.rs"]
+mod cache_layout;
 #[path = "github_catalogue/discovery.rs"]
 mod discovery;
 #[path = "github_catalogue/models.rs"]
@@ -58,6 +60,22 @@ fn single_graphql(repository: Value) -> Response {
     Response::json(json!({"data":{"repo0":repository}}))
 }
 
+fn cache_files(sandbox: &Sandbox) -> Vec<std::path::PathBuf> {
+    let mut directories = vec![sandbox.path().join("cache")];
+    let mut files = Vec::new();
+    while let Some(directory) = directories.pop() {
+        for entry in fs::read_dir(directory).unwrap() {
+            let entry = entry.unwrap();
+            if entry.file_type().unwrap().is_dir() {
+                directories.push(entry.path());
+            } else {
+                files.push(entry.path());
+            }
+        }
+    }
+    files
+}
+
 fn commit(base: &str, name: &str) -> Value {
     json!({"oid": name, "zipballUrl": format!("{base}/{name}.zip"), "committedDate": "2026-09-01T00:00:00Z"})
 }
@@ -107,7 +125,7 @@ fn repository(base: &str, name: &str) -> Value {
 }
 
 #[test]
-fn github_discovery_combines_lists_releases_and_tags_with_account_scoped_cache() {
+fn github_discovery_combines_lists_releases_and_tags_with_shared_cache() {
     let sandbox = Sandbox::new();
     let mut archives = std::collections::HashMap::new();
     for (archive_name, plugin_name, version, host) in [
@@ -208,11 +226,10 @@ fn github_discovery_combines_lists_releases_and_tags_with_account_scoped_cache()
     assert_success(&run("another-fixture-token"));
     assert_eq!(
         server.requests().len(),
-        requests.len() * 2,
-        "a different account must not inherit discovery results"
+        requests.len(),
+        "upstream shares discovery and archive caches across account tokens"
     );
-    for entry in fs::read_dir(sandbox.path().join("cache/github-catalogue")).unwrap() {
-        let path = entry.unwrap().path();
+    for path in cache_files(&sandbox) {
         fs::File::options()
             .write(true)
             .open(path)
@@ -431,7 +448,8 @@ fn terminal_statuses_invalid_rate_headers_and_invalid_json_are_not_retried() {
         assert!(!output.status.success());
         assert!(output.stdout.is_empty());
         assert_eq!(server.requests().len(), 1);
-        assert!(!sandbox.path().join("cache/github-catalogue").exists());
+        assert!(sandbox.path().join("cache").is_dir());
+        assert!(!sandbox.path().join("cache/candidate_repos.json").exists());
     }
 }
 

@@ -33,11 +33,6 @@ struct Client {
 }
 
 impl Client {
-    fn cache_key(&self, resource: &str) -> String {
-        // Account and API origin partition private repository discovery results.
-        format!("{}\n{}\n{resource}", self.base, self.token)
-    }
-
     async fn json<T: DeserializeOwned>(&self, request: reqwest::RequestBuilder) -> Result<T> {
         if self.offline {
             return Err(Error::Other("GitHub metadata is unavailable in the local cache".into()));
@@ -49,8 +44,14 @@ impl Client {
     }
 
     async fn archive(&self, archive: &acquisition::Archive) -> Result<Option<Vec<u8>>> {
-        let key = self.cache_key(&archive.cache_resource());
-        if let Some(bytes) = cache::read(&key, None)? {
+        match self.acquire_archive(archive).await {
+            Err(Error::GitHubValue(_)) => Ok(None),
+            result => result,
+        }
+    }
+
+    async fn acquire_archive(&self, archive: &acquisition::Archive) -> Result<Option<Vec<u8>>> {
+        if let Some(bytes) = cache::read(&archive.cache_path()?, None)? {
             return Ok(Some(bytes));
         }
         // Upstream consults its cache before download_release_asset checks size.
@@ -66,12 +67,8 @@ impl Client {
         } else {
             http::download(url).await
         };
-        let bytes = match result {
-            Ok(bytes) => bytes,
-            Err(Error::GitHubValue(_)) => return Ok(None),
-            Err(error) => return Err(error),
-        };
-        cache::write(&key, &bytes)?;
+        let bytes = result?;
+        cache::write(&archive.cache_path()?, &bytes)?;
         Ok(Some(bytes))
     }
 }

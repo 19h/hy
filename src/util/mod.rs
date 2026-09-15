@@ -10,6 +10,7 @@ pub mod http_redirect;
 pub mod io;
 pub mod json_encoding;
 pub mod json_numbers;
+pub mod pydantic_integer;
 pub mod python_datetime;
 pub mod python_integer;
 pub mod python_json;

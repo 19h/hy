@@ -1,72 +1,80 @@
-//! Typed GitHub responses used by catalogue discovery.
+//! Validated catalogue models; serialized field names match upstream cache records.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::error::{Error, Result};
+use crate::plugin::metadata_values::deserialize_bool;
+use crate::util::pydantic_integer::Integer;
+
+mod graphql;
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Connection<T> {
-    pub nodes: Vec<T>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Repository {
-    pub default_branch_ref: Option<Reference>,
-    pub releases: Connection<Release>,
-    pub refs: Connection<Reference>,
+    pub default_branch: Commit,
+    pub releases: Vec<Release>,
+    pub tags: Vec<Tag>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Release {
-    #[serde(default)]
+    pub name: String,
     pub tag_name: String,
-    pub published_at: Option<String>,
-    pub release_assets: Connection<Asset>,
-    pub tag: Option<Reference>,
+    pub commit_hash: String,
+    pub created_at: String,
+    pub published_at: String,
+    #[serde(deserialize_with = "deserialize_bool")]
+    pub is_prerelease: bool,
+    #[serde(deserialize_with = "deserialize_bool")]
+    pub is_draft: bool,
+    pub url: String,
+    pub zipball_url: String,
+    pub assets: Vec<Asset>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(try_from = "Value")]
 pub struct Asset {
     pub name: String,
     pub download_url: String,
-    pub size: u64,
+    pub size: Integer,
     pub content_type: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Reference {
-    #[serde(default)]
-    pub name: String,
-    pub target: Target,
-}
+impl TryFrom<Value> for Asset {
+    type Error = Error;
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum Target {
-    Commit(Commit),
-    Annotated {
-        target: Box<Target>,
-    },
-}
-
-impl Target {
-    pub fn commit(&self) -> &Commit {
-        match self {
-            Self::Commit(commit) => commit,
-            Self::Annotated {
-                target,
-            } => target.commit(),
-        }
+    fn try_from(value: Value) -> Result<Self> {
+        let field = |alias, name| {
+            value
+                .get(alias)
+                .or_else(|| value.get(name))
+                .cloned()
+                .ok_or_else(|| Error::Other(format!("GitHub asset is missing field {alias}")))
+        };
+        // Pydantic prefers aliases even when their values fail validation.
+        Ok(Self {
+            name: serde_json::from_value(field("name", "name")?)?,
+            download_url: serde_json::from_value(field("downloadUrl", "download_url")?)?,
+            size: serde_json::from_value(field("size", "size")?)?,
+            content_type: serde_json::from_value(field("contentType", "content_type")?)?,
+        })
     }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Commit {
-    pub oid: String,
+pub struct Tag {
+    pub tag_name: String,
+    pub commit_hash: String,
     pub zipball_url: String,
     pub committed_date: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Commit {
+    pub commit_hash: String,
+    pub committed_date: String,
+    pub zipball_url: String,
 }
 
 #[derive(Deserialize)]
@@ -83,3 +91,17 @@ pub struct SearchItem {
 pub struct SearchRepository {
     pub full_name: String,
 }
+
+pub(super) fn truthy(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::Bool(value) => *value,
+        Value::Number(value) => value.as_f64() != Some(0.0),
+        Value::String(value) => !value.is_empty(),
+        Value::Array(values) => !values.is_empty(),
+        Value::Object(values) => !values.is_empty(),
+    }
+}
+
+#[cfg(test)]
+mod tests;

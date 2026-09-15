@@ -2,10 +2,12 @@
 
 use std::collections::HashSet;
 
+use crate::util::pydantic_integer::Integer;
+
 use super::models::Repository;
 
 const FIRST_RELEASE_DATE: &str = "2025-09-01";
-const MAX_ASSET_BYTES: u64 = 104_857_600;
+const MAX_ASSET_BYTES: i64 = 104_857_600;
 
 #[derive(Default)]
 pub(super) struct Plan {
@@ -23,7 +25,7 @@ enum Kind {
     Asset {
         tag: String,
         name: String,
-        size: u64,
+        size: Integer,
     },
     Source {
         commit: String,
@@ -45,17 +47,14 @@ impl Plan {
 
     fn append(&mut self, name: &str, repository: Repository) {
         let mut seen_sources = HashSet::new();
-        for release in repository.releases.nodes {
-            if release.published_at.as_deref().is_none_or(|date| date < FIRST_RELEASE_DATE) {
+        for release in repository.releases {
+            if release.published_at.as_str() < FIRST_RELEASE_DATE {
                 continue;
             }
-            if let Some(tag) = release.tag {
-                let commit = tag.target.commit();
-                seen_sources.insert(commit.zipball_url.clone());
-                // Every release contributes its source, even when URLs repeat.
-                self.sources.push(Archive::source(name, commit));
-            }
-            for asset in release.release_assets.nodes {
+            seen_sources.insert(release.zipball_url.clone());
+            // Every release contributes its source, even when URLs repeat.
+            self.sources.push(Archive::source(name, release.commit_hash, release.zipball_url));
+            for asset in release.assets {
                 if !matches!(
                     asset.content_type.as_str(),
                     "application/zip" | "application/x-zip-compressed" | "raw"
@@ -74,13 +73,12 @@ impl Plan {
                 });
             }
         }
-        for reference in repository.refs.nodes {
-            let commit = reference.target.commit();
-            if reference.name.starts_with('v')
-                && commit.committed_date.as_str() >= FIRST_RELEASE_DATE
-                && seen_sources.insert(commit.zipball_url.clone())
+        for tag in repository.tags {
+            if tag.tag_name.starts_with('v')
+                && tag.committed_date.as_str() >= FIRST_RELEASE_DATE
+                && seen_sources.insert(tag.zipball_url.clone())
             {
-                self.sources.push(Archive::source(name, commit));
+                self.sources.push(Archive::source(name, tag.commit_hash, tag.zipball_url));
             }
         }
     }
@@ -91,12 +89,12 @@ impl Plan {
 }
 
 impl Archive {
-    fn source(repository: &str, commit: &super::models::Commit) -> Self {
+    fn source(repository: &str, commit: String, url: String) -> Self {
         Self {
             repository: repository.into(),
-            url: commit.zipball_url.clone(),
+            url,
             kind: Kind::Source {
-                commit: commit.oid.clone(),
+                commit,
             },
         }
     }
@@ -118,7 +116,7 @@ impl Archive {
     }
 
     pub fn exceeds_download_limit(&self) -> bool {
-        matches!(&self.kind, Kind::Asset { size, .. } if *size > MAX_ASSET_BYTES)
+        matches!(&self.kind, Kind::Asset { size, .. } if *size > Integer::from(MAX_ASSET_BYTES))
     }
 }
 

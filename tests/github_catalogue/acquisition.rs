@@ -17,11 +17,22 @@ fn asset(name: &str, url: String, size: u64) -> Value {
     json!({"name":name, "downloadUrl":url, "size":size, "contentType":"raw"})
 }
 
-fn release_metadata(source: Value, tag: &str, assets: Vec<Value>) -> Value {
-    json!({"defaultBranchRef":{"target":source}, "releases":{"nodes":[{
-        "publishedAt":"2026-09-01", "tagName":tag, "tag":{"target":source},
-        "releaseAssets":{"nodes":assets},
-    }]}, "refs":{"nodes":[]}})
+pub(super) fn release_metadata(source: Value, tag: &str, assets: Vec<Value>) -> Value {
+    json!({
+        "defaultBranchRef": {"target": source},
+        "releases": {"nodes": [{
+            "name": "fixture release",
+            "tagName": tag,
+            "createdAt": "2026-09-01",
+            "publishedAt": "2026-09-01",
+            "isPrerelease": false,
+            "isDraft": false,
+            "url": "https://github.com/owner/repo/releases/fixture",
+            "tag": {"target": source},
+            "releaseAssets": {"nodes": assets},
+        }]},
+        "refs": {"nodes": []},
+    })
 }
 
 fn snapshot(sandbox: &Sandbox, server: &Server) -> std::process::Output {

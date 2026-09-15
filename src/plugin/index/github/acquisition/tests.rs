@@ -22,7 +22,7 @@ fn planned_archive_calls_match_upstream_collection_order_and_multiplicity() {
                 .map(|entry| {
                     (
                         entry["name"].as_str().unwrap().to_owned(),
-                        serde_json::from_value(entry["metadata"].clone()).unwrap(),
+                        Repository::from_graphql(&entry["metadata"]).unwrap(),
                     )
                 })
                 .collect();
@@ -65,13 +65,13 @@ fn planned_archive_calls_match_upstream_collection_order_and_multiplicity() {
 
 #[test]
 fn cache_identity_uses_asset_coordinates_or_commit_without_size_or_url() {
-    let asset = |tag: &str, name: &str, size, url: &str| Archive {
+    let asset = |tag: &str, name: &str, size: i64, url: &str| Archive {
         repository: "owner/repo".into(),
         url: url.into(),
         kind: Kind::Asset {
             tag: tag.into(),
             name: name.into(),
-            size,
+            size: size.into(),
         },
     };
     let first = asset("v1", "a.zip", 1, "https://old.test/a");

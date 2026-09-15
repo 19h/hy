@@ -48,14 +48,14 @@ impl Client {
     }
 
     fn cached_releases(&self, name: &str) -> Result<Option<Repository>> {
-        let key = self.cache_key(&format!("releases-v2/{name}"));
+        let key = self.cache_key(&format!("releases-v3/{name}"));
         cache::read(&key, Some(METADATA_LIFETIME))?
             .map(|bytes| serde_json::from_slice(&bytes).map_err(Into::into))
             .transpose()
     }
 
     fn store_releases(&self, name: &str, repository: &Repository) -> Result<()> {
-        let key = self.cache_key(&format!("releases-v2/{name}"));
+        let key = self.cache_key(&format!("releases-v3/{name}"));
         cache::write(&key, &serde_json::to_vec(repository)?)
     }
 }

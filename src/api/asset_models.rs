@@ -2,10 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-mod integer;
 mod metadata;
 
-pub use integer::Integer;
+pub use crate::util::pydantic_integer::Integer;
 pub use metadata::Metadata;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

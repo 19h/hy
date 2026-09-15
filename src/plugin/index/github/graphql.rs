@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use crate::error::{Error, Result};
 use crate::util::python_repr;
 
-use super::models::Repository;
+use super::models::{Repository, truthy};
 
 pub(super) fn request(repositories: &[String]) -> Result<Value> {
     let mut query = String::from("query($first: Int!) {\n");
@@ -52,7 +52,7 @@ pub(super) fn decode(
             continue;
         }
         // Finish decoding the entire batch before callers publish any entries.
-        let repository = serde_json::from_value(value.clone())?;
+        let repository = Repository::from_graphql(value)?;
         releases.push((name.clone(), repository));
     }
     Ok(releases)
@@ -86,17 +86,6 @@ fn check_errors(response: &Value) -> Result<()> {
         tracing::warn!("GitHub GraphQL NOT_FOUND (repo deleted/renamed): {message}");
     }
     Ok(())
-}
-
-fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(value) => *value,
-        Value::Number(value) => value.as_f64() != Some(0.0),
-        Value::String(value) => !value.is_empty(),
-        Value::Array(values) => !values.is_empty(),
-        Value::Object(values) => !values.is_empty(),
-    }
 }
 
 #[cfg(test)]

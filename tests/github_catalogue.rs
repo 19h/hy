@@ -6,6 +6,8 @@ mod acquisition;
 mod batching;
 #[path = "github_catalogue/cache.rs"]
 mod cache;
+#[path = "github_catalogue/models.rs"]
+mod models;
 mod support;
 
 use std::collections::HashMap;
@@ -70,7 +72,13 @@ fn repository(base: &str, name: &str) -> Value {
     json!({
         "defaultBranchRef": {"target": commit(base, "default-branch-not-indexed")},
         "releases": {"nodes": [{
+            "name": "fixture release",
+            "tagName": "v1",
+            "createdAt": "2026-09-01T00:00:00Z",
             "publishedAt": "2026-09-01T00:00:00Z",
+            "isPrerelease": false,
+            "isDraft": false,
+            "url": "https://github.com/owner/main/releases/v1",
             "tag": {"target": target},
             "releaseAssets": {"nodes": [
                 {"name": "PLUGIN.ZIP", "downloadUrl": format!("{base}/asset.zip"), "size": 100, "contentType": "raw"},
@@ -78,7 +86,13 @@ fn repository(base: &str, name: &str) -> Value {
                 {"name": "wrong.zip", "downloadUrl": format!("{base}/wrong-type.zip"), "size": 100, "contentType": "text/plain"},
             ]},
         }, {
+            "name": "old release",
+            "tagName": "old",
+            "createdAt": "2025-08-31T23:59:59Z",
             "publishedAt": "2025-08-31T23:59:59Z",
+            "isPrerelease": false,
+            "isDraft": false,
+            "url": "https://github.com/owner/main/releases/old",
             "tag": {"target": commit(base, "old")},
             "releaseAssets": {"nodes": []},
         }]},

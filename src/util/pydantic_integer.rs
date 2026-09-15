@@ -7,7 +7,7 @@ use serde_json::Value;
 
 const MAX_DECIMAL_DIGITS: usize = 4300;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Integer(BigInt);
 
 impl From<i64> for Integer {

@@ -290,11 +290,12 @@ fn direct_github_install_rejects_ambiguous_and_oversized_release_assets() {
             .unwrap();
         assert!(!output.status.success());
         let error = String::from_utf8_lossy(&output.stderr);
-        assert!(error.contains(if oversized {
-            "exceeds 100 MiB"
+        let expected = if oversized {
+            "Asset one.ZIP (104857601 bytes) exceeds maximum size limit (104857600 bytes)"
         } else {
-            "multiple .zip assets"
-        }));
+            "Multiple .zip assets found in release: one.ZIP, two.zip. Cannot determine which to install."
+        };
+        assert!(error.contains(expected), "{error}");
         assert_eq!(
             server.requests().len(),
             1,

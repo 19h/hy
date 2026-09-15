@@ -7,6 +7,8 @@ use std::process::{Command, Stdio};
 
 use serde_json::{Value, json};
 
+use crate::util::http_body::Decoder;
+
 use super::*;
 
 mod cases;

@@ -83,6 +83,7 @@ The package version alone does not establish behavioral parity.
 | A63 | Direct installation is classified using the pinned command's branch order and A45 runtime. GitHub parsing is compared only after the source direct-install pattern accepts an input. Physical path fixtures run on Unix. | Probe native Windows filesystem encodings/errors, concurrent path replacement, other Python regex runtimes, downstream URL serialization/transport, malformed release responses and complete command diagnostics. | 1,822 source-branch projections and 25,088 actual GitHub recognition/parsing comparisons pass. Four CLI regressions cover local suffixes, directory/archive precedence, rejected direct schemes, file URLs and observed GitHub release requests. The parser preserves source owner/repository/raw-tag spelling; full transport and native Windows runtime equivalence remain open. |
 | A64 | File-URL conversion uses CPython 3.13.15, Unicode 15.1 and the A45 Unix runtime with UTF-8/surrogateescape filesystem encoding. Windows conversion is compared through nturl2path and PureWindowsPath on that runtime. | Probe other filesystem encodings, lone-surrogate input strings, native Windows file operations, arbitrary IPv6/IPvFuture spellings, Unicode normalization contexts, filesystem-specific names and concurrent replacement. | 5,315 conversion comparisons, the complete non-ASCII NFKC-delimiter table, 45 archive reads, six repository-construction comparisons and a direct-install regression cover represented file-URL behavior. This macOS volume rejects invalid UTF-8 filenames; its read failure is compared, while decoding bytes are tested independently. Full HTTP transport and native Windows execution remain open. |
 | A65 | Repository fetch policy is compared with the pinned source and HTTPX in the A45 runtime. The source client uses an in-memory transport; native wire regressions use owned HTTP loopback servers. Authentication resolution is replaced with deterministic empty or API-key headers in the policy oracle. | Probe real authentication refresh, arbitrary HTTPX URL normalization/joining, proxies/TLS, duplicate headers, malformed wire responses, timeout phases, optional content codecs and native Windows networking. | 231 response-sequence comparisons and 280 raw-host decisions pass. Three CLI regressions cover 37 wire scenarios. Lazy credential reuse, exact redirect statuses, represented cookie transitions, decoding order and entitlement diagnostics agree within this corpus. Generic HTTP diagnostics, URL serialization and phase deadlines remain distinct or unverified. |
+| A66 | Direct GitHub release acquisition uses the pinned source and A45 runtime. Ordinary JSON values and represented UTF byte encodings are compared through the actual source fetch function with intercepted GET operations. Redirect policy uses actual HTTPX client handling over MockTransport. | Probe Python JSON nonfinite constants, lone surrogates, nesting limits, malformed/normalized URL forms, live TLS/proxy behavior, phase deadlines, optional codecs and native Windows execution. | 1,998 selection comparisons and 125 HTTP transition comparisons pass. Three added CLI regressions cover eleven owned-server scenarios. Asset defaults, delayed field access, numeric size decisions, selection diagnostics, request headers, separate cookies and represented redirect/error order agree. General JSON and HTTPX URL equivalence remain open. |
 
 ## Implemented contracts and remaining coverage
 
@@ -109,6 +110,7 @@ imply that every upstream edge case or supported operating system was tested.
 | Direct installation source selection | A63 uses upstream branch order for editable directories, regular plugin directories, existing lowercase `.zip` paths, `file://`, recognized GitHub URLs, lowercase `https://`, and repository references. GitHub owner/repository/tag parsing preserves source spelling after recognition. | Full command diagnostic text, native Windows path behavior, URL decoding/serialization, transport policy and malformed release-response handling remain open. |
 | File-URL acquisition | A64 shares source-compatible decoding between archive fetching and repository construction. Authority validation is separate from local path selection; semicolons, encoded delimiters, trailing spaces, symlink/parent traversal and Unix filesystem bytes are retained under source rules. | Non-UTF-8 filesystem encodings, lone-surrogate input strings, native Windows execution and arbitrary filesystem/authority edge cases remain unverified. |
 | Repository HTTP policy | A65 resolves credentials lazily once per fetch, attaches them only to eligible raw HTTPS hosts, follows the five source redirect statuses with Location, retains per-fetch cookies, decodes bodies before status handling and distinguishes missing credentials, rejected credentials and entitlement denial. | HTTPX URL serialization/joining, generic HTTP diagnostic text, proxy/TLS and timeout-phase behavior, live credentials and native Windows networking remain open. Direct GitHub release transport has a separate source contract. |
+| Direct GitHub release acquisition | A66 selects ZIP assets after inspecting names, reads size/download fields only for the sole candidate, applies the source 104,857,600-byte metadata limit, and supplies separate metadata/asset HTTP operations with source Accept values and 30 s/60 s connect/read settings. Twenty redirects are permitted; final HTTP errors precede final-scheme downgrade checks. | Nonfinite JSON tokens, lone surrogates, nesting limits, arbitrary HTTPX URL construction, generic error presentation, write/pool timeout semantics, TLS/proxies and native Windows execution remain open. |
 | Editable package registration | `src` layouts write `_hcli_editable_NAME.pth` into the selected IDA interpreter's `sysconfig` purelib directory. Flat/regular replacements remove stale registrations. Uninstall removes links and registrations while retaining source files. Broken entries can be replaced or removed. Staged registration errors preserve the old plugin; cleanup skips interpreter-discovery failures, matching upstream. A real isolated Python process imports the fixture and observes later source edits. | Windows symlink/registration execution and live IDA imports remain unverified. Registrations left in a previously selected interpreter, and stale filenames after name-case changes on case-sensitive filesystems, remain open. |
 | Installed plugin inventory | Managed operations share records whose descriptors, referenced files and exact directory names validate. Broken directories do not enter dependency preflight, search, upgrades or configuration. Unfiltered status separately lists minimal descriptors and single-file legacy plugins; named status accepts only managed records and retains requested order/repetitions. Broken entries remain removable by filesystem name, including UTF-8 legacy names. | Directory entries are sorted for deterministic reports rather than retaining upstream filesystem iteration order. Case-colliding installed names produce errors in destructive/metadata lookup paths; upstream may select its first record. Non-UTF-8 filenames and exhaustive Unicode case conversion remain unverified. |
 | Python dependency metadata | Installation, dependency preflight and migration resolve explicit requirements or PEP 723 inline metadata. Lint does not resolve dependency scripts. Bundle creation collects explicit lists only and leaves inline metadata untouched, matching its source-specific policy. Tests cover archives, directories, editable sources, retained neighbors, malformed scripts and later installation from an inline-only bundle. Plugin code is not executed to extract requirements. | Depends on A45 for bundle collection. Migration and real wheel resolution still need end-to-end verification. Non-string TOML dependency entries are rejected during parsing; upstream returns them and fails downstream. |
@@ -781,8 +783,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 257 unit tests and 424
-integration tests on macOS: 681 passed, no failures. A65 records this validation;
+The latest uninterrupted serial all-target run passed 260 unit tests and 427
+integration tests on macOS: 687 passed, no failures. A66 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -813,6 +815,8 @@ File-URL decoding, archive reads and repository construction use A64's conversio
 and source-consumer comparisons.
 Repository redirect, credential and response policy uses A65's actual-source
 comparisons and production-client wire regressions.
+Direct GitHub release selection and acquisition use A66's source-function,
+HTTPX-transition and owned-server installation comparisons.
 The earlier A54 parallel run observed an OAuth callback shutdown
 assertion failure at `src/auth/oauth_tests.rs:158`; that assertion passed in the
 serial run. Its intermittent cause is unknown; port reuse is an unverified
@@ -2167,6 +2171,122 @@ in their tests. Rustfmt, whitespace validation, Clippy with warnings denied and
 the Windows all-target cross-check passed. The source checkout remained clean
 at the pinned revision.
 These results do not close QG3 or QG5 for the remaining contracts.
+
+### Direct GitHub release selection and HTTP acquisition
+
+Under A66, `transport/github_release.rs` owns selection and diagnostics, while
+`transport/github_http.rs` owns the two HTTP operations. The source contract is
+`fetch_github_release_zip_asset` in the pinned
+`src/hcli/lib/ida/plugin/repo/github.py`. `transport/response.rs` now shares complete
+body decoding with A65's repository transport; their redirect and status policies
+remain explicit at each caller.
+
+Release metadata uses `Accept: application/vnd.github.v3+json`; the asset uses
+`Accept: */*`. Each operation creates its own client and cookie jar. Cookies persist
+over that operation's redirects but metadata cookies do not authorize the later
+asset GET, even when both URLs have the same host. Neither operation resolves HCLI
+credentials or injects `GITHUB_TOKEN`. Initial URL userinfo becomes Basic auth;
+represented same-origin, cross-origin and default-port HTTP-to-HTTPS transitions
+follow HTTPX's header retention rules. Redirect URL userinfo does not independently
+replace the existing Authorization header through reqwest.
+
+The native GET loop follows 301, 302, 303, 307 and 308 with Location and permits
+twenty redirects (at most twenty-one requests). It constructs the redirect target
+before consuming/decoding that response, matching HTTPX's automatic redirect
+order. A missing or empty target fragment inherits the previous fragment in the
+represented cases. The final decoded response is checked for HTTP failure before
+checking whether an originally HTTPS operation ended on another scheme. Unlike
+the repository helper, temporary downgrades followed by an HTTPS final response
+are permitted by this source function. Native connect/read deadlines are 30 s for
+metadata and 60 s for the asset, without a total-operation timeout. HTTPX's write
+and pool deadline contracts are not established by these settings.
+
+Selection no longer deserializes every asset into a rigid struct. Missing `assets`
+defaults to an empty collection; empty string/object collections have the source's
+empty-iteration outcome. Missing names default to an empty string. ZIP names are
+selected case-insensitively, and all names are examined before candidate count is
+resolved. Non-ZIP entries do not require a download URL or a valid size. The sole
+candidate defaults a missing size to zero and reads its download field before
+comparing size. Negative sizes, fractional values and booleans follow the source
+comparison; the threshold is exactly 104,857,600 bytes (100 MiB). Only metadata size
+is checked—no new actual-body quota is imposed. No-asset, multiple-asset and
+oversize diagnostics match the source strings, including tag/owner/repository and
+Python numeric formatting.
+
+Metadata bytes use the existing CPython JSON encoding adapter and 4,300-digit
+integer limit before serde decoding. This accepts the represented UTF-8 BOM,
+UTF-16 and UTF-32 documents. It does not establish all Python JSON semantics:
+literal NaN/Infinity tokens, unpaired surrogate strings and differing nesting
+limits remain known decoder gaps. Finite JSON numeric syntax that overflows
+binary64, such as `1e309`, is covered separately from those literal tokens.
+A separate read-only probe confirmed that source sizes `NaN` and `-Infinity`
+select the archive, while `Infinity` produces the policy error with `inf bytes`.
+The native serde decoder rejects these three literal forms before selection;
+those observed source outcomes are not counted as passing comparisons.
+
+Evidence:
+
+- 1,998 selection comparisons comprise 666 documents under absent, empty and
+  nonempty tags. They invoke the actual upstream function, intercept its GET
+  boundaries and compare selected URLs or failure categories. Policy errors also
+  compare exact messages. The corpus includes twelve name forms, thirteen size
+  forms, four download-field forms, irrelevant assets, malformed containers,
+  ambiguous candidates, integer limits, binary64 rounding/overflow and five byte
+  encoding variants. The oracle asserts both source GET keyword sets, including
+  timeout values, Accept and redirect enablement. It does not download those URLs.
+- 125 response-sequence comparisons invoke the actual upstream GitHub function
+  with HTTPX client redirects over MockTransport. The second GET returns a fixed
+  archive after successful metadata acquisition. Comparisons cover the first
+  operation's request URLs, Accept/encoding/auth/cookie headers and result category:
+  seventeen statuses, Location presence, limits around twenty, final downgrade
+  and HTTP-error precedence, temporary downgrades, Basic auth retention/removal,
+  fragments, Latin-1/UTF-8 headers, cookies and corrupt gzip bodies. Success is a
+  category projection; these mock cases do not compare archive contents.
+- Three additional CLI regressions cover eleven owned-server scenarios: three
+  successful compressed acquisitions with size coercion and UTF metadata, two
+  redirect-limit cases, three selection failures and three compressed-response
+  failures. Successful cases verify installed files, request Accept values and
+  omission of configured API/GitHub credentials. The twenty-redirect case verifies
+  cookie return within metadata, absence at the asset operation's first request,
+  and a fresh asset cookie returned on its redirect. Existing A63 endpoint-spelling
+  CLI cases also pass.
+
+Both new source oracles execute with `-I -B` and filesystem-mutation audit guards.
+Rust owns all fixtures. Mock transport comparisons are not evidence of live TLS,
+proxy selection, timeout timing or native Windows networking. Generic HTTP and
+malformed-data exception text remains native; only the specified policy messages
+are compared exactly. User-Agent retains Hy's identity rather than HTTPX's default.
+The WHATWG-based URL parser/joiner still does not establish arbitrary HTTPX URL
+construction, including malformed absolute Locations without a host.
+Three additional source-only probes retain a percent-encoded hostname and
+percent-encoded parent path segment, and repair `https:/next` to the previous
+host. These are outside the passing URL corpus and identify follow-up targets
+for the native WHATWG adapter; they do not certify corresponding wire behavior.
+
+**High impact:** validating irrelevant assets could reject an otherwise installable
+release. **Medium impact:** using the repository's ten-redirect policy rejects
+release downloads that the source follows. **Medium impact:** sharing a metadata
+cookie session with asset acquisition changes which cookies authorize the download.
+**Medium impact:** applying the repository's per-hop downgrade check changes this
+function's source-defined final-response policy.
+
+For J JSON bytes, A assets and L aggregate name bytes, decoding and selection take
+O(J + A + L) work plus numeric conversion costs and retain O(J + A) storage. Each
+HTTP operation sends at most twenty-one requests, stores its own cookie state and
+retains one complete decoded response. Decoded body storage is O(B) for B bytes;
+cookie matching/sorting has the A65 bounds. No overall elapsed-time or downloaded
+byte bound follows from the metadata size check or per-read deadlines.
+
+The initial A66 all-target run passed 686 tests and failed one existing catalogue
+assertion that expected Hy's old ambiguity/oversize messages. That assertion now
+checks the source messages and retains its no-download/no-install checks. The
+subsequent uninterrupted serial all-target run passed 687 tests: 260 unit tests
+and 427 integration tests across 62 suites, with nine existing opt-in tests ignored
+and no failures. Both established source runtimes and the lint oracle were enabled,
+using the full command recorded under A61. Corpus sizes are asserted in the new
+tests. Rustfmt, whitespace checks, Clippy with warnings denied and Windows
+all-target cross-compilation passed. The upstream checkout remained clean at the
+pinned revision. QG3 and QG5 remain open for the recorded remaining contracts.
 
 ### Lint archive discovery, validation and README locations
 

@@ -5,7 +5,6 @@ use std::future::Future;
 use reqwest::header::{self, HeaderMap, HeaderValue};
 
 use crate::error::{Error, PluginAccessDenied, Result};
-use crate::util::http_body::Decoder;
 use crate::util::http_headers::TextDecoder;
 
 use super::url_parts::Parts;
@@ -39,15 +38,10 @@ pub(super) async fn fetch(url: &str) -> Result<Vec<u8>> {
         move |url, headers| {
             let client = client.clone();
             async move {
-                let mut response = client.get(url).headers(headers).send().await?;
+                let response = client.get(url).headers(headers).send().await?;
                 let status = response.status().as_u16();
                 let headers = response.headers().clone();
-                let mut decoder = Decoder::new(&headers, u64::MAX);
-                let mut body = Vec::new();
-                while let Some(chunk) = response.chunk().await? {
-                    body.extend_from_slice(&decoder.decode(&chunk)?);
-                }
-                body.extend(decoder.finish()?);
+                let body = super::response::decode(response).await?;
                 Ok(Response {
                     status,
                     headers,

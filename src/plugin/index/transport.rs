@@ -6,8 +6,11 @@ use super::Location;
 use crate::error::{Error, Result};
 
 mod file_url;
+mod github_http;
+mod github_release;
 mod github_url;
 mod repository;
+mod response;
 mod url_parts;
 
 pub(super) use file_url::path as local_file_path;
@@ -37,48 +40,19 @@ pub(super) fn verify_checksum(location: &Location, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-#[derive(serde::Deserialize)]
-struct Release {
-    assets: Vec<ReleaseAsset>,
-}
-
-#[derive(serde::Deserialize)]
-struct ReleaseAsset {
-    name: String,
-    browser_download_url: String,
-    #[serde(default)]
-    size: u64,
-}
-
 pub async fn github_archive(source: &str) -> Result<Vec<u8>> {
-    let github_url::ReleaseSource {
-        owner,
-        repository,
-        tag,
-    } = github_url::parse(source)?;
-    let release = match tag {
-        Some(tag) => format!("tags/{tag}"),
-        None => "latest".into(),
-    };
+    let source = github_url::parse(source)?;
     let endpoint = format!(
-        "{}/repos/{owner}/{repository}/releases/{release}",
-        crate::config::Env::global().github_api_url.trim_end_matches('/')
+        "{}{}",
+        crate::config::Env::global().github_api_url.trim_end_matches('/'),
+        github_release::endpoint(&source),
     );
-    let release: Release = serde_json::from_slice(&fetch(&endpoint).await?)?;
-    let assets: Vec<_> =
-        release.assets.iter().filter(|asset| asset.name.to_lowercase().ends_with(".zip")).collect();
-    let asset = match assets.as_slice() {
-        [asset] => *asset,
-        [] => return Err(Error::NotFound("no .zip asset in GitHub release".into())),
-        _ => {
-            return Err(Error::PluginInstall(format!(
-                "multiple .zip assets in GitHub release: {}",
-                assets.iter().map(|asset| asset.name.as_str()).collect::<Vec<_>>().join(", ")
-            )));
-        }
-    };
-    if asset.size > 100 * 1024 * 1024 {
-        return Err(Error::PluginInstall("GitHub release asset exceeds 100 MiB".into()));
-    }
-    fetch(&asset.browser_download_url).await
+    let release = github_http::fetch(
+        &endpoint,
+        std::time::Duration::from_secs(30),
+        "application/vnd.github.v3+json",
+    )
+    .await?;
+    let download = github_release::select(&source, &release)?;
+    github_http::fetch(&download, std::time::Duration::from_secs(60), "*/*").await
 }

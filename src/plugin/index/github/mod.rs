@@ -5,18 +5,19 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
-use serde_json::json;
 
 use super::{ArchiveCatalogue, LoadedRepository};
 use crate::error::{Error, Result};
 
 mod acquisition;
 mod cache;
+mod graphql;
 mod http;
+mod metadata;
 mod models;
 mod retry;
 
-use models::{GraphResponse, Repository, SearchResponse};
+use models::SearchResponse;
 
 const METADATA_LIFETIME: Duration = Duration::from_secs(86_400);
 
@@ -77,33 +78,6 @@ impl Client {
         }
         cache::write(&key, &serde_json::to_vec(&repositories)?)?;
         Ok(repositories)
-    }
-
-    async fn releases(&self, repository: &str) -> Result<Repository> {
-        // Earlier entries lack tagName, which is part of asset cache identity.
-        let key = self.cache_key(&format!("releases-v2/{repository}"));
-        if let Some(bytes) = cache::read(&key, Some(METADATA_LIFETIME))
-            && let Ok(releases) = serde_json::from_slice(&bytes)
-        {
-            return Ok(releases);
-        }
-        let (owner, name) = repository.split_once('/').expect("repository validated at discovery");
-        let response: GraphResponse = self
-            .json(self.http.post(format!("{}/graphql", self.base)).json(&json!({
-                "query": include_str!("releases.graphql"),
-                "variables": {"owner": owner, "name": name},
-            })))
-            .await?;
-        if let Some(error) = response.errors.iter().find(|error| error.kind != "NOT_FOUND") {
-            return Err(Error::Other(format!("GitHub GraphQL: {}", error.message)));
-        }
-        let repository = response
-            .data
-            .and_then(|data| data.repository)
-            .filter(|repository| repository.default_branch_ref.is_some())
-            .ok_or_else(|| Error::NotFound(format!("GitHub repository {repository}")))?;
-        cache::write(&key, &serde_json::to_vec(&repository)?)?;
-        Ok(repository)
     }
 
     async fn archive(&self, archive: &acquisition::Archive) -> Result<Option<Vec<u8>>> {
@@ -176,6 +150,9 @@ pub async fn load(options: &Options, offline: bool) -> Result<LoadedRepository> 
     let mut repositories = client.candidates().await?;
     repositories.extend(extra);
     repositories.retain(|repository| !ignored.contains(repository));
+    let mut repositories: Vec<_> = repositories.into_iter().collect();
+    client.warm_releases(&repositories).await?;
+    repositories.sort_by(|left, right| left.split_once('/').cmp(&right.split_once('/')));
     let mut loaded = LoadedRepository::empty();
     let mut metadata = Vec::new();
     for name in repositories {

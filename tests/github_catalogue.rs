@@ -2,6 +2,8 @@
 
 #[path = "github_catalogue/acquisition.rs"]
 mod acquisition;
+#[path = "github_catalogue/batching.rs"]
+mod batching;
 mod support;
 
 use std::collections::HashMap;
@@ -11,6 +13,44 @@ use std::sync::Mutex;
 use serde_json::{Value, json};
 use support::http::{Response, Server};
 use support::*;
+
+struct GraphRepository {
+    alias: String,
+    owner: String,
+    name: String,
+}
+
+fn graphql_repositories(request: &support::http::Request) -> Vec<GraphRepository> {
+    let body: Value = serde_json::from_slice(&request.body).unwrap();
+    assert_eq!(body["variables"], json!({"first":10}));
+    let pattern =
+        regex::Regex::new(r#"(repo\d+): repository\(owner: "([^"]+)", name: "([^"]+)"\)"#).unwrap();
+    let repositories: Vec<_> = pattern
+        .captures_iter(body["query"].as_str().unwrap())
+        .map(|capture| GraphRepository {
+            alias: capture[1].into(),
+            owner: capture[2].into(),
+            name: capture[3].into(),
+        })
+        .collect();
+    assert!(!repositories.is_empty());
+    repositories
+}
+
+fn graphql_response(
+    request: &support::http::Request,
+    repository: impl Fn(&str, &str) -> Value,
+) -> Response {
+    let data: serde_json::Map<_, _> = graphql_repositories(request)
+        .into_iter()
+        .map(|entry| (entry.alias, repository(&entry.owner, &entry.name)))
+        .collect();
+    Response::json(json!({"data":data}))
+}
+
+fn single_graphql(repository: Value) -> Response {
+    Response::json(json!({"data":{"repo0":repository}}))
+}
 
 fn commit(base: &str, name: &str) -> Value {
     json!({"oid": name, "zipballUrl": format!("{base}/{name}.zip"), "committedDate": "2026-09-01T00:00:00Z"})
@@ -85,10 +125,7 @@ fn github_discovery_combines_lists_releases_and_tags_with_account_scoped_cache()
                 {"repository": {"full_name": "Owner/Ignored"}},
             ]}))
         } else if request.path == "/graphql" {
-            let body: Value = serde_json::from_slice(&request.body).unwrap();
-            Response::json(
-                json!({"data": {"repository": repository(base, body["variables"]["name"].as_str().unwrap())}}),
-            )
+            graphql_response(request, |_, name| repository(base, name))
         } else if let Some(bytes) = archives.get(&request.path) {
             Response::zip(bytes.clone())
         } else {
@@ -135,7 +172,7 @@ fn github_discovery_combines_lists_releases_and_tags_with_account_scoped_cache()
         requests.iter().filter(|request| request.path.starts_with("/search/code?")).count(),
         2
     );
-    assert_eq!(requests.iter().filter(|request| request.path == "/graphql").count(), 2);
+    assert_eq!(requests.iter().filter(|request| request.path == "/graphql").count(), 1);
     assert_eq!(requests.iter().filter(|request| request.path == "/source.zip").count(), 1);
     for request in &requests {
         if request.path.ends_with(".zip") {
@@ -169,7 +206,7 @@ fn github_discovery_combines_lists_releases_and_tags_with_account_scoped_cache()
     assert_success(&run("fixture-token"));
     assert_eq!(
         server.requests().len(),
-        before + 4,
+        before + 3,
         "expired candidate/release metadata must refresh while archive bytes remain cached"
     );
 }
@@ -251,7 +288,7 @@ fn github_archive_indexing_errors_fail_the_catalogue() {
         if request.path.starts_with("/search/code?") {
             Response::json(json!({"items": [{"repository": {"full_name": "Owner/Main"}}]}))
         } else if request.path == "/graphql" {
-            Response::json(json!({"data": {"repository": repository(base, "main")}}))
+            single_graphql(repository(base, "main"))
         } else if request.path == "/asset.zip" {
             Response::zip(b"not ZIP".to_vec())
         } else {
@@ -294,7 +331,7 @@ fn catalogue_retries_search_graphql_and_archive_requests_without_changing_payloa
             let mut repository = repository(base, "main");
             repository["releases"] = json!({"nodes":[]});
             repository["refs"] = json!({"nodes":[{"name":"v1", "target":commit(base, "source")}]});
-            Response::json(json!({"data":{"repository":repository}}))
+            single_graphql(repository)
         } else {
             Response::zip(archive.clone())
         }
@@ -397,7 +434,7 @@ fn catalogue_archives_preserve_payload_bytes_regardless_of_content_encoding() {
                 repository["releases"] = json!({"nodes":[]});
                 repository["refs"] =
                     json!({"nodes":[{"name":"v1", "target":commit(base, "source")}]});
-                Response::json(json!({"data":{"repository":repository}}))
+                single_graphql(repository)
             } else {
                 return (
                     Response::zip(archive.clone()),

@@ -83,22 +83,3 @@ pub struct SearchItem {
 pub struct SearchRepository {
     pub full_name: String,
 }
-
-#[derive(Deserialize)]
-pub struct GraphResponse {
-    pub data: Option<GraphData>,
-    #[serde(default)]
-    pub errors: Vec<GraphError>,
-}
-
-#[derive(Deserialize)]
-pub struct GraphData {
-    pub repository: Option<Repository>,
-}
-
-#[derive(Deserialize)]
-pub struct GraphError {
-    #[serde(rename = "type", default)]
-    pub kind: String,
-    pub message: String,
-}

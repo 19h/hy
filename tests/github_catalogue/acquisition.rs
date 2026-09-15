@@ -72,21 +72,24 @@ fn catalogue_preserves_duplicates_and_fetches_global_asset_phase_before_sources(
             );
         }
         if request.path == "/graphql" {
-            let body: Value = serde_json::from_slice(&request.body).unwrap();
-            assert!(body["query"].as_str().unwrap().contains("tagName"));
-            let owner = body["variables"]["owner"].as_str().unwrap();
-            let source = json!({"oid":"shared-commit", "zipballUrl":format!("{base}/source/{owner}/release"), "committedDate":"2026-09-01"});
-            let first = asset("z.zip", format!("{base}/asset/{owner}/z"), 1);
-            let mut metadata = release_metadata(
-                source,
-                "v1",
-                vec![first.clone(), asset("a.zip", format!("{base}/asset/{owner}/a"), 1), first],
-            );
-            let release = metadata["releases"]["nodes"][0].clone();
-            metadata["releases"]["nodes"].as_array_mut().unwrap().push(release);
-            let tag = json!({"name":"vtag", "target":{"oid":"shared-commit", "zipballUrl":format!("{base}/source/{owner}/tag"), "committedDate":"2026-09-01"}});
-            metadata["refs"]["nodes"] = json!([tag.clone(), tag]);
-            return Response::json(json!({"data":{"repository":metadata}}));
+            return graphql_response(request, |owner, _| {
+                let source = json!({"oid":"shared-commit", "zipballUrl":format!("{base}/source/{owner}/release"), "committedDate":"2026-09-01"});
+                let first = asset("z.zip", format!("{base}/asset/{owner}/z"), 1);
+                let mut metadata = release_metadata(
+                    source,
+                    "v1",
+                    vec![
+                        first.clone(),
+                        asset("a.zip", format!("{base}/asset/{owner}/a"), 1),
+                        first,
+                    ],
+                );
+                let release = metadata["releases"]["nodes"][0].clone();
+                metadata["releases"]["nodes"].as_array_mut().unwrap().push(release);
+                let tag = json!({"name":"vtag", "target":{"oid":"shared-commit", "zipballUrl":format!("{base}/source/{owner}/tag"), "committedDate":"2026-09-01"}});
+                metadata["refs"]["nodes"] = json!([tag.clone(), tag]);
+                metadata
+            });
         }
         let owner = request.path.split('/').nth(2).unwrap();
         Response::zip(archives[owner].clone())
@@ -107,7 +110,6 @@ fn catalogue_preserves_duplicates_and_fetches_global_asset_phase_before_sources(
     assert_eq!(
         paths,
         [
-            "/graphql",
             "/graphql",
             "/asset/a/z",
             "/asset/a/a",
@@ -141,10 +143,23 @@ fn cached_assets_precede_size_checks_and_commit_identity_survives_url_changes() 
                 }
             );
             let source = json!({"oid":"same-commit", "zipballUrl":format!("{base}/source-{}", if phase == 0 { "old" } else { "new" }), "committedDate":"2026-09-01"});
-            return Response::json(
-                json!({"data":{"repository":release_metadata(source, if phase == 2 { "v2" } else { "v1" },
-                vec![asset("plugin.zip", asset_url, if phase == 1 { 104_857_601 } else { 1 })])}}),
-            );
+            return single_graphql(release_metadata(
+                source,
+                if phase == 2 {
+                    "v2"
+                } else {
+                    "v1"
+                },
+                vec![asset(
+                    "plugin.zip",
+                    asset_url,
+                    if phase == 1 {
+                        104_857_601
+                    } else {
+                        1
+                    },
+                )],
+            ));
         }
         assert!(
             matches!(request.path.as_str(), "/old" | "/source-old"),
@@ -195,11 +210,14 @@ fn archive_value_errors_are_skipped_but_other_acquisition_errors_propagate() {
             if request.path == "/graphql" {
                 let source = commit(base, "source");
                 return (
-                    Response::json(
-                        json!({"data":{"repository":release_metadata(source, "v1", vec![
-                            asset("bad.zip", format!("{base}/bad"), 1), asset("good.zip", format!("{base}/good"), 1),
-                        ])}}),
-                    ),
+                    single_graphql(release_metadata(
+                        source,
+                        "v1",
+                        vec![
+                            asset("bad.zip", format!("{base}/bad"), 1),
+                            asset("good.zip", format!("{base}/good"), 1),
+                        ],
+                    )),
                     vec![],
                 );
             }
@@ -244,7 +262,7 @@ fn archive_value_errors_are_skipped_but_other_acquisition_errors_propagate() {
 }
 
 #[test]
-fn a_later_metadata_failure_prevents_all_archive_acquisition() {
+fn a_metadata_batch_failure_prevents_all_archive_acquisition() {
     let sandbox = Sandbox::new();
     let server = Server::start(|request, base| {
         if request.path.starts_with("/search/code?") {
@@ -253,17 +271,18 @@ fn a_later_metadata_failure_prevents_all_archive_acquisition() {
             );
         }
         assert_eq!(request.path, "/graphql");
-        let body: Value = serde_json::from_slice(&request.body).unwrap();
-        if body["variables"]["owner"] == "z" {
+        if graphql_repositories(request).iter().any(|entry| entry.owner == "z") {
             return Response {
                 status: 401,
                 ..Response::json(json!({}))
             };
         }
-        Response::json(
-            json!({"data":{"repository":release_metadata(commit(base, "source"), "v1", vec![asset("plugin.zip", format!("{base}/asset"), 1)])}}),
-        )
+        single_graphql(release_metadata(
+            commit(base, "source"),
+            "v1",
+            vec![asset("plugin.zip", format!("{base}/asset"), 1)],
+        ))
     });
     assert!(!snapshot(&sandbox, &server).status.success());
-    assert_eq!(server.requests().len(), 4);
+    assert_eq!(server.requests().len(), 3);
 }

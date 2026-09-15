@@ -88,6 +88,7 @@ The package version alone does not establish behavioral parity.
 | A68 | Automatic redirect construction targets HTTPX 0.28.1 under A45. Comparisons use representable HTTP/HTTPS URLs and normalize only an empty source URL path to its transmitted `/` form. Repository manual redirects retain their separate contract. | Probe percent-encoded hosts/dot segments, backslashes, unusual authorities and ports, non-HTTP schemes, complete URL/error serialization, live proxies/TLS and native Windows. | 480 source target comparisons, 133 expanded GitHub request-policy comparisons and four added owned-server CLI scenarios cover missing-host repair, duplicate Location headers, literal dot segments, fragment inheritance, credentials and Host headers. Complete HTTPX URL and raw-wire equivalence remain open. |
 | A69 | Catalogue retry comparisons use the pinned HCLI functions, CPython 3.13.15 and locked Tenacity 9.1.4 under A45. Time and urllib acquisition are intercepted in memory; native wire fixtures use stable owned loopback endpoints. Python's socket default timeout is unset. | Probe other runtimes, global socket timeout overrides, socket write failures, resets/TLS/proxies, redirect/error presentation, native Windows, real GitHub quotas and cancellation. | 562 actual decorated-function sequences cover nested counters, status/error classification, header precedence and reactive/proactive waits. A paused-clock refused-connection regression checks the production scheduler. CLI fixtures cover retries in all remote catalogue consumers, request replay, cache publication, terminal failures and raw archive bytes. Full catalogue transport/discovery equivalence remains open. |
 | A70 | Archive planning uses valid represented GitHub metadata and the pinned `GithubPluginRepo.get_plugins` collection logic under A45. Repositories are unique, metadata strings are Unicode scalars and sizes fit unsigned 64-bit integers. CLI fixtures use stable owned files and HTTP endpoints. | Probe full Pydantic coercion/malformed models, negative/huge sizes, URL-related ValueError mappings, upstream cache-path interoperability, filesystem name aliases, concurrent cache changes and native Windows. | 550 source collection projections and four added CLI tests cover global phases, tuple sorting, duplicate retention, tag URL deduplication, logical cache identities, cache-before-size ordering and represented acquisition failures. Cache storage remains native and account/origin partitioned; full catalogue/model/transport parity remains open. |
+| A71 | GraphQL batching uses unique normalized ASCII repository identifiers, represented JSON/model values and stable native cache files under A45/A70. | Probe non-ASCII or quoted identifiers, full Pydantic coercion, nonstandard JSON, corrupt/unreadable caches, cache-write failures and concurrent filesystem changes. | 113 upstream query/envelope projections and three CLI tests cover ten-miss batches, partial results, lookup order and query/model failure publication. Cache-write transactions, upstream cache interoperability and complete model/transport equivalence are not established. |
 
 ## Implemented contracts and remaining coverage
 
@@ -127,7 +128,7 @@ imply that every upstream edge case or supported operating system was tested.
 | Repository snapshot envelopes | Dedicated wire models require the plugin list, plugin host, archive URL/hash and complete versioned descriptor. Snapshot version defaults to literal 1; shared schema-version decoding accepts source literal coercions. Location descriptors reuse the local manifest model and serialize their required version while excluding $schema. Version maps preserve input document order, including equal-precedence selection. Exports sort keys, indent by four spaces, escape non-ASCII strings and apply source number formatting. Bundle and installation downloads share case-sensitive hash verification. | Depends on A52/A53. Full metadata coercion, duplicate-key/nonstandard JSON behavior, exact validation reports, repository initialization and broader version-selection behavior remain open. Sorting exported keys can change a version tie after re-import, as upstream does. |
 | Pip offline mode | Group `--offline` changes pip's index policy without disabling repository transport. It requires `--pip-find-links` or an explicit bundle repository, except for upstream's repository-free command groups. A local HTTP fixture verifies repository/archive fetches while pip receives `--no-index`. | Full upstream pip environment classification remains open. The existing Rust search `--offline` and status alias remain separate command options. |
 | Plugin bundles | Separate target, manifest, inspection, publication, download and CLI source-resolution modules. Repository packaging verifies hashes, fetches per platform, groups archives in first-seen order and names them from the first exact-name descriptor. Installation uses archive metadata under A54. All archive repositories share catalogue grouping and ordering under A55/A56; bundle locations retain member URLs and fetch through an owned reader. A57 preserves duplicate name order and last-member lookup; A58 integrates wheelhouse extraction and A59 integrates installation reads. Selected Python, inherited pip sources and 30 platform/Python targets are supported. macOS tag sequences match packaging 26.0 from the upstream lockfile. Downloads use their own source-option order, omit installation-only flags, inherit stdin/environment/cwd and preserve raw decoded failure streams. Bundle consumption flattens wheel files, rejects duplicate basenames, checks target availability even without dependencies, and respects custom sources. | Depends on A41–A50/A54–A59. Real pip wheel resolution, all multi-plugin/native archive combinations, whole-document JSON/model-error equivalence, broader acquisition/loading/selection/reference grammar, compressed-stream partial-write behavior and cross-spec staging order remain open. Tests use fixture wheels and interpreters. |
-| GitHub catalogue | `--repo github`, extra/ignored repository lists, code-search discovery including forks, GraphQL release/tag metadata, distribution and source archives, date/type/size filtering, source identity checks, and account/origin-partitioned caches. Metadata expires after 86,400 seconds; archive bytes persist. A69 adds nested retries and proactive waits. A70 collects metadata before acquisition, orders global asset/source phases, preserves repeated release entries, deduplicates tag URLs within a repository and uses release/name or commit cache identities. Cache lookup precedes the asset download-size check. | Batched GraphQL queries, complete discovery/model coercion, upstream cache paths/formats and filesystem aliases, urllib redirect semantics, additional ValueError/network-error mappings, HTTP failure diagnostics, live private repositories and native Windows remain unverified or incomplete. |
+| GitHub catalogue | `--repo github`, extra/ignored repository lists, code-search discovery including forks, GraphQL release/tag metadata, distribution and source archives, date/type/size filtering, source identity checks, and account/origin-partitioned caches. Metadata expires after 86,400 seconds; archive bytes persist. A69 adds nested retries and proactive waits. A70 collects metadata before acquisition, orders global asset/source phases, preserves repeated release entries, deduplicates tag URLs within a repository and uses release/name or commit cache identities. Cache lookup precedes the asset download-size check. A71 warms metadata in ten-repository GraphQL batches, preserves partial NOT_FOUND results and validates each complete batch before cache publication. | Complete discovery/model coercion, upstream cache paths/formats and filesystem aliases, cache read/error semantics, urllib redirect semantics, additional ValueError/network-error mappings, HTTP failure diagnostics, live private repositories and native Windows remain unverified or incomplete. |
 | Python commands | Exec/script argument passthrough; separate typed doctor and explain reports; environment creation, dependency migration and persistent environment variable configuration. Explicit pip source/offline/build-isolation options and environment-check override. The Python group accepts --no-python-environment-check before the leaf; identically named arguments after exec remain child arguments. | Explain collector edge cases, IDA probe model validation, exhaustive path conversion, subprocess environment/signal behavior and cross-platform configuration edge cases remain open. Creation-specific discovery, doctor policy and execution/install guards and explain reports are covered separately below. Hy reports its own Python interpreter as not applicable because it is native Rust. |
 | Python explain report | Separate report records, installation/runtime collectors, ordered notes and complete text rendering. Overrides preserve their absent IDA probe; version collection resolves independently and uses the bounded version helper. Embedded virtualenv details come from the probe's VIRTUAL_ENV. Mismatch checks cover activated/requested roots before the final interpreter, deduplicating normalized roots. PATH candidates preserve order, deduplicate resolved aliases and exclude uv overlays. Known-installation versions use SDK/directory metadata, while selected-version reporting retains override/registry/SDK/binary/directory provenance. | Depends on A39 and acquisition/model limits under A38. The tested observations and source text rules match; full collector error handling, discovery/metadata equivalence, native Windows, noncanonical paths and terminal Rich behavior remain unverified. Native runtime identity is explicit; no fictitious HCLI Python version or own-venv branch is supplied. |
 | Python doctor | Separate state collection, filesystem observations, ordered findings, setup patterns, context notes and rendering. Version and pip are independent 10 s observations shared with creation; pip remains unknown when the resolution probe marks a managed base interpreter. Explicit HCLI overrides bypass additional IDA probing. All ten checker finding IDs and twelve pattern categories follow source precedence, including early return for a missing override interpreter and a separate unresolved-Python report. Findings retain complete details and concrete hints; arbitrary minimum-version and installation-platform findings were removed. Text groups errors before warnings and includes setup, fixes and context notes. | Depends on A33. The collector uses the selection policy covered under A37 and native installation metadata helpers. Native paths, missing-user-directory handling, live IDA execution, subprocess decoding and Rich wrapping/styling are not fully certified. A native executable has no sys.prefix environment to exclude from shell-venv discovery. |
@@ -789,8 +790,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 272 unit tests and 437
-integration tests on macOS: 709 passed, no failures. A70 records this validation;
+The latest uninterrupted serial all-target run passed 274 unit tests and 440
+integration tests on macOS: 714 passed, no failures. A71 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -831,6 +832,8 @@ Catalogue retries use A69's actual Tenacity-decorated source function, scheduler
 regression and CLI acquisition fixtures.
 Catalogue archive planning and cache identities use A70's source getter-call
 projections and command-level acquisition/order/cache regressions.
+Catalogue GraphQL batching uses A71's actual-client query/envelope comparisons
+and command-level batch/cache-publication regressions.
 The earlier A54 parallel run observed an OAuth callback shutdown
 assertion failure at `src/auth/oauth_tests.rs:158`; that assertion passed in the
 serial run. Its intermittent cause is unknown; port reuse is an unverified
@@ -2680,6 +2683,82 @@ cross-compilation passed. Logs are `/tmp/hy-catalogue-acquisition-full.log`,
 `/tmp/hy-catalogue-acquisition-clippy.log` and `/tmp/hy-catalogue-acquisition-windows.log`.
 The source checkout remained clean at its pinned revision. Full project parity
 remains open under QG3 and QG5.
+
+### GitHub catalogue GraphQL batching and partial results
+
+Under A71, `github/graphql.rs` owns query construction and response envelopes;
+`github/metadata.rs` owns cache warming and individual metadata lookup. The primary
+contracts are `GitHubGraphQLClient.query`, `get_many_releases`, `get_releases`,
+`warm_releases_metadata_cache`, `get_releases_metadata` and the constructor and
+`get_plugins` method of `GithubPluginRepo` in the pinned
+`src/hcli/lib/ida/plugin/repo/github.py`.
+
+Warming probes each repository cache, retains misses in full-name string order
+and queries successive groups of at most ten. Each query resets its aliases to
+`repo0`, `repo1`, etc., shares `first = 10` and requests the upstream release,
+asset, tag and default-branch fields. Subsequent per-repository lookup uses
+`(owner, repository)` tuple order. The distinction is observable for `a/r` and
+`a-b/r`. Existing metadata cache keys and the 86,400-second lifetime are retained.
+
+GraphQL errors are checked before data or model validation. Any non-NOT_FOUND
+record makes the response fatal; its diagnostic includes every such record in
+source order. NOT_FOUND-only responses retain valid aliases. Missing/falsey aliases
+and absent/falsey default branches are skipped with warnings. They are not
+negatively cached, so ordinary lookup retries them individually, including on
+subsequent invocations. Unrequested aliases are ignored.
+
+All returned models in a batch are decoded before any of its cache entries are
+written. A GraphQL or model failure therefore leaves that batch unpublished;
+earlier completed batches remain cached. Cache writes themselves remain sequential:
+a filesystem write failure can leave a written prefix. This is not an atomic
+multi-file transaction. Existing corrupt/unreadable-cache fallback is native and
+does not yet reproduce upstream's exception boundaries.
+
+Evidence:
+
+- 113 read-only comparisons execute upstream `get_many_releases`, intercepting
+  its HTTP opener. They compare query fields and aliases after whitespace
+  normalization, exact variables, selected repository names, failure outcomes
+  and fatal GraphQL diagnostics. Query sizes include 0, 1, 2, 9, 10, 11, 20 and 21;
+  the source method itself accepts more than ten, while the warmer chunks calls.
+  Cases include missing/falsey aliases, invalid branches, extra aliases, invalid
+  envelopes and mixed fatal/NOT_FOUND records. These are envelope projections,
+  not complete Pydantic model-coercion or warning-presentation certification.
+- One CLI test covers 0, 1, 9, 10, 11, 20 and 21 repositories, checks cold batch
+  sizes, verifies zero warm-cache requests and deletes one owned cache entry to
+  verify that only that repository is fetched again.
+- A partial-result fixture checks survivor caching, repeated individual missing
+  lookups and different full-name/tuple ordering across two invocations.
+- A two-batch fixture injects either a fatal GraphQL envelope or an invalid model
+  into the second batch. Recovery fetches both members of that failed batch while
+  retaining the first ten cached repositories. Existing acquisition, retry and
+  archive-cache tests remain enabled with the aliased request protocol.
+
+Bounded findings: **high impact** — publishing models during response traversal
+would preserve a partial failed batch and change the next invocation's requests.
+**Medium impact** — negatively caching missing repositories would suppress source
+retry behavior. **Medium impact** — full-name and tuple ordering differ for valid
+owner prefixes, affecting individual lookup/failure order. **Low impact** — batches
+reduce cold metadata request counts while fully cached invocations issue none.
+
+For R selected repositories and M cache misses, warming performs R cache probes
+and at most ceil(M / 10) queries absent retries. K aliases still missing afterward
+cause K individual lookup queries. Ordering costs O(R log R × L), where L is the
+compared identifier length; retained names require O(R + B) storage for B identifier
+bytes. Query construction and response traversal scale with their represented
+bytes; model validation, serialization and filesystem I/O add their own costs.
+No new response quota or deadline is introduced. Full Pydantic coercion, Python
+JSON edge grammar, cache path/format/read-error equivalence, urllib redirect/error
+mapping, live GitHub and native Windows behavior remain open under QG3 and QG5.
+
+The uninterrupted A71 serial all-target run passed 714 tests: 274 unit tests and
+440 integration tests across 62 suites, with nine existing opt-in tests ignored
+and no failures. The read-only source-oracle configuration was retained. Clippy
+with warnings denied and Windows all-target cross-compilation passed. Logs are
+`/tmp/hy-graphql-batch-full.log`, `/tmp/hy-graphql-batch-clippy.log` and
+`/tmp/hy-graphql-batch-windows.log`. Final readability-only fixture changes were
+checked again with the affected unit/CLI suites and Clippy. Formatting and
+whitespace checks passed. Full project parity remains open.
 
 ### Lint archive discovery, validation and README locations
 

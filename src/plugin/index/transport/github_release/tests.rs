@@ -2,7 +2,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::*;
 
@@ -25,7 +25,7 @@ fn report(result: Result<String>) -> Value {
 #[test]
 fn release_selection_matches_the_actual_upstream_fetch_function() {
     let documents = cases::documents();
-    assert_eq!(documents.len(), 666);
+    assert_eq!(documents.len(), 732);
     let mut cases = Vec::new();
     let mut expected = Vec::new();
     for tag in [None, Some(""), Some("v1/part+build")] {

@@ -3,7 +3,7 @@
 use crate::error::{Error, Result};
 
 // CPython's default decimal-int conversion limit. Floats have no digit limit.
-const MAX_INTEGER_DIGITS: usize = 4300;
+pub(super) const MAX_INTEGER_DIGITS: usize = 4300;
 
 pub(crate) fn normalize_for_validation(document: &str) -> Result<Vec<u8>> {
     let mut bytes = document.as_bytes().to_vec();

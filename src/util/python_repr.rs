@@ -6,6 +6,8 @@ mod numbers;
 mod printable;
 mod strings;
 
+pub(crate) use numbers::float_repr;
+
 pub(crate) fn string_repr(value: &str) -> String {
     let mut output = String::new();
     strings::write_repr(value, &mut output);

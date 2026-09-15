@@ -13,7 +13,7 @@ pub(super) fn repr(value: &Number) -> String {
     float_repr(text.parse().expect("JSON number is valid binary64 input"))
 }
 
-fn float_repr(value: f64) -> String {
+pub(crate) fn float_repr(value: f64) -> String {
     if value.is_nan() {
         return "nan".into();
     }

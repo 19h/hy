@@ -78,7 +78,94 @@ pub(super) fn documents() -> Vec<Vec<u8>> {
     documents.push(text.encode_utf16().flat_map(u16::to_be_bytes).collect());
     documents.push(text.chars().flat_map(|ch| u32::from(ch).to_le_bytes()).collect());
     documents.push(text.chars().flat_map(|ch| u32::from(ch).to_be_bytes()).collect());
+    documents.extend(extended_values());
     documents
+}
+
+fn extended_values() -> Vec<Vec<u8>> {
+    let mut documents = Vec::new();
+    for field in ["extra", "name", "browser_download_url", "size"] {
+        for token in
+            ["NaN", "Infinity", "-Infinity", r#""\ud800""#, r#""\udfff""#, r#""\ud800\udc00""#]
+        {
+            documents.push(raw_field(field, token));
+        }
+    }
+    for name in [r#""\ud800.zip""#, r#""\udfff.ZIP""#, r#""\ud800\udc00.zip""#] {
+        for size in ["0", "104857601"] {
+            let document = String::from_utf8(raw_field("name", name)).unwrap();
+            documents
+                .push(document.replace("\"size\":0", &format!("\"size\":{size}")).into_bytes());
+        }
+    }
+    for text in [
+        r#"{"$serde_json::private::Number":"NaN","assets":[{"name":"a.zip","browser_download_url":"https://mirror.test/a","size":NaN}]}"#,
+        r#"{"assets":[{"name":"a.zip","browser_download_url":"https://mirror.test/a"}],"unused":["\ud800",Infinity]}"#,
+        r#"{"assets":[{"name":"\ud800.zip"},{"name":"other.zip"}]}"#,
+    ] {
+        documents.push(text.as_bytes().to_vec());
+    }
+    for depth in [128, 512, 1100] {
+        let nested = format!("{}0{}", "[".repeat(depth), "]".repeat(depth));
+        documents.push(raw_field("extra", &nested));
+    }
+    for point in [0xd800_u32, 0xdc00, 0xdfff] {
+        for oversized in [false, true] {
+            let text = String::from_utf8(raw_field(
+                "size",
+                if oversized {
+                    "104857601"
+                } else {
+                    "0"
+                },
+            ))
+            .unwrap();
+            let points: Vec<_> = text.chars().map(u32::from).collect();
+            let name_start = text.find("a.zip").unwrap();
+            let mut points = points;
+            points[name_start] = point;
+            for encoding in 0..5 {
+                let mut bytes = Vec::new();
+                for &point in &points {
+                    match encoding {
+                        0 if (0xd800..=0xdfff).contains(&point) => bytes.extend([
+                            0xe0 | (point >> 12) as u8,
+                            0x80 | ((point >> 6) & 0x3f) as u8,
+                            0x80 | (point & 0x3f) as u8,
+                        ]),
+                        0 => bytes.push(u8::try_from(point).unwrap()),
+                        1 => bytes.extend((point as u16).to_le_bytes()),
+                        2 => bytes.extend((point as u16).to_be_bytes()),
+                        3 => bytes.extend(point.to_le_bytes()),
+                        _ => bytes.extend(point.to_be_bytes()),
+                    }
+                }
+                documents.push(bytes);
+            }
+        }
+    }
+    documents
+}
+
+fn raw_field(field: &str, token: &str) -> Vec<u8> {
+    let fields = [
+        ("name", r#""a.zip""#),
+        ("browser_download_url", r#""https://mirror.test/a""#),
+        ("size", "0"),
+        ("extra", "null"),
+    ]
+    .into_iter()
+    .map(|(name, value)| {
+        let value = if name == field {
+            token
+        } else {
+            value
+        };
+        format!("\"{name}\":{value}")
+    })
+    .collect::<Vec<_>>()
+    .join(",");
+    format!("{{\"assets\":[{{{fields}}}]}}").into_bytes()
 }
 
 fn with_size(size: &str) -> Vec<u8> {

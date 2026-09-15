@@ -7,7 +7,7 @@ use crate::error::{Error, Result};
 mod validation;
 pub(crate) use validation::decode as validation_text;
 
-enum Encoding {
+pub(super) enum Encoding {
     Utf8,
     Utf16Le,
     Utf16Be,
@@ -53,7 +53,7 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<Cow<'_, str>> {
     }
 }
 
-fn detect(bytes: &[u8]) -> (Encoding, &[u8]) {
+pub(super) fn detect(bytes: &[u8]) -> (Encoding, &[u8]) {
     for (bom, encoding) in [
         (b"\x00\x00\xfe\xff".as_slice(), Encoding::Utf32Be),
         (b"\xff\xfe\x00\x00".as_slice(), Encoding::Utf32Le),

@@ -1,8 +1,7 @@
 //! Select a direct-install release asset using the upstream decision order.
 
-use serde_json::{Map, Value};
-
 use crate::error::{Error, Result};
+use crate::util::python_json::{self, Object, Text, Value};
 
 use super::github_url::ReleaseSource;
 
@@ -17,9 +16,7 @@ pub(super) fn endpoint(source: &ReleaseSource) -> String {
 }
 
 pub(super) fn select(source: &ReleaseSource, bytes: &[u8]) -> Result<String> {
-    let text = crate::util::json_encoding::decode(bytes)?;
-    crate::util::json_numbers::validate_integer_limits(&text)?;
-    let value: Value = serde_json::from_str(&text)?;
+    let value = python_json::decode(bytes)?;
     let release = object(&value, "release")?;
     let mut candidates = Vec::new();
     if let Some(assets) = release.get("assets") {
@@ -31,20 +28,21 @@ pub(super) fn select(source: &ReleaseSource, bytes: &[u8]) -> Result<String> {
             Value::String(assets) if assets.is_empty() => &[],
             _ => return Err(invalid("assets must yield asset objects")),
         };
+        let empty_name = Text::from("");
         for asset in assets {
             let asset = object(asset, "asset")?;
             let name = match asset.get("name") {
-                None => "",
+                None => &empty_name,
                 Some(Value::String(name)) => name,
                 _ => return Err(invalid("asset name must be a string")),
             };
-            if name.to_lowercase().ends_with(".zip") {
-                candidates.push((name, asset));
+            if name.has_zip_suffix() {
+                candidates.push((name.diagnostic(), asset));
             }
         }
     }
     let (name, asset) = match candidates.as_slice() {
-        [(name, asset)] => (*name, *asset),
+        [(name, asset)] => (name, *asset),
         [] => {
             let tag = source.tag.as_deref().filter(|tag| !tag.is_empty()).unwrap_or("latest");
             return Err(Error::Other(format!(
@@ -53,43 +51,51 @@ pub(super) fn select(source: &ReleaseSource, bytes: &[u8]) -> Result<String> {
             )));
         }
         _ => {
-            let names = candidates.iter().map(|(name, _)| *name).collect::<Vec<_>>().join(", ");
+            let names =
+                candidates.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>().join(", ");
             return Err(Error::Other(format!(
                 "Multiple .zip assets found in release: {names}. Cannot determine which to install."
             )));
         }
     };
-    let default_size = Value::Number(0.into());
-    let size = asset.get("size").unwrap_or(&default_size);
+    let size = asset.get("size");
     // Read the download field before comparing size, as the source does.
     let download =
         asset.get("browser_download_url").ok_or_else(|| invalid("missing browser_download_url"))?;
-    if exceeds_limit(size)? {
-        let size = crate::util::python_repr::json_str(size);
+    if let Some(size) = oversized(size)? {
         return Err(Error::Other(format!(
             "Asset {name} ({size} bytes) exceeds maximum size limit ({MAX_DOWNLOAD_SIZE} bytes)"
         )));
     }
-    download
-        .as_str()
-        .map(str::to_owned)
-        .ok_or_else(|| invalid("browser_download_url must be a string"))
+    match download {
+        Value::String(url) => url.to_utf8(),
+        _ => Err(invalid("browser_download_url must be a string")),
+    }
 }
 
-fn object<'a>(value: &'a Value, description: &str) -> Result<&'a Map<String, Value>> {
-    value.as_object().ok_or_else(|| invalid(&format!("{description} must be an object")))
+fn object<'a>(value: &'a Value, description: &str) -> Result<&'a Object> {
+    match value {
+        Value::Object(object) => Ok(object),
+        _ => Err(invalid(&format!("{description} must be an object"))),
+    }
 }
 
-fn exceeds_limit(size: &Value) -> Result<bool> {
+fn oversized(size: Option<&Value>) -> Result<Option<String>> {
     match size {
-        Value::Bool(_) => Ok(false),
-        Value::Number(number) => {
-            // The threshold is exactly representable as f64. Arbitrarily large
-            // integers can overflow to infinity without changing this comparison.
-            let number =
-                number.to_string().parse::<f64>().map_err(|error| invalid(&error.to_string()))?;
-            Ok(number > MAX_DOWNLOAD_SIZE as f64)
+        None => Ok(None),
+        Some(Value::Bool(value)) => Ok((u64::from(*value) > MAX_DOWNLOAD_SIZE).then(|| {
+            if *value {
+                "True"
+            } else {
+                "False"
+            }
+            .into()
+        })),
+        Some(Value::Integer(value)) => {
+            Ok((value > &MAX_DOWNLOAD_SIZE.into()).then(|| value.to_string()))
         }
+        Some(Value::Float(value)) => Ok((*value > MAX_DOWNLOAD_SIZE as f64)
+            .then(|| crate::util::python_repr::float_repr(*value))),
         _ => Err(invalid("asset size must be a number")),
     }
 }

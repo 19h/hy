@@ -168,3 +168,52 @@ fn selection_and_compressed_response_failures_prevent_asset_fetch_and_installati
         assert_eq!(server.requests().len(), 1);
     }
 }
+
+#[test]
+fn nonfinite_sizes_and_surrogate_metadata_follow_python_selection_through_installation() {
+    for size in ["NaN", "-Infinity", "Infinity"] {
+        for utf16 in [false, true] {
+            let sandbox = Sandbox::new();
+            let path = sandbox.path().join("plugin.zip");
+            archive(&path, "1", &[]);
+            let bytes = fs::read(path).unwrap();
+            let server = Server::start(move |request, base| {
+                if request.path == "/asset" {
+                    return Response::zip(bytes.clone());
+                }
+                let nested = format!("{}\"\\ud800\"{}", "[".repeat(1100), "]".repeat(1100));
+                let document = format!(
+                    r#"{{"assets":[{{"name":"\udfff.ZIP","size":{size},
+                    "browser_download_url":"{base}/asset"}}],"unused":{nested}}}"#,
+                );
+                let body = if utf16 {
+                    document.encode_utf16().flat_map(u16::to_le_bytes).collect()
+                } else {
+                    document.into_bytes()
+                };
+                Response {
+                    status: 200,
+                    content_type: "application/json",
+                    body,
+                }
+            });
+            let output = install(&sandbox, &server);
+            if size == "Infinity" {
+                assert!(!output.status.success());
+                let error = String::from_utf8_lossy(&output.stderr);
+                assert!(
+                    error.contains(
+                        "Asset \\udfff.ZIP (inf bytes) exceeds maximum size limit (104857600 bytes)"
+                    ),
+                    "{error}"
+                );
+                assert_eq!(server.requests().len(), 1);
+                assert!(!sandbox.path().join("idausr/plugins/example").exists());
+            } else {
+                assert_success(&output);
+                assert_eq!(server.requests().len(), 2);
+                assert!(sandbox.path().join("idausr/plugins/example/plugin.py").is_file());
+            }
+        }
+    }
+}

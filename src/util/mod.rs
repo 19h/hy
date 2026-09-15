@@ -11,6 +11,7 @@ pub mod json_encoding;
 pub mod json_numbers;
 pub mod python_datetime;
 pub mod python_integer;
+pub mod python_json;
 pub mod python_path;
 pub mod python_regex;
 pub mod python_repr;

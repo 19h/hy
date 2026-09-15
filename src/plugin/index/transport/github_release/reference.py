@@ -43,7 +43,8 @@ for case in json.load(sys.stdin):
             fetch_github_release_zip_asset("Owner", "Repo.git", case["tag"])
             outcome = {"kind": "selected", "url": requests[-1][0]}
         except ValueError as error:
-            message = str(error)
+            # Model UTF-8 stderr's backslashreplace for unpaired surrogates.
+            message = str(error).encode("utf-8", "backslashreplace").decode("utf-8")
             if message.startswith(("No .zip", "Multiple .zip", "Asset ")):
                 outcome = {"kind": "policy", "message": message}
             else:

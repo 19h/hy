@@ -84,6 +84,7 @@ The package version alone does not establish behavioral parity.
 | A64 | File-URL conversion uses CPython 3.13.15, Unicode 15.1 and the A45 Unix runtime with UTF-8/surrogateescape filesystem encoding. Windows conversion is compared through nturl2path and PureWindowsPath on that runtime. | Probe other filesystem encodings, lone-surrogate input strings, native Windows file operations, arbitrary IPv6/IPvFuture spellings, Unicode normalization contexts, filesystem-specific names and concurrent replacement. | 5,315 conversion comparisons, the complete non-ASCII NFKC-delimiter table, 45 archive reads, six repository-construction comparisons and a direct-install regression cover represented file-URL behavior. This macOS volume rejects invalid UTF-8 filenames; its read failure is compared, while decoding bytes are tested independently. Full HTTP transport and native Windows execution remain open. |
 | A65 | Repository fetch policy is compared with the pinned source and HTTPX in the A45 runtime. The source client uses an in-memory transport; native wire regressions use owned HTTP loopback servers. Authentication resolution is replaced with deterministic empty or API-key headers in the policy oracle. | Probe real authentication refresh, arbitrary HTTPX URL normalization/joining, proxies/TLS, duplicate headers, malformed wire responses, timeout phases, optional content codecs and native Windows networking. | 231 response-sequence comparisons and 280 raw-host decisions pass. Three CLI regressions cover 37 wire scenarios. Lazy credential reuse, exact redirect statuses, represented cookie transitions, decoding order and entitlement diagnostics agree within this corpus. Generic HTTP diagnostics, URL serialization and phase deadlines remain distinct or unverified. |
 | A66 | Direct GitHub release acquisition uses the pinned source and A45 runtime. Ordinary JSON values and represented UTF byte encodings are compared through the actual source fetch function with intercepted GET operations. Redirect policy uses actual HTTPX client handling over MockTransport. | Probe Python JSON nonfinite constants, lone surrogates, nesting limits, malformed/normalized URL forms, live TLS/proxy behavior, phase deadlines, optional codecs and native Windows execution. | 1,998 selection comparisons and 125 HTTP transition comparisons pass. Three added CLI regressions cover eleven owned-server scenarios. Asset defaults, delayed field access, numeric size decisions, selection diagnostics, request headers, separate cookies and represented redirect/error order agree. General JSON and HTTPX URL equivalence remain open. |
+| A67 | Release JSON uses CPython 3.13.15, Unicode 15.1 and its default 4,300-digit integer limit as the decoding oracle. Strings retain Unicode code points, including surrogates. Policy diagnostics project the runtime's UTF-8 stderr/backslashreplace behavior. | Probe other Python/Unicode runtimes, configured integer limits, nondefault stderr encodings, exact JSON exception diagnostics and resource-failure boundaries. Audit other JSON consumers independently before adopting the reader. | 2,012 decoder comparisons, complete Unicode scalar scans for ZIP-letter lowercase mappings, 2,196 release-selection comparisons and six added CLI scenarios pass. Native parsing and destruction are iterative. A separate source probe accepts depth 5,000 but rejects 10,000; the native stability fixture accepts 10,000, so runtime resource-limit parity is not established. |
 
 ## Implemented contracts and remaining coverage
 
@@ -110,7 +111,8 @@ imply that every upstream edge case or supported operating system was tested.
 | Direct installation source selection | A63 uses upstream branch order for editable directories, regular plugin directories, existing lowercase `.zip` paths, `file://`, recognized GitHub URLs, lowercase `https://`, and repository references. GitHub owner/repository/tag parsing preserves source spelling after recognition. | Full command diagnostic text, native Windows path behavior, URL decoding/serialization, transport policy and malformed release-response handling remain open. |
 | File-URL acquisition | A64 shares source-compatible decoding between archive fetching and repository construction. Authority validation is separate from local path selection; semicolons, encoded delimiters, trailing spaces, symlink/parent traversal and Unix filesystem bytes are retained under source rules. | Non-UTF-8 filesystem encodings, lone-surrogate input strings, native Windows execution and arbitrary filesystem/authority edge cases remain unverified. |
 | Repository HTTP policy | A65 resolves credentials lazily once per fetch, attaches them only to eligible raw HTTPS hosts, follows the five source redirect statuses with Location, retains per-fetch cookies, decodes bodies before status handling and distinguishes missing credentials, rejected credentials and entitlement denial. | HTTPX URL serialization/joining, generic HTTP diagnostic text, proxy/TLS and timeout-phase behavior, live credentials and native Windows networking remain open. Direct GitHub release transport has a separate source contract. |
-| Direct GitHub release acquisition | A66 selects ZIP assets after inspecting names, reads size/download fields only for the sole candidate, applies the source 104,857,600-byte metadata limit, and supplies separate metadata/asset HTTP operations with source Accept values and 30 s/60 s connect/read settings. Twenty redirects are permitted; final HTTP errors precede final-scheme downgrade checks. | Nonfinite JSON tokens, lone surrogates, nesting limits, arbitrary HTTPX URL construction, generic error presentation, write/pool timeout semantics, TLS/proxies and native Windows execution remain open. |
+| Direct GitHub release acquisition | A66 selects ZIP assets after inspecting names, reads size/download fields only for the sole candidate, applies the source 104,857,600-byte metadata limit, and supplies separate metadata/asset HTTP operations with source Accept values and 30 s/60 s connect/read settings. Twenty redirects are permitted; final HTTP errors precede final-scheme downgrade checks. A67 accepts source nonfinite numbers, preserves surrogate strings and handles represented deep metadata. | Exact Python resource-failure boundaries, arbitrary HTTPX URL construction, generic error presentation, write/pool timeout semantics, TLS/proxies and native Windows execution remain open. |
+| Python JSON values in release metadata | A67 supplies a typed reader for null, booleans, arbitrary integers, binary64 floats, Python strings, arrays and ordered objects. It preserves nonfinite numbers, surrogate code points, signed floating zero and duplicate-key replacement order. UTF-8/16/32 byte decoding shares source encoding detection. | Adoption by other API/model/configuration JSON consumers is not implied. Full malformed-input diagnostic text, custom Python runtime limits and exact recursion/memory-failure behavior remain open. |
 | Editable package registration | `src` layouts write `_hcli_editable_NAME.pth` into the selected IDA interpreter's `sysconfig` purelib directory. Flat/regular replacements remove stale registrations. Uninstall removes links and registrations while retaining source files. Broken entries can be replaced or removed. Staged registration errors preserve the old plugin; cleanup skips interpreter-discovery failures, matching upstream. A real isolated Python process imports the fixture and observes later source edits. | Windows symlink/registration execution and live IDA imports remain unverified. Registrations left in a previously selected interpreter, and stale filenames after name-case changes on case-sensitive filesystems, remain open. |
 | Installed plugin inventory | Managed operations share records whose descriptors, referenced files and exact directory names validate. Broken directories do not enter dependency preflight, search, upgrades or configuration. Unfiltered status separately lists minimal descriptors and single-file legacy plugins; named status accepts only managed records and retains requested order/repetitions. Broken entries remain removable by filesystem name, including UTF-8 legacy names. | Directory entries are sorted for deterministic reports rather than retaining upstream filesystem iteration order. Case-colliding installed names produce errors in destructive/metadata lookup paths; upstream may select its first record. Non-UTF-8 filenames and exhaustive Unicode case conversion remain unverified. |
 | Python dependency metadata | Installation, dependency preflight and migration resolve explicit requirements or PEP 723 inline metadata. Lint does not resolve dependency scripts. Bundle creation collects explicit lists only and leaves inline metadata untouched, matching its source-specific policy. Tests cover archives, directories, editable sources, retained neighbors, malformed scripts and later installation from an inline-only bundle. Plugin code is not executed to extract requirements. | Depends on A45 for bundle collection. Migration and real wheel resolution still need end-to-end verification. Non-string TOML dependency entries are rejected during parsing; upstream returns them and fails downstream. |
@@ -783,8 +785,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 260 unit tests and 427
-integration tests on macOS: 687 passed, no failures. A66 records this validation;
+The latest uninterrupted serial all-target run passed 263 unit tests and 428
+integration tests on macOS: 691 passed, no failures. A67 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -817,6 +819,8 @@ Repository redirect, credential and response policy uses A65's actual-source
 comparisons and production-client wire regressions.
 Direct GitHub release selection and acquisition use A66's source-function,
 HTTPX-transition and owned-server installation comparisons.
+Release JSON values and byte encodings use A67's CPython decoder projections,
+expanded source-selection corpus and installation regressions.
 The earlier A54 parallel run observed an OAuth callback shutdown
 assertion failure at `src/auth/oauth_tests.rs:158`; that assertion passed in the
 serial run. Its intermittent cause is unknown; port reuse is an unverified
@@ -2213,16 +2217,17 @@ is checked—no new actual-body quota is imposed. No-asset, multiple-asset and
 oversize diagnostics match the source strings, including tag/owner/repository and
 Python numeric formatting.
 
-Metadata bytes use the existing CPython JSON encoding adapter and 4,300-digit
-integer limit before serde decoding. This accepts the represented UTF-8 BOM,
-UTF-16 and UTF-32 documents. It does not establish all Python JSON semantics:
-literal NaN/Infinity tokens, unpaired surrogate strings and differing nesting
-limits remain known decoder gaps. Finite JSON numeric syntax that overflows
-binary64, such as `1e309`, is covered separately from those literal tokens.
+The A66 implementation used the existing CPython JSON encoding adapter and
+4,300-digit integer limit before serde decoding. That accepted the represented
+UTF-8 BOM, UTF-16 and UTF-32 documents, but rejected literal NaN/Infinity tokens
+and unpaired surrogate strings and imposed a different nesting limit. A67 below
+replaces that release decoder. Finite JSON numeric syntax that overflows binary64,
+such as `1e309`, was covered separately from those literal tokens under A66.
 A separate read-only probe confirmed that source sizes `NaN` and `-Infinity`
 select the archive, while `Infinity` produces the policy error with `inf bytes`.
-The native serde decoder rejects these three literal forms before selection;
-those observed source outcomes are not counted as passing comparisons.
+The A66 native serde decoder rejected these three literal forms before selection;
+those observed source outcomes were not counted as passing A66 comparisons.
+They are covered by the expanded A67 comparisons.
 
 Evidence:
 
@@ -2287,6 +2292,107 @@ using the full command recorded under A61. Corpus sizes are asserted in the new
 tests. Rustfmt, whitespace checks, Clippy with warnings denied and Windows
 all-target cross-compilation passed. The upstream checkout remained clean at the
 pinned revision. QG3 and QG5 remain open for the recorded remaining contracts.
+
+### Python JSON values and release metadata
+
+Under A67, `src/util/python_json` supplies a typed JSON reader used by direct
+GitHub release selection. The observed contract is `json.loads(response.content)`
+inside the pinned `fetch_github_release_zip_asset`, using the A45 CPython 3.13.15
+runtime. Its standard-library JSON implementation resides under
+`/opt/homebrew/Cellar/python@3.13/3.13.15/Frameworks/Python.framework/Versions/3.13/lib/python3.13/json`.
+The decoding oracle invokes that runtime's actual `json.loads`, including its C
+accelerator, rather than reproducing JSON rules in the oracle.
+
+Values distinguish null, booleans, arbitrary-precision integers, binary64 floats,
+strings, arrays and ordered objects. NaN and positive/negative infinity remain
+float values. They are not replaced by zero or string markers. Integer syntax
+retains integer identity, while fractional/exponent syntax retains binary64 value
+and signed zero. The shared default integer digit limit remains 4,300. Release
+size comparison now uses exact integer comparison for integers and native IEEE 754
+comparison for floats: NaN and negative infinity do not exceed the limit; positive
+infinity does and displays as `inf` in the policy diagnostic.
+
+The byte reader shares existing JSON encoding detection and implements
+surrogatepass decoding for UTF-8, UTF-16 and UTF-32. Python strings are stored as
+Unicode code points so unpaired surrogates are retained. Escaped UTF-16 surrogate
+pairs combine into a supplementary code point; raw UTF-8 surrogate sequences retain
+their separate code points, as Python does. Object keys compare these retained
+values, and replacing a duplicate key preserves its original insertion position.
+Names resembling serde's private number marker remain ordinary object fields.
+
+Consumers perform conversion only where needed. Release ZIP suffix checks operate
+on retained code points. Download URLs require a Unicode scalar string and reject
+unpaired surrogates at that boundary. Asset names can contain surrogates without
+preventing selection or installation. Diagnostic rendering escapes unencodable
+surrogates as `\ud800`-style text, matching the observed source runtime's UTF-8
+stderr with `backslashreplace`. Other stream encoding/error policies remain outside
+that result.
+
+Container parsing uses an explicit stack. Completed values are attached to their
+parent array/object until the root is complete. Destruction also drains child values
+iteratively, so a deeply nested ignored field does not merely postpone a Rust
+stack overflow until the parsed document is dropped. No fixed nesting quota is
+added. The first oracle run rejected the initial assumption that Python's default
+recursion limit of 1,000 defines the JSON depth limit: the source accepted depth
+1,100. A separate plain-json probe accepted 1,000, 1,100, 1,500, 2,000 and 5,000,
+but raised RecursionError at 10,000 and 20,000. The exact boundary and its dependence
+on runtime/call context remain unknown. The native stability test accepts and drops
+depth 10,000; this is not claimed as source resource-failure equivalence.
+
+Evidence:
+
+- 2,012 byte-document comparisons cover literal spelling, whitespace, number
+  grammar, arbitrary integers around the digit limit, binary64 rounding/overflow/
+  underflow, escapes, surrogate pairs and unpaired surrogates, duplicate keys,
+  malformed syntax, six UTF encodings/BOM forms, raw surrogate encodings and deep
+  arrays/objects through 1,100 levels. Deterministic insertion/deletion mutations
+  exercise punctuation and quoted input. Successful results compare flat,
+  lossless projections: integer decimal strings, float bits, string/key code points
+  and ordered container structure. Failures compare rejection, not exception text.
+- The oracle scans every Unicode code point for lowercase mappings to `z`, `i`
+  and `p`, confirming the represented ZIP-letter mapping uses only the corresponding
+  ASCII uppercase/lowercase letters on Unicode 15.1.
+- The existing release oracle expands from 666 to 732 documents under three tag
+  states: 2,196 comparisons. New cases cover nonfinite values in selected and
+  ignored fields, surrogate names/URLs, raw UTF-8/16/32 surrogates, deep ignored
+  arrays, ambiguity diagnostics and ordinary private-marker-like object keys.
+  Policy diagnostics are compared after the stated source stderr projection.
+- Six new owned-server CLI scenarios combine three nonfinite sizes with UTF-8
+  and UTF-16 metadata, surrogate names and ignored fields nested 1,100 levels deep.
+  NaN and negative infinity install the expected plugin; positive infinity returns
+  the source oversize message without downloading an archive or creating the plugin.
+- Native regressions independently check scalar identity, arbitrary integers,
+  reserved-looking object keys, surrogate preservation and iterative destruction.
+
+The decoder and release oracles run with `-I -B` and filesystem-mutation audit
+guards. Rust creates fixtures. This reader is adopted only for release metadata;
+other JSON APIs, models, configuration and snapshot consumers retain their existing
+contracts and require separate migration evidence. Exact syntax-error text,
+runtime-adjusted integer limits, source C-stack exhaustion, allocation failures and
+other-platform runtime behavior remain open. The new code does not close QG3 or QG5
+for the full project.
+
+**High impact:** rejecting an ignored surrogate/nonfinite field prevented an
+otherwise valid release from installing. **Medium impact:** a small parser nesting
+limit rejected source-accepted metadata; recursive destruction could recreate the
+same failure after parsing. **Medium impact:** encoding Python nonfinite numbers
+as ordinary JSON values loses the source's comparison and display semantics.
+
+For B input bytes and N decoded nodes, decoding, syntax scanning, container assembly
+and iterative destruction take O(B + N) work apart from numeric conversion and
+expected hash-map operations. Integer conversion has an O(D²) upper bound for at
+most D = 4,300 decimal digits; float conversion scans its input spelling without
+that integer limit. Retained input/value/container storage is O(B + N), with explicit
+parse/drop stacks bounded by the represented data. No new byte quota, elapsed-time
+deadline or source-equivalent resource-exhaustion bound is implied.
+
+The uninterrupted A67 serial all-target run passed 691 tests: 263 unit tests and
+428 integration tests across 62 suites, with nine existing opt-in tests ignored
+and no failures. It enabled both established source runtimes and the lint oracle,
+using the full command recorded under A61. Decoder and release corpus sizes are
+asserted in their tests. Rustfmt, whitespace checks, Clippy with warnings denied
+and Windows all-target cross-compilation passed. The source checkout remained
+clean at the pinned revision. Full project parity remains open under QG3 and QG5.
 
 ### Lint archive discovery, validation and README locations
 

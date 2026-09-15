@@ -52,10 +52,8 @@ impl Client {
 
     async fn candidates(&self) -> Result<BTreeSet<String>> {
         let key = self.cache_key("candidates");
-        if let Some(bytes) = cache::read(&key, Some(METADATA_LIFETIME))
-            && let Ok(candidates) = serde_json::from_slice(&bytes)
-        {
-            return Ok(candidates);
+        if let Some(bytes) = cache::read(&key, Some(METADATA_LIFETIME))? {
+            return Ok(serde_json::from_slice(&bytes)?);
         }
         let mut repositories = BTreeSet::new();
         for query in ["filename:ida-plugin.json", "filename:ida-plugin.json fork:true"] {
@@ -82,7 +80,7 @@ impl Client {
 
     async fn archive(&self, archive: &acquisition::Archive) -> Result<Option<Vec<u8>>> {
         let key = self.cache_key(&archive.cache_resource());
-        if let Some(bytes) = cache::read(&key, None) {
+        if let Some(bytes) = cache::read(&key, None)? {
             return Ok(Some(bytes));
         }
         // Upstream consults its cache before download_release_asset checks size.

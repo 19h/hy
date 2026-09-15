@@ -8,11 +8,12 @@ const BATCH_SIZE: usize = 10;
 
 impl Client {
     pub(super) async fn warm_releases(&self, repositories: &[String]) -> Result<()> {
-        let missing: Vec<_> = repositories
-            .iter()
-            .filter(|name| self.cached_releases(name).is_none())
-            .cloned()
-            .collect();
+        let mut missing = Vec::new();
+        for name in repositories {
+            if self.cached_releases(name)?.is_none() {
+                missing.push(name.clone());
+            }
+        }
         for batch in missing.chunks(BATCH_SIZE) {
             let releases = self.query_releases(batch).await?;
             for (name, repository) in releases {
@@ -23,7 +24,7 @@ impl Client {
     }
 
     pub(super) async fn releases(&self, name: &str) -> Result<Repository> {
-        if let Some(repository) = self.cached_releases(name) {
+        if let Some(repository) = self.cached_releases(name)? {
             return Ok(repository);
         }
         // Missing aliases are not negatively cached by the warming pass.
@@ -46,10 +47,11 @@ impl Client {
         graphql::decode(repositories, response)
     }
 
-    fn cached_releases(&self, name: &str) -> Option<Repository> {
+    fn cached_releases(&self, name: &str) -> Result<Option<Repository>> {
         let key = self.cache_key(&format!("releases-v2/{name}"));
-        let bytes = cache::read(&key, Some(METADATA_LIFETIME))?;
-        serde_json::from_slice(&bytes).ok()
+        cache::read(&key, Some(METADATA_LIFETIME))?
+            .map(|bytes| serde_json::from_slice(&bytes).map_err(Into::into))
+            .transpose()
     }
 
     fn store_releases(&self, name: &str, repository: &Repository) -> Result<()> {

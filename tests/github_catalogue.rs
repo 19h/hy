@@ -4,6 +4,8 @@
 mod acquisition;
 #[path = "github_catalogue/batching.rs"]
 mod batching;
+#[path = "github_catalogue/cache.rs"]
+mod cache;
 mod support;
 
 use std::collections::HashMap;

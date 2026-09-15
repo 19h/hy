@@ -87,9 +87,8 @@ async fn observe(steps: &[Step]) -> Value {
     .await;
     let outcome = match result {
         Ok(response) => json!({"status": response.status().as_u16()}),
-        Err(Error::Other(message)) => json!({"error": if message.starts_with("invalid GitHub") {
-            "header"
-        } else if message.contains("binary64") {
+        Err(Error::GitHubValue(_)) => json!({"error": "header"}),
+        Err(Error::Other(message)) => json!({"error": if message.contains("binary64") {
             "overflow"
         } else { &message }}),
         Err(error) => panic!("unexpected retry error: {error}"),

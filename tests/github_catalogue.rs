@@ -1,5 +1,7 @@
 //! GitHub discovery contracts exercised against a local REST/GraphQL fixture.
 
+#[path = "github_catalogue/acquisition.rs"]
+mod acquisition;
 mod support;
 
 use std::collections::HashMap;

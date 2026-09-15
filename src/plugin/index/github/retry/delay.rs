@@ -49,7 +49,7 @@ fn reset_delta(value: &str, now: impl Fn() -> f64) -> Result<f64> {
 
 fn integer(value: &str, name: &str) -> Result<BigInt> {
     python_integer::parse(value)
-        .ok_or_else(|| Error::Other(format!("invalid GitHub rate-limit header: {name}")))
+        .ok_or_else(|| Error::GitHubValue(format!("invalid GitHub rate-limit header: {name}")))
 }
 
 fn header(headers: &HeaderMap, name: &str) -> Option<String> {

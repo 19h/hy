@@ -10,6 +10,7 @@ use serde_json::json;
 use super::{ArchiveCatalogue, LoadedRepository};
 use crate::error::{Error, Result};
 
+mod acquisition;
 mod cache;
 mod http;
 mod models;
@@ -18,8 +19,6 @@ mod retry;
 use models::{GraphResponse, Repository, SearchResponse};
 
 const METADATA_LIFETIME: Duration = Duration::from_secs(86_400);
-const FIRST_RELEASE_DATE: &str = "2025-09-01";
-const MAX_ASSET_BYTES: u64 = 100 * 1024 * 1024;
 
 #[derive(Debug, Default)]
 pub struct Options {
@@ -81,7 +80,8 @@ impl Client {
     }
 
     async fn releases(&self, repository: &str) -> Result<Repository> {
-        let key = self.cache_key(&format!("releases/{repository}"));
+        // Earlier entries lack tagName, which is part of asset cache identity.
+        let key = self.cache_key(&format!("releases-v2/{repository}"));
         if let Some(bytes) = cache::read(&key, Some(METADATA_LIFETIME))
             && let Ok(releases) = serde_json::from_slice(&bytes)
         {
@@ -106,21 +106,31 @@ impl Client {
         Ok(repository)
     }
 
-    async fn archive(&self, url: &str) -> Result<Vec<u8>> {
-        let key = self.cache_key(&format!("archive/{url}"));
+    async fn archive(&self, archive: &acquisition::Archive) -> Result<Option<Vec<u8>>> {
+        let key = self.cache_key(&archive.cache_resource());
         if let Some(bytes) = cache::read(&key, None) {
-            return Ok(bytes);
+            return Ok(Some(bytes));
         }
+        // Upstream consults its cache before download_release_asset checks size.
+        if archive.exceeds_download_limit() {
+            return Ok(None);
+        }
+        let url = &archive.url;
         if self.offline {
             return Err(Error::Other(format!("archive unavailable offline: {url}")));
         }
-        let bytes = if url.starts_with("file://") {
-            super::fetch(url).await?
+        let result = if url.starts_with("file://") {
+            super::fetch(url).await
         } else {
-            http::download(url).await?
+            http::download(url).await
+        };
+        let bytes = match result {
+            Ok(bytes) => bytes,
+            Err(Error::GitHubValue(_)) => return Ok(None),
+            Err(error) => return Err(error),
         };
         cache::write(&key, &bytes)?;
-        Ok(bytes)
+        Ok(Some(bytes))
     }
 }
 
@@ -150,37 +160,6 @@ fn read_list(path: Option<&Path>) -> Result<BTreeSet<String>> {
         .collect()
 }
 
-fn archive_urls(repository: &Repository) -> Vec<String> {
-    let mut assets = BTreeSet::new();
-    let mut sources = BTreeSet::new();
-    for release in &repository.releases.nodes {
-        if release.published_at.as_deref().is_none_or(|date| date < FIRST_RELEASE_DATE) {
-            continue;
-        }
-        if let Some(tag) = &release.tag {
-            sources.insert(tag.target.commit().zipball_url.clone());
-        }
-        for asset in &release.release_assets.nodes {
-            if asset.size <= MAX_ASSET_BYTES
-                && asset.name.to_lowercase().ends_with(".zip")
-                && matches!(
-                    asset.content_type.as_str(),
-                    "application/zip" | "application/x-zip-compressed" | "raw"
-                )
-            {
-                assets.insert(asset.download_url.clone());
-            }
-        }
-    }
-    for reference in &repository.refs.nodes {
-        let commit = reference.target.commit();
-        if reference.name.starts_with('v') && commit.committed_date.as_str() >= FIRST_RELEASE_DATE {
-            sources.insert(commit.zipball_url.clone());
-        }
-    }
-    assets.into_iter().chain(sources).collect()
-}
-
 pub async fn load(options: &Options, offline: bool) -> Result<LoadedRepository> {
     let token = crate::config::Env::global()
         .github_token
@@ -198,7 +177,7 @@ pub async fn load(options: &Options, offline: bool) -> Result<LoadedRepository> 
     repositories.extend(extra);
     repositories.retain(|repository| !ignored.contains(repository));
     let mut loaded = LoadedRepository::empty();
-    let mut catalogue = ArchiveCatalogue::default();
+    let mut metadata = Vec::new();
     for name in repositories {
         let repository = match client.releases(&name).await {
             Ok(repository) => repository,
@@ -208,10 +187,13 @@ pub async fn load(options: &Options, offline: bool) -> Result<LoadedRepository> 
             }
             Err(error) => return Err(error),
         };
-        let host = format!("https://github.com/{name}");
-        for url in archive_urls(&repository) {
-            let bytes = client.archive(&url).await?;
-            super::archive::add_bytes(&mut catalogue, &bytes, &url, Some(&host))?;
+        metadata.push((name, repository));
+    }
+    let mut catalogue = ArchiveCatalogue::default();
+    for archive in acquisition::Plan::from_repositories(metadata).into_archives() {
+        if let Some(bytes) = client.archive(&archive).await? {
+            let host = format!("https://github.com/{}", archive.repository);
+            super::archive::add_bytes(&mut catalogue, &bytes, &archive.url, Some(&host))?;
         }
     }
     loaded.snapshot.plugins = catalogue.into_plugins()?;

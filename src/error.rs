@@ -63,6 +63,10 @@ pub enum Error {
     Io(#[from] std::io::Error),
 
     // ── Plugin errors ───────────────────────────────────────────────────
+    /// Python ValueError from catalogue acquisition; archive callers skip it.
+    #[error("{0}")]
+    GitHubValue(String),
+
     #[error("{0}")]
     PluginAccessDenied(#[from] PluginAccessDenied),
 

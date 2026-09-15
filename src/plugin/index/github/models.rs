@@ -18,6 +18,8 @@ pub struct Repository {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Release {
+    #[serde(default)]
+    pub tag_name: String,
     pub published_at: Option<String>,
     pub release_assets: Connection<Asset>,
     pub tag: Option<Reference>,

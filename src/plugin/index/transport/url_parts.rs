@@ -4,7 +4,7 @@
 
 use crate::error::Result;
 
-pub(super) mod authority;
+pub(in crate::plugin::index) mod authority;
 
 pub(super) struct Parts {
     pub scheme: String,

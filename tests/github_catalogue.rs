@@ -12,6 +12,8 @@ mod cache_layout;
 mod discovery;
 #[path = "github_catalogue/models.rs"]
 mod models;
+#[path = "github_catalogue/redirect.rs"]
+mod redirect;
 mod support;
 
 use std::collections::HashMap;

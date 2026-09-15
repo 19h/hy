@@ -1,4 +1,4 @@
-//! GitHub catalogue request retries, before response-body consumption.
+//! GitHub catalogue retries include redirects but precede final-body consumption.
 
 use std::future::Future;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -14,12 +14,20 @@ pub(super) async fn send(
     client: &reqwest::Client,
     request: reqwest::Request,
 ) -> Result<reqwest::Response> {
+    // urllib attaches redirect_dict to the original Request, so retries share it.
+    let mut history = super::redirect::History::default();
     execute(
-        || async {
+        async || {
             let request = request.try_clone().ok_or_else(|| {
                 Failure::Terminal(Error::Other("GitHub request body cannot be replayed".into()))
             })?;
-            client.execute(request).await.map_err(Failure::from)
+            super::redirect::send(client, request, &mut history).await.map_err(
+                |error| match error {
+                    Error::Http(error) => Failure::from(error),
+                    error @ Error::GitHubUrl(_) => Failure::Transient(error),
+                    error => Failure::Terminal(error),
+                },
+            )
         },
         tokio::time::sleep,
         timestamp,
@@ -42,10 +50,9 @@ impl From<reqwest::Error> for Failure {
     }
 }
 
-async fn execute<S, SF, W, WF, C>(mut send: S, mut wait: W, now: C) -> Result<reqwest::Response>
+async fn execute<S, W, WF, C>(mut send: S, mut wait: W, now: C) -> Result<reqwest::Response>
 where
-    S: FnMut() -> SF,
-    SF: Future<Output = std::result::Result<reqwest::Response, Failure>>,
+    S: AsyncFnMut() -> std::result::Result<reqwest::Response, Failure>,
     W: FnMut(Duration) -> WF,
     WF: Future<Output = ()>,
     C: Fn() -> f64,

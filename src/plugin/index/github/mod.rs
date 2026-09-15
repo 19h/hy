@@ -15,6 +15,7 @@ mod graphql;
 mod http;
 mod metadata;
 mod models;
+mod redirect;
 mod retry;
 
 const METADATA_LIFETIME: Duration = Duration::from_secs(86_400);

@@ -2,7 +2,7 @@
 
 use crate::error::{Error, Result};
 
-pub(in crate::plugin::index::transport) fn validate(authority: &str) -> Result<()> {
+pub(in crate::plugin::index) fn validate(authority: &str) -> Result<()> {
     if authority.contains('[') != authority.contains(']') {
         return Err(invalid());
     }

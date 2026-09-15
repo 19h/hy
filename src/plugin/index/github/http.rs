@@ -1,4 +1,4 @@
-//! Catalogue HTTP acquisition; response bodies are read outside the retry loop.
+//! Catalogue HTTP acquisition; final response bodies are read outside retries.
 
 use reqwest::{Client, Response, header, redirect::Policy};
 
@@ -7,13 +7,13 @@ use crate::error::{Error, Result};
 use super::retry;
 
 pub(super) fn metadata_client() -> Result<Client> {
-    client(Policy::none())
+    client()
 }
 
-fn client(redirects: Policy) -> Result<Client> {
+fn client() -> Result<Client> {
     Ok(Client::builder()
-        .user_agent(concat!("hy/", env!("CARGO_PKG_VERSION")))
-        .redirect(redirects)
+        .user_agent("Python-urllib/3.13")
+        .redirect(Policy::none())
         .retry(reqwest::retry::never())
         .default_headers(header::HeaderMap::from_iter([
             (header::ACCEPT_ENCODING, header::HeaderValue::from_static("identity")),
@@ -29,7 +29,7 @@ fn client(redirects: Policy) -> Result<Client> {
 }
 
 pub(super) async fn download(url: &str) -> Result<Vec<u8>> {
-    let client = client(Policy::limited(10))?;
+    let client = client()?;
     let response = retry::send(&client, client.get(url).build()?).await?;
     require_success(&response)?;
     // urllib returns the payload as received. A truncated body must not restart

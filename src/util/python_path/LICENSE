@@ -13,6 +13,11 @@ The NFKC delimiter classification is pinned to Unicode 15.1 rather than a host
 normalization library. Windows conversion is compared through pure path objects;
 native Windows filesystem execution is not established by that comparison.
 
+The catalogue redirect target adapter in plugin/index/github/redirect/target.rs
+also adapts CPython v3.13.15 Lib/urllib/parse.py and Lib/urllib/request.py.
+Changes: Rust owned URL components and byte headers replace Python objects;
+request transport remains separate from lexical target construction.
+
 Copyright (c) 2001-2024 Python Software Foundation; All Rights Reserved
 
 PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2

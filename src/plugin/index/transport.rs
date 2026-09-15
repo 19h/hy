@@ -11,7 +11,7 @@ mod github_release;
 mod github_url;
 mod repository;
 mod response;
-mod url_parts;
+pub(super) mod url_parts;
 
 pub(super) use file_url::path as local_file_path;
 

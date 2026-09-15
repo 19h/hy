@@ -117,3 +117,88 @@ fn discovery_is_cached_before_selected_name_failures_and_can_be_reused_after_fil
         assert_eq!(server.requests().len(), 2);
     }
 }
+
+#[test]
+fn cached_objects_use_keys_and_cached_strings_use_characters_without_refreshing() {
+    for (root, ignored, expected_repositories) in [
+        (json!({"Owner/Repo": [null, {"unused": true}]}), "", vec!["repo"]),
+        (json!({}), "", vec![]),
+        (json!(""), "", vec![]),
+        (json!("Aa/🧠"), "a\n/\n🧠\n", vec![]),
+        (json!({"invalid": false, "OWNER/REPO": null}), "invalid\n", vec!["repo"]),
+    ] {
+        let sandbox = Sandbox::new();
+        let cache = sandbox.path().join("cache");
+        fs::create_dir_all(&cache).unwrap();
+        let path = cache.join("candidate_repos.json");
+        let bytes = serde_json::to_vec(&root).unwrap();
+        fs::write(&path, &bytes).unwrap();
+        let ignored_path = sandbox.path().join("ignored.txt");
+        fs::write(&ignored_path, ignored).unwrap();
+        let names = expected_repositories.clone();
+        let server = Server::start(move |request, base| {
+            assert_eq!(request.path, "/graphql");
+            let actual: Vec<_> =
+                graphql_repositories(request).into_iter().map(|entry| entry.name).collect();
+            assert_eq!(actual, names);
+            graphql_response(request, |_, _| empty_repository(base))
+        });
+        assert_success(&snapshot(
+            &sandbox,
+            &server,
+            &["--with-ignored-repos-list", ignored_path.to_str().unwrap()],
+        ));
+        assert_eq!(server.requests().len(), usize::from(!expected_repositories.is_empty()));
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn invalid_candidate_root_values_fail_without_network_or_cache_publication() {
+    for root in [json!(null), json!(true), json!(1), json!([null]), json!([[]]), json!([{}])] {
+        let sandbox = Sandbox::new();
+        let cache = sandbox.path().join("cache");
+        fs::create_dir_all(&cache).unwrap();
+        let path = cache.join("candidate_repos.json");
+        let bytes = serde_json::to_vec(&root).unwrap();
+        fs::write(&path, &bytes).unwrap();
+        let server = Server::start(|_, _| Response {
+            status: 401,
+            ..Response::json(json!({}))
+        });
+        assert!(!snapshot(&sandbox, &server, &[]).status.success(), "{root}");
+        assert!(server.requests().is_empty(), "{root}");
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn scalar_search_names_finish_pagination_but_unhashable_names_stop_immediately() {
+    for name in [json!(null), json!(false), json!(3), json!(0.5), json!([]), json!({})] {
+        let sandbox = Sandbox::new();
+        let expected_requests = if name.is_array() || name.is_object() {
+            1
+        } else {
+            4
+        };
+        let page = json!({"items": vec![json!({"repository": {"full_name": name}}); 100]});
+        let server = Server::start(move |request, _| {
+            assert!(request.path.starts_with("/search/code?"));
+            Response::json(if request.path.ends_with("page=1") {
+                page.clone()
+            } else {
+                json!({})
+            })
+        });
+        assert!(!snapshot(&sandbox, &server, &[]).status.success(), "{name}");
+        let requests = server.requests();
+        assert_eq!(requests.len(), expected_requests, "{name}");
+        if expected_requests == 4 {
+            assert!(requests[0].path.contains("q=filename%3Aida-plugin.json&"));
+            assert!(requests[1].path.ends_with("page=2"));
+            assert!(requests[2].path.contains("%20fork%3Atrue&"));
+            assert!(requests[3].path.ends_with("page=2"));
+        }
+        assert!(!sandbox.path().join("cache/candidate_repos.json").exists());
+    }
+}

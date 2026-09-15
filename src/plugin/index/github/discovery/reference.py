@@ -31,6 +31,7 @@ logging.disable(logging.CRITICAL)
 results = []
 for case in json.load(sys.stdin):
     urls = []
+    publication = []
     try:
         if case["kind"] == "list":
             with patch.object(Path, "exists", return_value=True), patch.object(
@@ -42,6 +43,12 @@ for case in json.load(sys.stdin):
             instance.extra_repos = set(case["extra"])
             instance.ignored_repos = set(case["ignored"])
             with patch.object(github, "get_candidate_github_repos_cache", return_value=case["candidates"]):
+                value = ["/".join(parts) for parts in instance._get_repos()]
+        elif case["kind"] == "cache":
+            instance = object.__new__(github.GithubPluginRepo)
+            instance.extra_repos = set()
+            instance.ignored_repos = set(case["ignored"])
+            with patch.object(github, "get_candidate_github_repos_cache", return_value=case["root"]):
                 value = ["/".join(parts) for parts in instance._get_repos()]
         elif case["kind"] == "component":
             try:
@@ -61,11 +68,26 @@ for case in json.load(sys.stdin):
                 return io.BytesIO(json.dumps(body).encode())
 
             with patch.object(github, "_urlopen_with_retry", side_effect=respond):
-                value = github.find_github_repos_with_plugins("fixture")
+                if case["kind"] == "pipeline":
+                    instance = object.__new__(github.GithubPluginRepo)
+                    instance.token = "fixture"
+                    instance.extra_repos = set()
+                    instance.ignored_repos = set()
+                    with patch.object(
+                        github, "get_candidate_github_repos_cache", side_effect=KeyError
+                    ), patch.object(
+                        github, "set_candidate_github_repos_cache", side_effect=publication.append
+                    ):
+                        value = ["/".join(parts) for parts in instance._get_repos()]
+                else:
+                    value = github.find_github_repos_with_plugins("fixture")
         result = {"value": value}
     except (ValueError, TypeError, AttributeError, KeyError):
         result = {"error": True}
     if case["kind"] == "search":
         result["urls"] = urls
+    elif case["kind"] in {"cache", "pipeline"}:
+        result["urls"] = urls
+        result["published"] = publication[0] if publication else None
     results.append(result)
 print(json.dumps(results))

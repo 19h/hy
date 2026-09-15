@@ -2,7 +2,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::*;
 
@@ -79,6 +79,10 @@ fn lists_selection_and_search_pages_match_upstream() {
     }
     assert_eq!(cases.len(), 165);
     let expected: Vec<Value> = cases.iter().map(observe).collect();
+    compare_source(&cases, &expected);
+}
+
+pub(super) fn compare_source(cases: &[Value], expected: &[Value]) {
     let Some(python) = std::env::var_os("HY_TEST_BUNDLE_ORACLE_PYTHON") else {
         return;
     };
@@ -92,12 +96,12 @@ fn lists_selection_and_search_pages_match_upstream() {
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
-    child.stdin.take().unwrap().write_all(&serde_json::to_vec(&cases).unwrap()).unwrap();
+    child.stdin.take().unwrap().write_all(&serde_json::to_vec(cases).unwrap()).unwrap();
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success());
     let actual: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(actual.len(), expected.len());
-    for (index, (actual, expected)) in actual.iter().zip(&expected).enumerate() {
+    for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
         assert_eq!(actual, expected, "case {index}: {}", cases[index]);
     }
     eprintln!("matched {} upstream discovery cases", cases.len());
@@ -119,21 +123,19 @@ fn observe(case: &Value) -> Value {
         }
         "search" => {
             let mut urls = Vec::new();
-            let mut names = BTreeSet::new();
+            let mut names = values::Search::default();
             for query in ENCODED_QUERIES {
                 urls.push(search_url("https://api.github.com", query, 1));
-                match search_page(&case["response"]) {
-                    Ok(page) => {
-                        let more = page.len() >= PAGE_SIZE;
-                        names.extend(page);
-                        if more {
+                match names.append(&case["response"]) {
+                    Ok(count) => {
+                        if count >= PAGE_SIZE {
                             urls.push(search_url("https://api.github.com", query, 2));
                         }
                     }
                     Err(_) => return json!({"error": true, "urls": urls}),
                 }
             }
-            json!({"value": names, "urls": urls})
+            json!({"value": names.finish().unwrap(), "urls": urls})
         }
         _ => unreachable!(),
     }

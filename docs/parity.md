@@ -86,6 +86,7 @@ The package version alone does not establish behavioral parity.
 | A66 | Direct GitHub release acquisition uses the pinned source and A45 runtime. Ordinary JSON values and represented UTF byte encodings are compared through the actual source fetch function with intercepted GET operations. Redirect policy uses actual HTTPX client handling over MockTransport. | Probe Python JSON nonfinite constants, lone surrogates, nesting limits, malformed/normalized URL forms, live TLS/proxy behavior, phase deadlines, optional codecs and native Windows execution. | 1,998 selection comparisons and 125 HTTP transition comparisons pass. Three added CLI regressions cover eleven owned-server scenarios. Asset defaults, delayed field access, numeric size decisions, selection diagnostics, request headers, separate cookies and represented redirect/error order agree. General JSON and HTTPX URL equivalence remain open. |
 | A67 | Release JSON uses CPython 3.13.15, Unicode 15.1 and its default 4,300-digit integer limit as the decoding oracle. Strings retain Unicode code points, including surrogates. Policy diagnostics project the runtime's UTF-8 stderr/backslashreplace behavior. | Probe other Python/Unicode runtimes, configured integer limits, nondefault stderr encodings, exact JSON exception diagnostics and resource-failure boundaries. Audit other JSON consumers independently before adopting the reader. | 2,012 decoder comparisons, complete Unicode scalar scans for ZIP-letter lowercase mappings, 2,196 release-selection comparisons and six added CLI scenarios pass. Native parsing and destruction are iterative. A separate source probe accepts depth 5,000 but rejects 10,000; the native stability fixture accepts 10,000, so runtime resource-limit parity is not established. |
 | A68 | Automatic redirect construction targets HTTPX 0.28.1 under A45. Comparisons use representable HTTP/HTTPS URLs and normalize only an empty source URL path to its transmitted `/` form. Repository manual redirects retain their separate contract. | Probe percent-encoded hosts/dot segments, backslashes, unusual authorities and ports, non-HTTP schemes, complete URL/error serialization, live proxies/TLS and native Windows. | 480 source target comparisons, 133 expanded GitHub request-policy comparisons and four added owned-server CLI scenarios cover missing-host repair, duplicate Location headers, literal dot segments, fragment inheritance, credentials and Host headers. Complete HTTPX URL and raw-wire equivalence remain open. |
+| A69 | Catalogue retry comparisons use the pinned HCLI functions, CPython 3.13.15 and locked Tenacity 9.1.4 under A45. Time and urllib acquisition are intercepted in memory; native wire fixtures use stable owned loopback endpoints. Python's socket default timeout is unset. | Probe other runtimes, global socket timeout overrides, socket write failures, resets/TLS/proxies, redirect/error presentation, native Windows, real GitHub quotas and cancellation. | 562 actual decorated-function sequences cover nested counters, status/error classification, header precedence and reactive/proactive waits. A paused-clock refused-connection regression checks the production scheduler. CLI fixtures cover retries in all remote catalogue consumers, request replay, cache publication, terminal failures and raw archive bytes. Full catalogue transport/discovery equivalence remains open. |
 
 ## Implemented contracts and remaining coverage
 
@@ -125,7 +126,7 @@ imply that every upstream edge case or supported operating system was tested.
 | Repository snapshot envelopes | Dedicated wire models require the plugin list, plugin host, archive URL/hash and complete versioned descriptor. Snapshot version defaults to literal 1; shared schema-version decoding accepts source literal coercions. Location descriptors reuse the local manifest model and serialize their required version while excluding $schema. Version maps preserve input document order, including equal-precedence selection. Exports sort keys, indent by four spaces, escape non-ASCII strings and apply source number formatting. Bundle and installation downloads share case-sensitive hash verification. | Depends on A52/A53. Full metadata coercion, duplicate-key/nonstandard JSON behavior, exact validation reports, repository initialization and broader version-selection behavior remain open. Sorting exported keys can change a version tie after re-import, as upstream does. |
 | Pip offline mode | Group `--offline` changes pip's index policy without disabling repository transport. It requires `--pip-find-links` or an explicit bundle repository, except for upstream's repository-free command groups. A local HTTP fixture verifies repository/archive fetches while pip receives `--no-index`. | Full upstream pip environment classification remains open. The existing Rust search `--offline` and status alias remain separate command options. |
 | Plugin bundles | Separate target, manifest, inspection, publication, download and CLI source-resolution modules. Repository packaging verifies hashes, fetches per platform, groups archives in first-seen order and names them from the first exact-name descriptor. Installation uses archive metadata under A54. All archive repositories share catalogue grouping and ordering under A55/A56; bundle locations retain member URLs and fetch through an owned reader. A57 preserves duplicate name order and last-member lookup; A58 integrates wheelhouse extraction and A59 integrates installation reads. Selected Python, inherited pip sources and 30 platform/Python targets are supported. macOS tag sequences match packaging 26.0 from the upstream lockfile. Downloads use their own source-option order, omit installation-only flags, inherit stdin/environment/cwd and preserve raw decoded failure streams. Bundle consumption flattens wheel files, rejects duplicate basenames, checks target availability even without dependencies, and respects custom sources. | Depends on A41–A50/A54–A59. Real pip wheel resolution, all multi-plugin/native archive combinations, whole-document JSON/model-error equivalence, broader acquisition/loading/selection/reference grammar, compressed-stream partial-write behavior and cross-spec staging order remain open. Tests use fixture wheels and interpreters. |
-| GitHub catalogue | `--repo github`, extra/ignored repository lists, code-search discovery including forks, GraphQL release/tag metadata, distribution and source archives, date/type/size filtering, source identity checks, and account/origin-partitioned caches. Metadata expires after 86,400 seconds; archive bytes persist. Direct installs require exactly one ZIP release asset. Local HTTP fixtures cover REST/GraphQL requests, annotated tags, cache reuse/expiry, ignored repositories and malformed inputs. | Rate-limit and transient-error retry behavior, batched GraphQL requests, live private-repository access, and upstream-compatible cache paths/formats remain unverified or incomplete. |
+| GitHub catalogue | `--repo github`, extra/ignored repository lists, code-search discovery including forks, GraphQL release/tag metadata, distribution and source archives, date/type/size filtering, source identity checks, and account/origin-partitioned caches. Metadata expires after 86,400 seconds; archive bytes persist. A69 adds nested rate-limit/transient retries and proactive waits to remote metadata/archive acquisition, with body reads outside retries. Catalogue HTTP acquisition preserves raw payloads and uses no added request deadline. | Batched GraphQL queries, complete discovery/filter/model behavior, cache paths/formats, urllib redirect semantics, arbitrary network-error mappings, HTTP failure diagnostics, live private repositories and native Windows remain unverified or incomplete. |
 | Python commands | Exec/script argument passthrough; separate typed doctor and explain reports; environment creation, dependency migration and persistent environment variable configuration. Explicit pip source/offline/build-isolation options and environment-check override. The Python group accepts --no-python-environment-check before the leaf; identically named arguments after exec remain child arguments. | Explain collector edge cases, IDA probe model validation, exhaustive path conversion, subprocess environment/signal behavior and cross-platform configuration edge cases remain open. Creation-specific discovery, doctor policy and execution/install guards and explain reports are covered separately below. Hy reports its own Python interpreter as not applicable because it is native Rust. |
 | Python explain report | Separate report records, installation/runtime collectors, ordered notes and complete text rendering. Overrides preserve their absent IDA probe; version collection resolves independently and uses the bounded version helper. Embedded virtualenv details come from the probe's VIRTUAL_ENV. Mismatch checks cover activated/requested roots before the final interpreter, deduplicating normalized roots. PATH candidates preserve order, deduplicate resolved aliases and exclude uv overlays. Known-installation versions use SDK/directory metadata, while selected-version reporting retains override/registry/SDK/binary/directory provenance. | Depends on A39 and acquisition/model limits under A38. The tested observations and source text rules match; full collector error handling, discovery/metadata equivalence, native Windows, noncanonical paths and terminal Rich behavior remain unverified. Native runtime identity is explicit; no fictitious HCLI Python version or own-venv branch is supplied. |
 | Python doctor | Separate state collection, filesystem observations, ordered findings, setup patterns, context notes and rendering. Version and pip are independent 10 s observations shared with creation; pip remains unknown when the resolution probe marks a managed base interpreter. Explicit HCLI overrides bypass additional IDA probing. All ten checker finding IDs and twelve pattern categories follow source precedence, including early return for a missing override interpreter and a separate unresolved-Python report. Findings retain complete details and concrete hints; arbitrary minimum-version and installation-platform findings were removed. Text groups errors before warnings and includes setup, fixes and context notes. | Depends on A33. The collector uses the selection policy covered under A37 and native installation metadata helpers. Native paths, missing-user-directory handling, live IDA execution, subprocess decoding and Rich wrapping/styling are not fully certified. A native executable has no sys.prefix environment to exclude from shell-venv discovery. |
@@ -787,8 +788,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 266 unit tests and 430
-integration tests on macOS: 696 passed, no failures. A68 records this validation;
+The latest uninterrupted serial all-target run passed 270 unit tests and 433
+integration tests on macOS: 703 passed, no failures. A69 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -825,6 +826,8 @@ Release JSON values and byte encodings use A67's CPython decoder projections,
 expanded source-selection corpus and installation regressions.
 Automatic redirect targets use A68's HTTPX target-construction comparisons,
 expanded GitHub request-policy corpus and API/GitHub wire regressions.
+Catalogue retries use A69's actual Tenacity-decorated source function, scheduler
+regression and CLI acquisition fixtures.
 The earlier A54 parallel run observed an OAuth callback shutdown
 assertion failure at `src/auth/oauth_tests.rs:158`; that assertion passed in the
 serial run. Its intermittent cause is unknown; port reuse is an unverified
@@ -2480,6 +2483,101 @@ and `/tmp/hy-redirect-target-final.log`. Formatting, whitespace checks, Clippy w
 warnings denied and Windows all-target cross-compilation passed. The source tree
 remained clean at its pinned revision. QG3 and QG5 remain open for the documented
 remaining contracts.
+
+### GitHub catalogue retry and rate-limit handling
+
+Under A69, catalogue acquisition separates HTTP setup (`github/http.rs`), retry
+orchestration (`github/retry.rs`) and wait calculations (`github/retry/delay.rs`).
+The source contract is `src/hcli/lib/ida/plugin/repo/github.py` at the pinned
+revision: `_urlopen_with_retry`, `WaitGitHubRateLimit`, `_is_transient_error`,
+`_is_rate_limit_error` and `_check_and_handle_proactive_rate_limit`. The installed
+Tenacity version is 9.1.4, matching `uv.lock`. The oracle executes the actual nested
+decorators rather than reconstructing their state machine.
+
+The inner loop permits five attempts for HTTP 403/429. The outer loop permits four
+attempts for HTTP 500/502/503/504 and represented connection/timeout failures.
+Outer retries restart the inner attempt counter. Up to twenty logical send attempts
+are possible when rate-limit failures precede each transient failure; redirects
+within an attempt are separate network requests. Native automatic transport retries
+are disabled so they cannot silently add attempts to this policy.
+
+Reactive header precedence is Retry-After, reset timestamp, then exponential delay.
+Retry-After uses Python integer syntax and is clamped to 60–3,600 s. Reset timestamps
+also yield a delay clamped to that interval; the source implementation uses a
+present reset header regardless of remaining quota, despite its narrower docstring.
+Fallback rate-limit waits are 60, 120, 240 and 480 s before the final attempt.
+Transient waits are 2, 4 and 8 s. The rate-limit wait strategy is evaluated even on
+the fifth attempt, so malformed final headers still produce an error before retry
+exhaustion is returned. Integer conversion retains the source 4,300-digit limit;
+reset conversion overflow remains a failure rather than becoming a capped delay.
+
+Successful responses with remaining quota at most two and a reset timestamp wait
+proactively for max(reset − current time, 30 s), only when that result is below
+3,600 s. Greater values cause no proactive wait. Remaining quota is parsed only
+when both headers are nonempty; reset is parsed only when the quota qualifies.
+Headers use urllib's first-field, ISO-8859-1 representation, rather than HTTPX's
+combined-field and response-wide text decoding. Error and log wording remain native.
+
+Search, GraphQL and remote catalogue archive requests now use this policy. Buffered
+request methods, URLs, headers and bodies are cloned for each attempt. Bodies are
+read and parsed only after the retry function returns, so JSON/ZIP validation and
+body-read failures do not enter retry scheduling. Successful reads populate the
+existing caches. Offline and cached paths keep their existing pre-acquisition
+behavior; local file URLs retain the separate file acquisition path.
+
+The catalogue HTTP client sends identity encoding and closes each connection,
+preserves raw archive payload bytes, and has no added total request deadline.
+The previous 60 s metadata deadline and repository response decoding do not model
+the source's default urllib acquisition. The native Hy User-Agent remains explicit.
+Archive GET redirects currently use reqwest's ten-hop policy; metadata still has
+its existing no-follow policy. These are not claimed equivalent to urllib's
+method, repeated-target and redirect-header rules, which remain separate work.
+
+Evidence:
+
+- 562 source sequences compare ordered requests, requested waits, simulated wall
+  times and final status/error categories. They include mixed error types, attempt
+  exhaustion, the twenty-attempt case, header duplicates and lazy parsing,
+  malformed integers, overflow and digit limits. Read-only audit guards prohibit
+  source-oracle filesystem mutations.
+- A real refused loopback connection under Tokio's paused clock exhausts the
+  production send adapter after exactly 14 s of scheduled waits (2 + 4 + 8 s).
+  Other native regressions independently check counter reset and malformed headers
+  on the last rate-limit attempt.
+- The CLI recovery fixture retries both REST search queries, GraphQL POST and
+  source-archive GET, preserving each method/body and credential boundary. A second
+  invocation performs no network requests after the successful cache publication.
+- Five CLI terminal cases cover 401, nontransient 501, invalid successful JSON,
+  malformed reactive headers and malformed proactive headers. Each sends one
+  request and leaves the catalogue cache unpublished.
+- Two archive-encoding scenarios verify that ZIP bytes remain usable despite a
+  gzip Content-Encoding header, while an actual gzip wrapper reaches ZIP validation
+  unchanged and fails. Neither body-validation outcome triggers retries.
+
+Bounded findings: **high impact** — nested limits cannot be flattened into a single
+five- or four-attempt loop without changing recovery behavior. **Medium impact** —
+performing decoding inside the retry loop would replay failures that upstream
+does not retry. **Medium impact** — reqwest and urllib expose different network
+exception classes; connection refusal is observed, but arbitrary write/reset/TLS/
+proxy failures require further mapping. **Low impact** — cache formats and GraphQL
+batching remain independent of retry scheduling and are not certified by these tests.
+
+For A logical attempts and H header bytes, scheduling uses O(A × H) scanning work,
+plus Python-integer conversion costs (quadratic upper bound in at most 4,300 digits).
+A is at most twenty. Production scheduler storage is O(H) beyond the buffered
+request, one response and its downstream body. Waits suspend the async task; no new
+whole-operation deadline or response-byte quota is introduced. QG3 and QG5 remain
+open for the listed acquisition, model, discovery and platform contracts.
+
+The uninterrupted A69 serial all-target run passed 703 tests: 270 unit tests and
+433 integration tests across 62 suites, with nine existing opt-in tests ignored
+and no failures. The A68 runtime configuration was retained, including the HTTPX,
+bundle, venv and lint source-oracle environments. The retry corpus size is asserted
+in its test. Formatting, whitespace checks, Clippy with warnings denied and Windows
+all-target cross-compilation passed. Logs are `/tmp/hy-catalogue-retry-full.log`,
+`/tmp/hy-catalogue-retry-clippy-final.log` and `/tmp/hy-catalogue-retry-windows.log`.
+The source checkout remained clean at its pinned revision. This result does not
+close QG3 or QG5 for full project parity.
 
 ### Lint archive discovery, validation and README locations
 

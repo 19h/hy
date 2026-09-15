@@ -2,7 +2,9 @@
 
 mod support;
 
+use std::collections::HashMap;
 use std::fs;
+use std::sync::Mutex;
 
 use serde_json::{Value, json};
 use support::http::{Response, Server};
@@ -265,6 +267,157 @@ fn github_archive_indexing_errors_fail_the_catalogue() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("ZIP"));
     assert!(server.requests().iter().any(|request| request.path == "/asset.zip"));
     assert!(!server.requests().iter().any(|request| request.path == "/source.zip"));
+}
+
+#[test]
+fn catalogue_retries_search_graphql_and_archive_requests_without_changing_payloads() {
+    let sandbox = Sandbox::new();
+    let path = sandbox.path().join("plugin.zip");
+    archive_manifest(&path, &identity_manifest("1.0", "https://github.com/owner/main"), &[]);
+    let archive = fs::read(path).unwrap();
+    let counts = Mutex::new(HashMap::<String, usize>::new());
+    let server = Server::start(move |request, base| {
+        let mut counts = counts.lock().unwrap();
+        let count = counts.entry(request.path.clone()).or_default();
+        *count += 1;
+        if *count == 1 {
+            return Response {
+                status: 503,
+                ..Response::json(json!({"error":"temporary"}))
+            };
+        }
+        if request.path.starts_with("/search/code?") {
+            Response::json(json!({"items":[{"repository":{"full_name":"Owner/Main"}}]}))
+        } else if request.path == "/graphql" {
+            let mut repository = repository(base, "main");
+            repository["releases"] = json!({"nodes":[]});
+            repository["refs"] = json!({"nodes":[{"name":"v1", "target":commit(base, "source")}]});
+            Response::json(json!({"data":{"repository":repository}}))
+        } else {
+            Response::zip(archive.clone())
+        }
+    });
+    let run = || {
+        sandbox
+            .command(&["plugin", "--repo", "github", "repo", "snapshot"])
+            .env("GITHUB_TOKEN", "fixture-token")
+            .env("GITHUB_API_URL", &server.url)
+            .output()
+            .unwrap()
+    };
+    let output = run();
+    assert_success(&output);
+    let snapshot: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(snapshot["plugins"][0]["versions"]["1.0"].as_array().unwrap().len(), 1);
+    let requests = server.requests();
+    assert_eq!(requests.len(), 8);
+    for pair in requests.as_chunks::<2>().0 {
+        assert_eq!(pair[0].method, pair[1].method);
+        assert_eq!(pair[0].path, pair[1].path);
+        assert_eq!(pair[0].body, pair[1].body);
+        let authorized = pair[0].path != "/source.zip";
+        for request in pair {
+            assert_eq!(
+                request
+                    .headers
+                    .to_ascii_lowercase()
+                    .contains("authorization: bearer fixture-token\r\n"),
+                authorized
+            );
+            assert!(request.headers.contains("accept-encoding: identity\r\n"));
+            assert!(request.headers.contains("connection: close\r\n"));
+        }
+    }
+    assert_success(&run());
+    assert_eq!(server.requests().len(), 8, "successful retries must populate the normal caches");
+}
+
+#[test]
+fn terminal_statuses_invalid_rate_headers_and_invalid_json_are_not_retried() {
+    for (status, headers, body) in [
+        (401, vec![], br#"{}"#.to_vec()),
+        (501, vec![], br#"{}"#.to_vec()),
+        (200, vec![], b"invalid JSON".to_vec()),
+        (403, vec![("Retry-After".into(), "invalid".into())], br#"{}"#.to_vec()),
+        (
+            200,
+            vec![
+                ("X-RateLimit-Remaining".into(), "0".into()),
+                ("X-RateLimit-Reset".into(), "invalid".into()),
+            ],
+            br#"{}"#.to_vec(),
+        ),
+    ] {
+        let sandbox = Sandbox::new();
+        let server = Server::start_with_headers(move |_, _| {
+            (
+                Response {
+                    status,
+                    content_type: "application/json",
+                    body: body.clone(),
+                },
+                headers.clone(),
+            )
+        });
+        let output = sandbox
+            .command(&["plugin", "--repo", "github", "repo", "snapshot"])
+            .env("GITHUB_TOKEN", "fixture-token")
+            .env("GITHUB_API_URL", &server.url)
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
+        assert_eq!(server.requests().len(), 1);
+        assert!(!sandbox.path().join("cache/github-catalogue").exists());
+    }
+}
+
+#[test]
+fn catalogue_archives_preserve_payload_bytes_regardless_of_content_encoding() {
+    use flate2::{Compression, write::GzEncoder};
+    use std::io::Write;
+
+    for compressed in [false, true] {
+        let sandbox = Sandbox::new();
+        let path = sandbox.path().join("plugin.zip");
+        archive_manifest(&path, &identity_manifest("1.0", "https://github.com/owner/main"), &[]);
+        let mut archive = fs::read(path).unwrap();
+        if compressed {
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+            encoder.write_all(&archive).unwrap();
+            archive = encoder.finish().unwrap();
+        }
+        let server = Server::start_with_headers(move |request, base| {
+            let response = if request.path.starts_with("/search/code?") {
+                Response::json(json!({"items":[{"repository":{"full_name":"owner/main"}}]}))
+            } else if request.path == "/graphql" {
+                let mut repository = repository(base, "main");
+                repository["releases"] = json!({"nodes":[]});
+                repository["refs"] =
+                    json!({"nodes":[{"name":"v1", "target":commit(base, "source")}]});
+                Response::json(json!({"data":{"repository":repository}}))
+            } else {
+                return (
+                    Response::zip(archive.clone()),
+                    vec![("Content-Encoding".into(), "gzip".into())],
+                );
+            };
+            (response, Vec::new())
+        });
+        let output = sandbox
+            .command(&["plugin", "--repo", "github", "repo", "snapshot"])
+            .env("GITHUB_TOKEN", "fixture-token")
+            .env("GITHUB_API_URL", &server.url)
+            .output()
+            .unwrap();
+        // urllib ignores Content-Encoding. A ZIP payload remains usable, while
+        // a gzip-wrapped ZIP reaches archive validation unchanged and fails.
+        assert_eq!(output.status.success(), !compressed, "{output:?}");
+        assert_eq!(server.requests().len(), 4);
+        if compressed {
+            assert!(String::from_utf8_lossy(&output.stderr).contains("ZIP"));
+        }
+    }
 }
 
 #[test]

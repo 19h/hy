@@ -11,7 +11,9 @@ use super::{ArchiveCatalogue, LoadedRepository};
 use crate::error::{Error, Result};
 
 mod cache;
+mod http;
 mod models;
+mod retry;
 
 use models::{GraphResponse, Repository, SearchResponse};
 
@@ -42,11 +44,9 @@ impl Client {
         if self.offline {
             return Err(Error::Other("GitHub metadata is unavailable in the local cache".into()));
         }
-        let response = request.bearer_auth(&self.token).send().await?;
-        let status = response.status();
-        if !status.is_success() {
-            return Err(Error::Other(format!("GitHub request failed with HTTP {status}")));
-        }
+        let request = request.bearer_auth(&self.token).build()?;
+        let response = retry::send(&self.http, request).await?;
+        http::require_success(&response)?;
         Ok(response.json().await?)
     }
 
@@ -114,7 +114,11 @@ impl Client {
         if self.offline {
             return Err(Error::Other(format!("archive unavailable offline: {url}")));
         }
-        let bytes = super::fetch(url).await?;
+        let bytes = if url.starts_with("file://") {
+            super::fetch(url).await?
+        } else {
+            http::download(url).await?
+        };
         cache::write(&key, &bytes)?;
         Ok(bytes)
     }
@@ -183,11 +187,7 @@ pub async fn load(options: &Options, offline: bool) -> Result<LoadedRepository> 
         .clone()
         .ok_or_else(|| Error::Other("GitHub token required; set GITHUB_TOKEN".into()))?;
     let client = Client {
-        http: reqwest::Client::builder()
-            .user_agent(concat!("hy/", env!("CARGO_PKG_VERSION")))
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(60))
-            .build()?,
+        http: http::metadata_client()?,
         base: crate::config::Env::global().github_api_url.trim_end_matches('/').into(),
         token,
         offline,

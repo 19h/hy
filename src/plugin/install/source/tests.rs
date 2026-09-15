@@ -27,7 +27,11 @@ fn archive_and_directory_sources_retain_the_inspected_distribution() {
             fs::write(&path, super::directory::pack(&tree).unwrap()).unwrap();
             path
         };
-        let mut distribution = InstallationSource::read(&path, false).unwrap();
+        let mut distribution = if directory {
+            InstallationSource::directory(&path, false).unwrap()
+        } else {
+            InstallationSource::archive(fs::read(&path).unwrap()).unwrap()
+        };
         fs::remove_dir_all(&tree).unwrap();
         if !directory {
             fs::write(&path, b"replaced archive").unwrap();

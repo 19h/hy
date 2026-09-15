@@ -79,9 +79,6 @@ async fn upgrade_one(
     };
     let location = index::select(&repository.snapshot, &reference, ida_version().as_deref())?;
     let archive = repository.fetch_verified(location).await?;
-    let temporary = tempfile::tempdir()?;
-    let path = temporary.path().join("plugin.zip");
-    std::fs::write(&path, archive)?;
     let arguments = PluginInstallArgs {
         source: source.into(),
         force: false,
@@ -91,7 +88,7 @@ async fn upgrade_one(
         config: Vec::new(),
     };
     install_local(
-        &path,
+        plugin::InstallationSource::archive(archive)?,
         &arguments,
         repository.bundle_reader(),
         context,

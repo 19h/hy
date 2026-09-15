@@ -5,6 +5,7 @@ use crate::error::{Error, Result};
 use crate::util::python_repr::string_repr;
 
 mod host;
+pub(crate) use host::is_direct_github;
 #[cfg(test)]
 mod tests;
 

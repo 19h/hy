@@ -2,6 +2,9 @@
 
 #[path = "plugin_repository_loading/bundle.rs"]
 mod bundle;
+#[path = "plugin_repository_loading/file_urls.rs"]
+#[cfg(unix)]
+mod file_urls;
 #[path = "plugin_repository_loading/filesystem.rs"]
 mod filesystem;
 mod support;

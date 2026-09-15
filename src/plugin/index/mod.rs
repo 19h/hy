@@ -21,6 +21,7 @@ pub(crate) use archive::add_bytes as index_archive;
 pub(crate) use catalogue::ArchiveCatalogue;
 pub use config::{RESERVED, Repository, repositories, save_repositories, valid_repo_name};
 pub use models::{Location, Plugin, Snapshot};
+pub(crate) use reference::is_direct_github;
 pub use reference::{Reference, normalize_host, parse_reference};
 pub use selection::{matches_reference, matching_plugins, select, select_for_platform};
 pub use transport::{fetch, github_archive};
@@ -82,13 +83,8 @@ pub async fn load_named(
 }
 
 pub async fn load(source: &str, offline: bool) -> Result<LoadedRepository> {
-    let local = if source.starts_with("file:") {
-        Some(
-            url::Url::parse(source)
-                .map_err(|e| Error::Other(e.to_string()))?
-                .to_file_path()
-                .map_err(|_| Error::Other("invalid file URL".into()))?,
-        )
+    let local = if let Some(path) = transport::local_file_path(source)? {
+        Some(path)
     } else if Path::new(source).exists() {
         Some(PathBuf::from(source))
     } else {

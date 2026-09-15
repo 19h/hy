@@ -2,6 +2,8 @@
 
 #[path = "plugin_install/archive.rs"]
 mod archive_cases;
+#[path = "plugin_install/sources.rs"]
+mod sources;
 mod support;
 
 use std::fs;

@@ -4,6 +4,9 @@ use crate::error::{Error, Result};
 use crate::plugin::{self, index};
 use std::path::{Path, PathBuf};
 
+mod source;
+use source::Source;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum UpgradePolicy {
     KeepCurrentIfNewer,
@@ -34,46 +37,45 @@ fn combined_dependencies(
 }
 
 pub async fn install(args: PluginInstallArgs, context: &plugin::PluginContext) -> Result<()> {
-    let expanded = PathBuf::from(crate::util::python_path::expand_user(&args.source)?);
-    let local_directory = crate::util::python_path::is_dir(&expanded)?
-        && crate::util::python_path::is_file(&expanded.join("ida-plugin.json"))?;
-    if args.editable && !local_directory {
-        return Err(Error::PluginInstall(
-            "--editable requires a local directory containing ida-plugin.json".into(),
-        ));
+    let source = source::classify(&args.source, args.editable)?;
+    if let Source::Directory(path) = &source {
+        return install_local(
+            plugin::InstallationSource::directory(path, args.editable)?,
+            &args,
+            None,
+            context,
+            None,
+            UpgradePolicy::KeepCurrentIfNewer,
+        )
+        .await;
     }
     let temporary = tempfile::tempdir()?;
-    let mut source = if local_directory {
-        expanded.canonicalize()?
-    } else {
-        PathBuf::from(&args.source)
-    };
     let mut loaded = None;
     let mut selected_name = None;
-    if !source.exists() || (!local_directory && source.is_dir()) {
-        let bytes = if args.source.starts_with("https://github.com/")
-            && !args.source.contains("/releases/download/")
-        {
-            index::github_archive(&args.source).await?
-        } else if args.source.starts_with("https://")
-            || args.source.starts_with("http://")
-            || args.source.starts_with("file:")
-        {
-            index::fetch(&args.source).await?
-        } else {
-            let reference = index::parse_reference(&args.source)?;
-            let repository = loaded.insert(context.load_for(&reference).await?);
-            let location =
-                index::select(&repository.snapshot, &reference, ida_version().as_deref())?;
-            selected_name = Some(location.descriptor.metadata.name.clone());
-            repository.fetch_verified(location).await?
-        };
-        source = temporary.path().join("plugin.zip");
-        std::fs::write(&source, bytes)?;
-    }
+    let source = match source {
+        Source::Archive(path) => path,
+        remote => {
+            let bytes = match remote {
+                Source::GitHub => index::github_archive(&args.source).await?,
+                Source::Download => index::fetch(&args.source).await?,
+                Source::Repository => {
+                    let reference = index::parse_reference(&args.source)?;
+                    let repository = loaded.insert(context.load_for(&reference).await?);
+                    let location =
+                        index::select(&repository.snapshot, &reference, ida_version().as_deref())?;
+                    selected_name = Some(location.descriptor.metadata.name.clone());
+                    repository.fetch_verified(location).await?
+                }
+                Source::Directory(_) | Source::Archive(_) => unreachable!("local source handled"),
+            };
+            let path = temporary.path().join("plugin.zip");
+            std::fs::write(&path, bytes)?;
+            path
+        }
+    };
     if plugin::bundle::is_plugin_bundle_zip(&source) {
         let bundle = index::load(&source.to_string_lossy(), true).await?;
-        for (index, entry) in bundle.snapshot.plugins.iter().enumerate() {
+        for entry in &bundle.snapshot.plugins {
             let reference = index::Reference {
                 name: entry.name.clone(),
                 spec: String::new(),
@@ -81,10 +83,8 @@ pub async fn install(args: PluginInstallArgs, context: &plugin::PluginContext) -
                 repo: None,
             };
             let location = index::select(&bundle.snapshot, &reference, ida_version().as_deref())?;
-            let path = temporary.path().join(format!("bundle-plugin-{index}.zip"));
-            std::fs::write(&path, bundle.fetch_verified(location).await?)?;
             install_local(
-                &path,
+                plugin::InstallationSource::archive(bundle.fetch_verified(location).await?)?,
                 &args,
                 bundle.bundle_reader(),
                 context,
@@ -95,7 +95,7 @@ pub async fn install(args: PluginInstallArgs, context: &plugin::PluginContext) -
         }
     } else {
         install_local(
-            &source,
+            plugin::InstallationSource::archive(std::fs::read(&source)?)?,
             &args,
             loaded.as_ref().and_then(index::LoadedRepository::bundle_reader),
             context,
@@ -139,7 +139,7 @@ fn extract_wheelhouse(
 }
 
 pub(super) async fn install_local(
-    source: &Path,
+    mut distribution: plugin::InstallationSource,
     args: &PluginInstallArgs,
     bundle: Option<&plugin::bundle::BundleReader>,
     context: &plugin::PluginContext,
@@ -147,7 +147,7 @@ pub(super) async fn install_local(
     upgrade_policy: UpgradePolicy,
 ) -> Result<()> {
     let replace = args.force || args.upgrade || args.editable;
-    let mut distribution = plugin::InstallationSource::read(source, args.editable)?;
+    let editable_path = distribution.editable_path().map(Path::to_path_buf);
     let metadata = distribution.metadata(selected_name)?;
     let candidate_version = plugin::parse_version(&metadata.version).ok_or_else(|| {
         Error::PluginInstall(format!("invalid plugin version: {}", metadata.version))
@@ -231,7 +231,7 @@ pub(super) async fn install_local(
     };
     let registration = plugin::EditableRegistration::prepare(
         &metadata.name,
-        args.editable.then_some(source),
+        editable_path.as_deref(),
         resolved.as_ref().map(|python| python.exe.as_path()),
     )
     .await?;

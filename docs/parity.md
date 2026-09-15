@@ -79,8 +79,9 @@ The package version alone does not establish behavioral parity.
 | A59 | Installation selection uses the pinned HCLI functions and the A45 runtime; extraction comparisons project the actual source predicates and ZIP reads into an inventory. Fixtures are stable Unix files with represented metadata. | Exercise other metadata/reference grammars, native Windows drive/case rules, local-source replacement between inspection and staging, filesystem publication failures, compressed decoder timing and full source installation with real dependencies. | 325 selection/reference comparisons and ninety extraction projections cover descriptor count/order, lazy named lookup, lexical roots, selected-member validation and resulting bytes. Four CLI regressions cover publication, ignored members, duplicates and Unix permissions. Lint migration follows under A60; complete installation/error/model equivalence remains open. |
 | A60 | Lint comparisons target the pinned HCLI archive function and A45 runtime on Unix, using stable ZIP fixtures. Reports compare terminal status, ordered findings and locations while excluding model-specific validation details. | Repeat with arbitrary Pydantic multi-errors, metadata coercion, malformed compressed streams, native Windows path equality, non-UTF-8 filesystem names, concurrent source mutation and Rich markup/terminal rendering. | 181 native CLI/source-function comparisons cover ordered descriptors, duplicate lookup, lexical README parents, reference validation and terminal read/UTF-8 failures. A direct CLI regression checks phase ordering and valid-descriptor accounting. The obsolete scanner and archive inventory are removed; whole lint/model/error equivalence remains open. |
 | A61 | Metadata paths are strings from the represented HCLI models. Pure path comparisons use CPython 3.13.15 POSIX/Windows classes; physical directory comparisons run on Unix under A45. | Probe other Python versions, native Windows filesystem behavior, non-UTF-8 roots/surrogates, arbitrary stat failures, concurrent replacement, platform-specific special files and full regular-directory packaging. | 3,329 grammar cases, 86,554 lexical joins, 196 directory/reference/dependency cases and an effective permission-denial probe match source behavior. Two CLI regressions cover four literal/normalized names and four directory-reference forms. Windows error mappings are source-reviewed and cross-compiled; native runtime equivalence remains open. |
-
 | A62 | Regular-directory packing comparisons use the pinned HCLI function, CPython 3.13.15 and stable Unix fixture trees under A45. The compared ZIP projection includes member order, decoded bytes, sizes, DOS timestamps, compression method and ordinary rwx permissions. | Probe native Windows traversal/case ties, non-UTF-8 names, alternate timezones/runtimes, ZIP64 size boundaries, special permission bits, concurrent mutation during acquisition and arbitrary filesystem failures. | Twelve source packing comparisons, seven new CLI regressions and a retained-source test cover the represented distribution behavior. ZIP bytes and complete external attributes are not identical; special mode bits are discarded by the native writer and are not restored by installation. Source replacement after acquisition cannot change regular installation bytes. Whole installation/model/transport equivalence remains open. |
+| A63 | Direct installation is classified using the pinned command's branch order and A45 runtime. GitHub parsing is compared only after the source direct-install pattern accepts an input. Physical path fixtures run on Unix. | Probe native Windows filesystem encodings/errors, concurrent path replacement, other Python regex runtimes, downstream URL serialization/transport, malformed release responses and complete command diagnostics. | 1,822 source-branch projections and 25,088 actual GitHub recognition/parsing comparisons pass. Four CLI regressions cover local suffixes, directory/archive precedence, rejected direct schemes, file URLs and observed GitHub release requests. The parser preserves source owner/repository/raw-tag spelling; full transport and native Windows runtime equivalence remain open. |
+| A64 | File-URL conversion uses CPython 3.13.15, Unicode 15.1 and the A45 Unix runtime with UTF-8/surrogateescape filesystem encoding. Windows conversion is compared through nturl2path and PureWindowsPath on that runtime. | Probe other filesystem encodings, lone-surrogate input strings, native Windows file operations, arbitrary IPv6/IPvFuture spellings, Unicode normalization contexts, filesystem-specific names and concurrent replacement. | 5,315 conversion comparisons, the complete non-ASCII NFKC-delimiter table, 45 archive reads, six repository-construction comparisons and a direct-install regression cover represented file-URL behavior. This macOS volume rejects invalid UTF-8 filenames; its read failure is compared, while decoding bytes are tested independently. Full HTTP transport and native Windows execution remain open. |
 
 ## Implemented contracts and remaining coverage
 
@@ -103,7 +104,9 @@ imply that every upstream edge case or supported operating system was tested.
 | Plugin compatibility | Defaults and allowed values come from the pinned schema: 63 IDA versions and six platforms. IDA ranges expand to exact known versions, including service packs; empty lists match nothing. Platform selection reads the selected IDA executable and honors `HCLI_CURRENT_IDA_PLATFORM`. | Real cross-architecture IDA execution and all repository archive variants remain unverified. |
 | Plugin schema | `schemas/ida-plugin.json` is copied from the pinned upstream `docs/schemas/ida-plugin.json`. Flat manifests, missing wrapper versions and dictionary-form settings now fail as they do upstream. | Schema equivalence does not establish runtime model equivalence; Pydantic's accepted boolean coercions and IDA range expansion are tested separately. |
 | Plugin installation | Validate and stage files before pip; resolve combined dependencies with pip dry-run, excluding the replaced version; publish after dependency installation succeeds. Direct archives count all valid descriptors; named lookup stops at the first exact name under A59. Reference validation is separate from selection. Extraction validates only the selected subtree, excludes its raw `.git/` prefix, rejects selected symlinks and reads duplicate names through their last record. Replacement directories use the exact new descriptor name, including case. | Archive normalization and malformed-member cases beyond A59, full source installation equivalence and cross-platform publication failures. Pip environment changes are not rolled back after a subsequent failure. |
-| Local directory distribution | Under A62, regular directories are packed before metadata inspection and use the shared archive pipeline. Packing filters, file-link dereferencing, omitted directory links/empty directories, all-descriptor counting and fresh installed-file permissions are covered by source comparisons and CLI regressions. `.venv`, `venv` and `.idea` files are retained. A single archive snapshot survives inspection through staging. | Native Windows execution, non-UTF-8 names, arbitrary special files, ZIP64 boundaries, concurrent acquisition and complete ZIP metadata/byte identity remain unverified or differ as recorded under A62. Local file classification still accepts existing non-ZIP-suffixed files more broadly than upstream. |
+| Local directory distribution | Under A62, regular directories are packed before metadata inspection and use the shared archive pipeline. Packing filters, file-link dereferencing, omitted directory links/empty directories, all-descriptor counting and fresh installed-file permissions are covered by source comparisons and CLI regressions. `.venv`, `venv` and `.idea` files are retained. A single archive snapshot survives inspection through staging. A63 preserves directory/archive classification through acquisition. | Native Windows execution, non-UTF-8 names, arbitrary special files, ZIP64 boundaries, concurrent acquisition and complete ZIP metadata/byte identity remain unverified or differ as recorded under A62. |
+| Direct installation source selection | A63 uses upstream branch order for editable directories, regular plugin directories, existing lowercase `.zip` paths, `file://`, recognized GitHub URLs, lowercase `https://`, and repository references. GitHub owner/repository/tag parsing preserves source spelling after recognition. | Full command diagnostic text, native Windows path behavior, URL decoding/serialization, transport policy and malformed release-response handling remain open. |
+| File-URL acquisition | A64 shares source-compatible decoding between archive fetching and repository construction. Authority validation is separate from local path selection; semicolons, encoded delimiters, trailing spaces, symlink/parent traversal and Unix filesystem bytes are retained under source rules. | Non-UTF-8 filesystem encodings, lone-surrogate input strings, native Windows execution and arbitrary filesystem/authority edge cases remain unverified. |
 | Editable package registration | `src` layouts write `_hcli_editable_NAME.pth` into the selected IDA interpreter's `sysconfig` purelib directory. Flat/regular replacements remove stale registrations. Uninstall removes links and registrations while retaining source files. Broken entries can be replaced or removed. Staged registration errors preserve the old plugin; cleanup skips interpreter-discovery failures, matching upstream. A real isolated Python process imports the fixture and observes later source edits. | Windows symlink/registration execution and live IDA imports remain unverified. Registrations left in a previously selected interpreter, and stale filenames after name-case changes on case-sensitive filesystems, remain open. |
 | Installed plugin inventory | Managed operations share records whose descriptors, referenced files and exact directory names validate. Broken directories do not enter dependency preflight, search, upgrades or configuration. Unfiltered status separately lists minimal descriptors and single-file legacy plugins; named status accepts only managed records and retains requested order/repetitions. Broken entries remain removable by filesystem name, including UTF-8 legacy names. | Directory entries are sorted for deterministic reports rather than retaining upstream filesystem iteration order. Case-colliding installed names produce errors in destructive/metadata lookup paths; upstream may select its first record. Non-UTF-8 filenames and exhaustive Unicode case conversion remain unverified. |
 | Python dependency metadata | Installation, dependency preflight and migration resolve explicit requirements or PEP 723 inline metadata. Lint does not resolve dependency scripts. Bundle creation collects explicit lists only and leaves inline metadata untouched, matching its source-specific policy. Tests cover archives, directories, editable sources, retained neighbors, malformed scripts and later installation from an inline-only bundle. Plugin code is not executed to extract requirements. | Depends on A45 for bundle collection. Migration and real wheel resolution still need end-to-end verification. Non-string TOML dependency entries are rejected during parsing; upstream returns them and fails downstream. |
@@ -776,8 +779,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 247 unit tests and 408
-integration tests on macOS: 655 passed, no failures. A61 records this validation;
+The latest uninterrupted serial all-target run passed 255 unit tests and 421
+integration tests on macOS: 676 passed, no failures. A64 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -799,8 +802,13 @@ Installation selection and extraction use A59's source comparisons and CLI regre
 Lint archive discovery and reporting use A60's source-function comparisons; the
 existing command-level lint oracle was also enabled.
 Reference grammar, lexical joins and real directory/dependency lookups use A61's
-read-only source comparisons. Its configured-environment extension suite was run
-separately with all nine tests enabled.
+read-only source comparisons. Directory packing and retained installation sources
+use A62's comparisons and regressions. The configured-environment extension suite
+was rerun separately under A62 with all nine tests enabled; all nine passed.
+Direct acquisition branch selection and GitHub release parsing use A63's source
+comparisons and owned-server CLI regressions.
+File-URL decoding, archive reads and repository construction use A64's conversion
+and source-consumer comparisons.
 The earlier A54 parallel run observed an OAuth callback shutdown
 assertion failure at `src/auth/oauth_tests.rs:158`; that assertion passed in the
 serial run. Its intermittent cause is unknown; port reuse is an unverified
@@ -1854,6 +1862,201 @@ metadata and codec buffers; compression cost depends on the codec. File inputs r
 their entire archive in memory, matching source acquisition. The archive remains
 resident through staging. No size quota, whole-operation deadline, or atomic snapshot
 of a concurrently modified source tree is introduced.
+
+The first A62 full run passed 664 tests and failed one stale diagnostic assertion
+in `tests/plugin_manifest.rs`. It expected regular directories to validate their
+root descriptor directly. That test now expects archive discovery for regular
+directories and adds editable-source cases to retain coverage of direct field
+diagnostics. Across four invalid descriptors and four source kinds, all sixteen
+cases still assert failure before dependency invocation or publication.
+
+The final uninterrupted serial all-target run passed 665 tests: 250 unit tests and
+415 integration tests across 62 suites, with nine existing opt-in tests ignored and
+no failures. It used the full-suite command recorded under A61, including both
+source runtimes and the lint oracle. All nine extension tests passed separately
+with `HY_TEST_EXTENSION_PYTHON=/tmp/hy-extension-runtime/bin/python` and
+`--include-ignored --test-threads=1`. Rustfmt, whitespace checks, Clippy with warnings
+denied and the Windows all-target cross-check passed after the fixture correction.
+The upstream checkout remained clean at the pinned revision. QG3 and QG5 remain
+open for the outstanding contracts and edge cases recorded in this audit.
+
+The A62 review identified acquisition differences separate from packing: local
+archive suffix recognition and GitHub branch selection. A63 addresses those
+contracts below; the packing comparisons alone did not cover them.
+
+### Direct installation acquisition and GitHub release spelling
+
+Under A63, `src/cmd/plugin_ops/source.rs` owns source classification in the order
+used by `install_plugin` in the pinned `src/hcli/commands/plugin/install.py`.
+Editable inputs require a directory and retain direct descriptor validation.
+Regular directory recognition expands the home prefix and requires a root
+`ida-plugin.json` file. Local archive recognition instead checks the original
+path spelling and its exact lowercase `.zip` suffix, without requiring a regular
+file. A directory named `source.zip` without root metadata reaches a file-read
+failure; a root descriptor makes it a directory distribution. Existing files
+without that suffix fall through to repository selection.
+
+The remaining branches are exact `file://` prefix, the shared source-compatible
+GitHub predicate, exact `https://` prefix, and repository reference. Direct `http://`
+and short `file:` inputs no longer enter download transport. This does not prevent
+repository locations or GitHub release assets from using those transport schemes
+where their source contracts allow them.
+
+Acquisition now passes `InstallationSource` into the shared installation operation.
+Explicit directory and archive constructors prevent a later filesystem-type check
+from changing the selected branch. Bundle-member installation and repository
+upgrades pass their fetched bytes directly, removing temporary write/read cycles.
+Editable registration obtains its source path from the retained editable variant.
+
+`src/plugin/index/transport/github_url.rs` follows `parse_github_url` from the pinned
+`src/hcli/lib/ida/plugin/repo/github.py` over inputs accepted by
+`is_github_direct_install_url`. It uses the existing shared predicate from A51
+instead of another URL recognition rule. Recognition is case-insensitive with
+CPython's represented Unicode exceptions. Parsing still requires an ASCII HTTPS
+scheme and the actual GitHub authority; Unicode characters that merely match the
+regex do not automatically become valid authority characters.
+
+The parser splits a raw tag before URL parsing and strips trailing `/` from that
+tag. A terminal LF can therefore survive in the tag. For the URL portion, the
+accepted terminal LF is removed as by `urlparse`. Repository `.git` removal occurs
+once and before empty path components are discarded: `repo.git/` retains `.git`,
+whereas `repo.git.git` becomes `repo.git`. Dot segments and Unicode path components
+are preserved at this parsing stage. Downstream HTTP URL serialization is a
+separate contract and is not proved by these tuple comparisons.
+
+Evidence:
+
+- 1,822 acquisition comparisons cover 24 physical path fixtures, 880 scheme/host/
+  path/suffix combinations and seven additional inputs, each in regular and editable
+  mode. The Python oracle reads the actual command AST, retains its branch conditions
+  and editable path checks, and replaces acquisition bodies with branch labels.
+  It does not invoke the source downloader, packer, pip or publication path.
+- 25,088 comparisons invoke the actual source GitHub predicate and, for recognized
+  inputs, its parser: four schemes, four authorities, four owner spellings, eight
+  repository spellings, seven tag forms and seven suffixes. They compare recognition,
+  parse failure, owner, repository and raw tag, including case, Unicode, `.git`,
+  dot components, terminal LF and rejected query/fragment spellings.
+- Four CLI regressions verify repository fallback despite an existing non-ZIP file,
+  uppercase suffix rejection, `.zip` directory precedence, no transport for rejected
+  direct schemes, installation through a file URL with a non-ZIP suffix, and four
+  exact GitHub release request paths through an owned server. Existing directory,
+  editable, upgrade and MCP consumers also pass.
+
+Rust creates every fixture. Both Python oracles run with `-I -B` and audit hooks
+that reject filesystem mutation. Error projections compare failure status rather
+than full Click/Pydantic exception text. The source runtime, filesystem assumptions
+and unverified native Windows execution are bounded by A45/A63.
+
+**High impact:** an existing arbitrary file could shadow the repository plugin the
+source would select. **Medium impact:** prefix-only GitHub detection selected a
+different acquisition operation for uppercase hosts and extra URL path segments.
+**Medium impact:** normalizing the repository path before extracting owner/repository
+changed release endpoints. These changes affect selection, not only presentation.
+
+For L input bytes, recognition and parsing take O(L) work and retain O(L) path/tag
+text. Classification performs a bounded number of filesystem probes; path resolution
+and filesystem latency have no added deadline. Those bounds exclude downloading,
+repository selection, archive parsing and installation. Source mutation between
+classification and acquisition remains unverified.
+
+The uninterrupted A63 serial all-target run passed 671 tests: 252 unit tests and
+419 integration tests across 62 suites, with nine existing opt-in tests ignored and
+no failures. It used the full command recorded under A61 with both established
+source runtimes and the lint oracle enabled. The new oracle corpus sizes are asserted
+in their tests. Rustfmt, whitespace validation, Clippy with warnings denied and the
+Windows all-target cross-check passed. The source checkout remained clean at the
+pinned revision. The preceding A62 extension suite remains the latest separate
+all-nine-extension validation. Full parity is not established: QG3 and QG5 remain open.
+
+The A63 review identified archive transport as the next integration gap. A64
+addresses file-URL decoding below. Repository HTTP fetching still differs in
+redirect-status selection, cached credential resolution and entitlement-error
+mapping. GitHub release fetching has its own request headers, timeout values and
+release-response defaults. A63 proves source selection and represented release
+request paths, not those transport contracts.
+
+### File-URL paths for archives and repositories
+
+Under A64, `src/plugin/index/transport/file_url.rs` converts local archive URLs
+before a WHATWG URL parser can normalize their paths. Archive fetching and
+repository construction use the same adapter. The pinned source contracts are
+`fetch_plugin_archive` and `repo_from_url` in
+`src/hcli/lib/ida/plugin/repo/__init__.py`, plus `JSONFilePluginRepo.from_url` in
+`repo/file.py`. Each converts the parsed URL's path through `url2pathname` and
+then constructs a native `Path`.
+
+The adapter strips source-defined URL controls, recognizes the file scheme without
+case sensitivity, validates a present authority, and separates path from query and
+fragment. It does not use the authority as a filesystem host. Semicolons remain in
+file paths. The `url2pathname` handling of an empty authority, extra leading slashes
+and a literal lowercase `localhost` prefix occurs before percent decoding. Native
+path normalization removes redundant separators and `.` components while retaining
+`..`. Consequently, `link/../plugin.zip` is resolved by filesystem traversal; erasing
+that parent segment through URL normalization can select a different archive.
+
+On Unix, percent-decoded bytes represent UTF-8 plus surrogateescape directly in an
+`OsString`, retaining bytes that are not valid UTF-8. On Windows, drive/bar conversion
+and UTF-8 replacement decoding precede the existing PureWindowsPath adapter. Encoded
+slashes, encoded colons, malformed percent escapes and drive errors follow these
+separate conversion orders. Native Windows filesystem execution is not established
+by comparing its conversion through pure path objects.
+
+Authority validation remains necessary even when the authority is discarded for
+file selection. `file_url/authority.rs` checks bracket structure, IPv6 scope spelling
+and represented IPvFuture forms. Its NFKC delimiter classification is the nineteen
+non-ASCII Unicode 15.1 characters whose normalization introduces `/`, `?`, `#`, `@`
+or `:`. This avoids inheriting another library's Unicode table version. Attribution
+and adaptation details are recorded in `src/util/python_path/LICENSE` for the
+CPython `urllib.parse`, `urllib.request` and `nturl2path` code.
+
+Evidence:
+
+- 5,315 source conversion comparisons comprise 2,660 scheme/authority/path cases,
+  2,560 percent-octet cases and 95 delimiter/combining-context cases. They compare
+  parsing failure, POSIX filesystem bytes and Windows normalized path strings.
+  The source uses actual `urlparse`, `url2pathname`, `nturl2path.url2pathname` and
+  pure path classes. Separate enumeration over the non-ASCII Unicode range verifies
+  the complete nineteen-character NFKC delimiter table against `unicodedata`.
+- Forty-five calls compare actual `fetch_plugin_archive` reads with native fetching
+  across five authority forms and nine path spellings. Fixtures cover trailing
+  slash/dot, semicolon and space names, percent-decoded invalid bytes, missing/NUL
+  paths and symlink/parent traversal selecting a different payload.
+- A CLI regression installs version 2 through `file://elsewhere/.../link/../plugin.zip`
+  while version 1 occupies the path produced by premature dot-segment removal.
+- Six repository CLI/source comparisons construct directory, bundle and JSON
+  repositories through nonlocal authorities, uppercase file schemes and the same
+  symlink/parent path. They compare complete snapshots from actual `repo_from_url`.
+
+The initial physical-file fixture failed because this macOS filesystem returns
+EILSEQ when creating a filename containing byte FF. The corrected fixture reports
+that constraint and compares native/source read failure for that name; it does not
+skip the remaining read cases. The pure conversion tests separately verify retained
+invalid UTF-8 bytes. Successful physical reads of such names remain unverified on
+this volume. The source oracles use `-I -B` and audit hooks rejecting filesystem
+mutation; all fixture creation and modification is performed by Rust.
+
+**High impact:** WHATWG dot-segment removal could install the wrong local archive
+when a path traverses a directory symlink before `..`. **Medium impact:** authority
+restrictions rejected file URLs that upstream treats as local paths. **Medium
+impact:** percent decoding and pathname conversion have different orders and error
+policies on Unix and Windows; sharing a generic URL-to-file conversion concealed
+those distinctions.
+
+For L URL bytes, decoding, authority checks and lexical path normalization take
+O(L) work and O(L) retained storage. File reads retain B bytes, and subsequent archive
+processing has its existing resource costs. The adapter adds no filesystem deadline
+or atomic snapshot guarantee. Full exception text, arbitrary authority combinations,
+other Unicode/filesystem encodings and native Windows execution remain outside the
+verified result. The remaining HTTP and GitHub transport contracts are still open.
+
+The uninterrupted A64 serial all-target run passed 676 tests: 255 unit tests and
+421 integration tests across 62 suites, with nine existing opt-in tests ignored and
+no failures. It used the full command recorded under A61, including both established
+source runtimes and the lint oracle. The file-URL corpus and physical read counts
+are asserted in their tests. Rustfmt, whitespace checks, Clippy with warnings denied
+and the Windows all-target cross-check passed. The upstream checkout remained clean
+at the pinned revision. These results do not close QG3 or QG5 for the remaining
+transport, platform and metadata contracts.
 
 ### Lint archive discovery, validation and README locations
 

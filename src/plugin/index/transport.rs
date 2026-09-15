@@ -5,6 +5,11 @@ use sha2::{Digest, Sha256};
 use super::Location;
 use crate::error::{Error, Result};
 
+mod file_url;
+mod github_url;
+
+pub(super) use file_url::path as local_file_path;
+
 pub fn credential_host(url: &url::Url) -> bool {
     url.scheme() == "https"
         && url.host_str().is_some_and(|host| {
@@ -14,12 +19,13 @@ pub fn credential_host(url: &url::Url) -> bool {
 
 /// Recompute credentials per redirect; never forward x-api-key to mirrors or presigned storage.
 pub async fn fetch(url: &str) -> Result<Vec<u8>> {
-    let mut current = url::Url::parse(url).map_err(|e| Error::Other(e.to_string()))?;
-    if current.scheme() == "file" {
-        return Ok(std::fs::read(
-            current.to_file_path().map_err(|_| Error::Other("invalid file URL".into()))?,
-        )?);
+    if let Some(path) = local_file_path(url)? {
+        if !crate::util::python_path::exists(&path)? {
+            return Err(Error::Other(format!("File not found: {}", path.display())));
+        }
+        return Ok(std::fs::read(path)?);
     }
+    let mut current = url::Url::parse(url).map_err(|e| Error::Other(e.to_string()))?;
     let secure = current.scheme() == "https";
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
@@ -80,27 +86,17 @@ struct ReleaseAsset {
 }
 
 pub async fn github_archive(source: &str) -> Result<Vec<u8>> {
-    let url = url::Url::parse(source).map_err(|error| Error::Other(error.to_string()))?;
-    if url.scheme() != "https" || url.host_str() != Some("github.com") {
-        return Err(Error::Other("expected an HTTPS GitHub repository URL".into()));
-    }
-    let path = url.path().trim_matches('/');
-    let (repository, tag) = path
-        .rsplit_once('@')
-        .map(|(repository, tag)| (repository, Some(tag)))
-        .unwrap_or((path, None));
-    let repository = repository.trim_end_matches(".git");
-    if repository.split('/').count() != 2 || tag == Some("") {
-        return Err(Error::Other(
-            "expected a GitHub owner/repository URL with an optional @tag".into(),
-        ));
-    }
+    let github_url::ReleaseSource {
+        owner,
+        repository,
+        tag,
+    } = github_url::parse(source)?;
     let release = match tag {
         Some(tag) => format!("tags/{tag}"),
         None => "latest".into(),
     };
     let endpoint = format!(
-        "{}/repos/{repository}/releases/{release}",
+        "{}/repos/{owner}/{repository}/releases/{release}",
         crate::config::Env::global().github_api_url.trim_end_matches('/')
     );
     let release: Release = serde_json::from_slice(&fetch(&endpoint).await?)?;

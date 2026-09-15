@@ -17,7 +17,7 @@ static DIRECT_GITHUB: Lazy<Regex> = Lazy::new(|| {
         .unwrap()
 });
 
-pub(super) fn is_direct_github(value: &str) -> bool {
+pub(crate) fn is_direct_github(value: &str) -> bool {
     DIRECT_GITHUB.is_match(&pattern_spelling(value))
 }
 

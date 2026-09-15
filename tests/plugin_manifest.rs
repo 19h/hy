@@ -10,7 +10,7 @@ use support::*;
 
 #[test]
 fn invalid_descriptors_cannot_reach_dependency_installation_or_publication() {
-    for source in ["archive", "directory", "snapshot"] {
+    for source in ["archive", "directory", "editable", "snapshot"] {
         for (field, value, diagnostic) in [
             ("authors", json!([]), "authors or maintainers"),
             ("categories", json!(["invalid"]), "unknown plugin category"),
@@ -50,9 +50,12 @@ fn invalid_descriptors_cannot_reach_dependency_installation_or_publication() {
                 args.extend(["--repo", repository.to_str().unwrap()]);
             }
             args.push("install");
+            if source == "editable" {
+                args.push("--editable");
+            }
             args.push(match source {
                 "archive" => package.to_str().unwrap(),
-                "directory" => directory.to_str().unwrap(),
+                "directory" | "editable" => directory.to_str().unwrap(),
                 _ => "example==1",
             });
             let result = sandbox.run_with_env(
@@ -60,9 +63,9 @@ fn invalid_descriptors_cannot_reach_dependency_installation_or_publication() {
                 &[("HCLI_CURRENT_IDA_PYTHON_EXE", &python), ("HY_TEST_PIP_ARGUMENTS", &arguments)],
             );
             assert!(!result.status.success(), "{source}: {field}");
-            // Archive selection skips invalid descriptors; directory and snapshot
-            // validation report the rejected field directly.
-            let diagnostic = if source == "archive" {
+            // Regular distributions skip invalid archived descriptors. Editable
+            // sources and repository snapshots validate the descriptor directly.
+            let diagnostic = if matches!(source, "archive" | "directory") {
                 "ida-plugin.json not found in archive"
             } else {
                 diagnostic

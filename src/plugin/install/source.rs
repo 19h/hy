@@ -15,19 +15,25 @@ pub enum InstallationSource {
 }
 
 impl InstallationSource {
-    pub fn read(path: &Path, editable: bool) -> Result<Self> {
+    pub fn directory(path: &Path, editable: bool) -> Result<Self> {
         if editable {
             if !path.is_dir() {
                 return Err(Error::PluginInstall("--editable requires a local directory".into()));
             }
             return Ok(Self::Editable(path.into()));
         }
-        let bytes = if path.is_dir() {
-            directory::pack(path)?
-        } else {
-            std::fs::read(path)?
-        };
+        Self::archive(directory::pack(path)?)
+    }
+
+    pub fn archive(bytes: Vec<u8>) -> Result<Self> {
         Ok(Self::Archive(Archive::new(Cursor::new(bytes))?))
+    }
+
+    pub fn editable_path(&self) -> Option<&Path> {
+        match self {
+            Self::Editable(path) => Some(path),
+            Self::Archive(_) => None,
+        }
     }
 
     pub fn metadata(&mut self, name: Option<&str>) -> Result<PluginMetadata> {

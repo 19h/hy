@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 
-fn snapshot(sandbox: &Sandbox, server: &Server) -> std::process::Output {
+pub(super) fn snapshot(sandbox: &Sandbox, server: &Server) -> std::process::Output {
     sandbox
         .command(&["plugin", "--repo", "github", "repo", "snapshot"])
         .env("GITHUB_TOKEN", "fixture-token")
@@ -13,7 +13,7 @@ fn snapshot(sandbox: &Sandbox, server: &Server) -> std::process::Output {
         .unwrap()
 }
 
-fn search() -> Response {
+pub(super) fn search() -> Response {
     Response::json(json!({"items": [
         {"repository": {"full_name": "owner/repo"}},
     ]}))

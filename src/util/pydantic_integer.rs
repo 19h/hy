@@ -17,6 +17,21 @@ impl From<i64> for Integer {
 }
 
 impl Integer {
+    pub(crate) fn to_python(&self) -> crate::util::python_json::Value {
+        crate::util::python_json::Value::Integer(self.0.clone())
+    }
+
+    pub(crate) fn from_python(value: &crate::util::python_json::Value) -> Option<Self> {
+        use crate::util::python_json::Value;
+        match value {
+            Value::Integer(value) => Some(Self(value.clone())),
+            Value::Bool(value) => Some(Self(BigInt::from(u8::from(*value)))),
+            Value::Float(value) => from_float(*value).map(Self),
+            Value::String(value) => from_string(&value.to_utf8().ok()?).map(Self),
+            _ => None,
+        }
+    }
+
     pub(crate) fn to_u64(&self) -> Option<u64> {
         self.0.to_u64()
     }

@@ -27,7 +27,7 @@ pub(super) fn graphql() -> Value {
     })
 }
 
-fn cached() -> Value {
+pub(super) fn cached() -> Value {
     json!({
         "default_branch": {
             "commit_hash": "commit",

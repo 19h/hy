@@ -36,6 +36,12 @@ impl Drop for Value {
 }
 
 impl Value {
+    pub(crate) fn object<const N: usize>(fields: [(&str, Value); N]) -> Self {
+        Self::Object(Object(
+            fields.into_iter().map(|(key, value)| (Text::from(key), value)).collect(),
+        ))
+    }
+
     pub(crate) fn get(&self, key: &str) -> Option<&Value> {
         match self {
             Self::Object(object) => object.get(key),
@@ -68,6 +74,12 @@ impl Value {
 pub(crate) struct Object(IndexMap<Text, Value>);
 
 impl Object {
+    pub(crate) fn iter(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = (&Text, &Value)> + ExactSizeIterator {
+        self.0.iter()
+    }
+
     pub(crate) fn keys(&self) -> impl Iterator<Item = &Text> {
         self.0.keys()
     }
@@ -96,3 +108,8 @@ fn invalid(message: impl std::fmt::Display) -> Error {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(crate) fn from_fixture(value: &serde_json::Value) -> Value {
+    parse(&value.to_string()).unwrap()
+}

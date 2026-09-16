@@ -5,6 +5,9 @@ use serde_json::Value;
 mod numbers;
 mod printable;
 mod strings;
+mod values;
+
+pub(crate) use values::python_str;
 
 pub(crate) use numbers::float_repr;
 

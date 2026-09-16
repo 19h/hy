@@ -1,6 +1,8 @@
 //! Unicode code points preserve Python strings that Rust String cannot represent.
 
 use crate::error::Result;
+#[cfg(test)]
+use serde::{Serialize, Serializer};
 
 use super::invalid;
 
@@ -14,6 +16,18 @@ impl From<&str> for Text {
 }
 
 impl Text {
+    pub(crate) fn starts_with(&self, character: char) -> bool {
+        self.0.first() == Some(&u32::from(character))
+    }
+
+    pub(crate) fn equals(&self, text: &str) -> bool {
+        self.codepoints().eq(text.chars().map(u32::from))
+    }
+
+    pub(crate) fn compare(&self, text: &str) -> std::cmp::Ordering {
+        self.codepoints().cmp(text.chars().map(u32::from))
+    }
+
     pub(crate) fn codepoints(&self) -> impl Iterator<Item = u32> + '_ {
         self.0.iter().copied()
     }
@@ -81,5 +95,13 @@ impl Text {
             }
         }
         result
+    }
+}
+
+#[cfg(test)]
+impl Serialize for Text {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        let text = self.to_utf8().map_err(serde::ser::Error::custom)?;
+        serializer.serialize_str(&text)
     }
 }

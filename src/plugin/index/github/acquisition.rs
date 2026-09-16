@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use crate::error::Result;
 use crate::util::pydantic_integer::Integer;
-use crate::util::python_path;
+use crate::util::{python_json::Text, python_path};
 
 use super::{cache, models::Repository};
 
@@ -20,18 +20,18 @@ pub(super) struct Plan {
 
 pub(super) struct Archive {
     pub repository: String,
-    pub url: String,
+    pub url: Text,
     kind: Kind,
 }
 
 enum Kind {
     Asset {
-        tag: String,
-        name: String,
+        tag: Text,
+        name: Text,
         size: Integer,
     },
     Source {
-        commit: String,
+        commit: Text,
     },
 }
 
@@ -51,17 +51,17 @@ impl Plan {
     fn append(&mut self, name: &str, repository: Repository) {
         let mut seen_sources = HashSet::new();
         for release in repository.releases {
-            if release.published_at.as_str() < FIRST_RELEASE_DATE {
+            if release.published_at.compare(FIRST_RELEASE_DATE).is_lt() {
                 continue;
             }
             seen_sources.insert(release.zipball_url.clone());
             // Every release contributes its source, even when URLs repeat.
             self.sources.push(Archive::source(name, release.commit_hash, release.zipball_url));
             for asset in release.assets {
-                if !matches!(
-                    asset.content_type.as_str(),
-                    "application/zip" | "application/x-zip-compressed" | "raw"
-                ) || !asset.name.to_lowercase().ends_with(".zip")
+                if !["application/zip", "application/x-zip-compressed", "raw"]
+                    .iter()
+                    .any(|kind| asset.content_type.equals(kind))
+                    || !asset.name.has_zip_suffix()
                 {
                     continue;
                 }
@@ -78,7 +78,7 @@ impl Plan {
         }
         for tag in repository.tags {
             if tag.tag_name.starts_with('v')
-                && tag.committed_date.as_str() >= FIRST_RELEASE_DATE
+                && !tag.committed_date.compare(FIRST_RELEASE_DATE).is_lt()
                 && seen_sources.insert(tag.zipball_url.clone())
             {
                 self.sources.push(Archive::source(name, tag.commit_hash, tag.zipball_url));
@@ -92,7 +92,7 @@ impl Plan {
 }
 
 impl Archive {
-    fn source(repository: &str, commit: String, url: String) -> Self {
+    fn source(repository: &str, commit: Text, url: Text) -> Self {
         Self {
             repository: repository.into(),
             url,
@@ -102,21 +102,28 @@ impl Archive {
         }
     }
 
-    pub fn cache_path(&self) -> Result<PathBuf> {
+    /// None means the filename cannot be encoded by the native filesystem.
+    /// Python treats that existence probe as a cache miss, but publication fails.
+    pub fn cache_path(&self) -> Result<Option<PathBuf>> {
         let (owner, repo) = super::discovery::parse_repository(&self.repository)?;
+        let owner = Text::from(owner);
+        let repo = Text::from(repo);
         match &self.kind {
             Kind::Asset {
                 tag,
                 name,
                 ..
-            } => Ok(python_path::join(
-                &cache::directory(&[owner, repo, "release-assets", tag])?,
-                name,
-            )),
+            } => {
+                let directory =
+                    cache::directory_text(&[&owner, &repo, &"release-assets".into(), tag])?;
+                Ok(python_path::join_text(&directory, name))
+            }
             Kind::Source {
                 commit,
             } => {
-                Ok(cache::directory(&[owner, repo, "source-archives", commit])?.join("source.zip"))
+                let directory =
+                    cache::directory_text(&[&owner, &repo, &"source-archives".into(), commit])?;
+                Ok(Some(directory.join("source.zip")))
             }
         }
     }

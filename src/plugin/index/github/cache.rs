@@ -22,9 +22,13 @@ pub(super) fn directory(parts: &[&str]) -> Result<PathBuf> {
 
 pub(super) fn candidate_metadata_path(repository: &Text) -> Result<PathBuf> {
     let (owner, repo) = super::discovery::parse_name(repository)?;
+    Ok(directory_text(&[&owner, &repo])?.join("releases.json"))
+}
+
+pub(super) fn directory_text(parts: &[&Text]) -> Result<PathBuf> {
     let root = prepare_root()?;
     let mut path = python_path::join(&root, "");
-    for part in [owner, repo] {
+    for part in parts {
         let text = part.to_utf8().map_err(|_| {
             Error::GitHubValue(format!(
                 "Invalid path component: '{}'. Must contain only ASCII characters",
@@ -34,7 +38,7 @@ pub(super) fn candidate_metadata_path(repository: &Text) -> Result<PathBuf> {
         validate_component(&text)?;
         path = python_path::join(&path, &text);
     }
-    Ok(create_directory(path)?.join("releases.json"))
+    create_directory(path)
 }
 
 fn prepare_root() -> Result<PathBuf> {
@@ -117,13 +121,6 @@ pub fn write(path: &Path, bytes: &[u8]) -> Result<()> {
     // Path.write_bytes follows existing links and does not create asset-name parents.
     std::fs::write(path, bytes)?;
     Ok(())
-}
-
-pub(super) fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<()> {
-    let value = serde_json::to_value(value)?;
-    let text = crate::util::json_format::sorted_ascii(&value, "  ");
-    crate::util::json_numbers::validate_integer_limits(&text)?;
-    write_text(path, text)
 }
 
 pub(super) fn write_text(path: &Path, mut text: String) -> Result<()> {

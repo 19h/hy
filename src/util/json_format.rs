@@ -6,6 +6,61 @@ use serde_json::Value;
 
 use crate::util::python_repr;
 
+/// Model cache JSON uses Python values, including strings outside Unicode scalars.
+pub(crate) fn python_sorted_ascii(value: &crate::util::python_json::Value, indent: &str) -> String {
+    let mut output = String::new();
+    write_python_value(value, 0, indent, &mut output);
+    output
+}
+
+fn write_python_value(
+    value: &crate::util::python_json::Value,
+    depth: usize,
+    indent: &str,
+    output: &mut String,
+) {
+    use crate::util::python_json::Value;
+    match value {
+        Value::Null => output.push_str("null"),
+        Value::Bool(value) => output.push_str(if *value {
+            "true"
+        } else {
+            "false"
+        }),
+        Value::Integer(value) => output.push_str(&value.to_string()),
+        Value::Float(value) => {
+            let text = python_repr::float_repr(*value);
+            output.push_str(match text.as_str() {
+                "nan" => "NaN",
+                "inf" => "Infinity",
+                "-inf" => "-Infinity",
+                _ => &text,
+            });
+        }
+        Value::String(value) => write_codepoints(value.codepoints(), output),
+        Value::Array(values) => {
+            output.push('[');
+            for (index, value) in values.iter().enumerate() {
+                separator(index, depth + 1, indent, output);
+                write_python_value(value, depth + 1, indent, output);
+            }
+            close(']', values.is_empty(), depth, indent, output);
+        }
+        Value::Object(values) => {
+            let mut fields: Vec<_> = values.iter().collect();
+            fields.sort_unstable_by_key(|(key, _)| *key);
+            output.push('{');
+            for (index, (key, value)) in fields.into_iter().enumerate() {
+                separator(index, depth + 1, indent, output);
+                write_codepoints(key.codepoints(), output);
+                output.push_str(": ");
+                write_python_value(value, depth + 1, indent, output);
+            }
+            close('}', values.is_empty(), depth, indent, output);
+        }
+    }
+}
+
 pub(crate) fn sorted_ascii(value: &Value, indent: &str) -> String {
     let mut output = String::new();
     write_value(value, 0, indent, &mut output);

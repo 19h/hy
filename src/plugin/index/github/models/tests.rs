@@ -5,8 +5,10 @@ use std::process::{Command, Stdio};
 use serde_json::{Value, json};
 
 use super::Repository;
+use crate::util::python_json::from_fixture;
 
 mod cases;
+mod lexical;
 
 #[test]
 fn graphql_and_cached_models_match_upstream_validation_and_serialization() {
@@ -16,9 +18,9 @@ fn graphql_and_cached_models_match_upstream_validation_and_serialization() {
         .iter()
         .map(|case| {
             let result = if case["kind"] == "graphql" {
-                Repository::from_graphql(&case["value"])
+                Repository::from_graphql(&from_fixture(&case["value"]))
             } else {
-                serde_json::from_value::<Repository>(case["value"].clone()).map_err(Into::into)
+                Repository::from_cached(&from_fixture(&case["value"]))
             };
             match result {
                 Ok(repository) => json!({"value": repository}),
@@ -26,6 +28,10 @@ fn graphql_and_cached_models_match_upstream_validation_and_serialization() {
             }
         })
         .collect();
+    compare_source(&cases, &expected);
+}
+
+fn compare_source(cases: &[Value], expected: &[Value]) {
     let Some(python) = std::env::var_os("HY_TEST_BUNDLE_ORACLE_PYTHON") else {
         return;
     };
@@ -40,12 +46,12 @@ fn graphql_and_cached_models_match_upstream_validation_and_serialization() {
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
-    child.stdin.take().unwrap().write_all(&serde_json::to_vec(&cases).unwrap()).unwrap();
+    child.stdin.take().unwrap().write_all(&serde_json::to_vec(cases).unwrap()).unwrap();
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success());
     let actual: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(actual.len(), expected.len());
-    for (index, (actual, expected)) in actual.iter().zip(&expected).enumerate() {
+    for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
         assert_eq!(actual, expected, "case {index}: {}", cases[index]);
     }
     eprintln!("matched {} upstream GitHub model cases", cases.len());
@@ -54,14 +60,14 @@ fn graphql_and_cached_models_match_upstream_validation_and_serialization() {
 #[test]
 fn releases_validate_required_fields_and_unwrap_only_one_tag_level() {
     let baseline = cases::graphql();
-    assert!(Repository::from_graphql(&baseline).is_ok());
+    assert!(Repository::from_graphql(&from_fixture(&baseline)).is_ok());
     for field in ["createdAt", "publishedAt", "isPrerelease", "isDraft", "url", "tag"] {
         let mut value = baseline.clone();
         value["releases"]["nodes"][0].as_object_mut().unwrap().remove(field);
-        assert!(Repository::from_graphql(&value).is_err(), "{field}");
+        assert!(Repository::from_graphql(&from_fixture(&value)).is_err(), "{field}");
     }
     let mut value = baseline;
     let target = &mut value["releases"]["nodes"][0]["tag"]["target"];
     *target = json!({"target": {"target": target.clone()}});
-    assert!(Repository::from_graphql(&value).is_err());
+    assert!(Repository::from_graphql(&from_fixture(&value)).is_err());
 }

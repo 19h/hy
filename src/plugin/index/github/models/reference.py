@@ -24,8 +24,8 @@ import hcli.lib.ida.plugin.repo.github as github
 
 results = []
 for case in json.load(sys.stdin):
-    value = case["value"]
     try:
+        value = json.loads(case["body"]) if "body" in case else case["value"]
         if case["kind"] == "graphql":
             releases = value["releases"]["nodes"]
             tags = value["refs"]["nodes"]
@@ -36,7 +36,10 @@ for case in json.load(sys.stdin):
             )
         else:
             model = github.GitHubReleases.model_validate(value)
-        results.append({"value": model.model_dump()})
+        if "body" in case:
+            results.append({"text": json.dumps(model.model_dump(), indent=2, sort_keys=True)})
+        else:
+            results.append({"value": model.model_dump()})
     except (ValueError, KeyError, TypeError, AttributeError):
         results.append({"error": True})
 print(json.dumps(results))

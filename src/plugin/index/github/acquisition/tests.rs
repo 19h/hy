@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 use serde_json::{Value, json};
 
 use super::*;
+use crate::util::python_json::from_fixture;
 
 mod cases;
 
@@ -22,7 +23,7 @@ fn planned_archive_calls_match_upstream_collection_order_and_multiplicity() {
                 .map(|entry| {
                     (
                         entry["name"].as_str().unwrap().to_owned(),
-                        Repository::from_graphql(&entry["metadata"]).unwrap(),
+                        Repository::from_graphql(&from_fixture(&entry["metadata"])).unwrap(),
                     )
                 })
                 .collect();

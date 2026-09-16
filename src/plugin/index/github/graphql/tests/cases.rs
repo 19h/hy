@@ -1,6 +1,6 @@
 use serde_json::{Value, json};
 
-fn repository() -> Value {
+pub(super) fn repository() -> Value {
     json!({
         "defaultBranchRef": {
             "target": {

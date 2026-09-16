@@ -1,7 +1,6 @@
 //! Catalogue HTTP acquisition; final response bodies are read outside retries.
 
 use reqwest::{Client, Response, header, redirect::Policy};
-use serde::de::DeserializeOwned;
 
 use crate::error::{Error, Result};
 use crate::util::{python_json, python_utf8, strings::python_trim};
@@ -59,7 +58,7 @@ pub(super) async fn read_search_json(response: Response) -> Result<python_json::
     python_json::parse(python_utf8::decode(&bytes)?)
 }
 
-pub(super) async fn read_graphql_json<T: DeserializeOwned>(response: Response) -> Result<T> {
+pub(super) async fn read_graphql_json(response: Response) -> Result<python_json::Value> {
     if !response.status().is_success() {
         let status = response.status().as_u16();
         // GraphQL catches HTTPError outside _urlopen_with_retry. Reading and
@@ -68,8 +67,7 @@ pub(super) async fn read_graphql_json<T: DeserializeOwned>(response: Response) -
         let body = python_utf8::decode(&bytes)?;
         return Err(Error::Other(format!("HTTP {status}: {body}")));
     }
-    require_success(&response)?;
-    Ok(response.json().await?)
+    read_search_json(response).await
 }
 
 pub(super) fn reason(response: &Response) -> String {

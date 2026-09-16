@@ -1,7 +1,10 @@
 //! Ten-repository cache warming, followed by ordinary per-repository lookups.
 
 use crate::error::{Error, Result};
-use crate::util::python_json::Text;
+use crate::util::{
+    python_json::{self, Text},
+    python_utf8,
+};
 
 use super::{Client, METADATA_LIFETIME, cache, graphql, http, models::Repository};
 
@@ -52,7 +55,7 @@ impl Client {
         let body = graphql::request(repositories)?;
         let request = self.http.post(format!("{}/graphql", self.base)).json(&body);
         let response = http::read_graphql_json(self.response(request).await?).await?;
-        graphql::decode(repositories, response)
+        graphql::decode(repositories, &response)
     }
 
     fn cached_releases(&self, name: &str) -> Result<Option<Repository>> {
@@ -61,12 +64,15 @@ impl Client {
     }
 
     fn store_releases(&self, name: &str, repository: &Repository) -> Result<()> {
-        cache::write_json(&cache::metadata_path(name)?, repository)
+        cache::write_text(&cache::metadata_path(name)?, repository.cache_text()?)
     }
 }
 
 fn read_releases(path: &std::path::Path) -> Result<Option<Repository>> {
     cache::read(path, Some(METADATA_LIFETIME))?
-        .map(|bytes| serde_json::from_slice(&bytes).map_err(Into::into))
+        .map(|bytes| {
+            let value = python_json::parse(python_utf8::decode(&bytes)?)?;
+            Repository::from_cached(&value)
+        })
         .transpose()
 }

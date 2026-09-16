@@ -34,14 +34,18 @@ for case in json.load(sys.stdin):
         body = json.loads(request.data)
         body["query"] = " ".join(body["query"].split())
         requests.append(body)
-        return io.BytesIO(json.dumps(case["response"]).encode())
+        payload = bytes(case["body"]) if "body" in case else json.dumps(case["response"]).encode()
+        return io.BytesIO(payload)
 
     with patch.object(github, "_urlopen_with_retry", side_effect=respond):
         try:
             values = github.GitHubGraphQLClient("fixture").get_many_releases(
                 [tuple(name.split("/")) for name in case["repositories"]]
             )
-            outcome = {"repositories": ["/".join(name) for name in values]}
+            if "body" in case:
+                outcome = {"models": [json.dumps(value.model_dump(), indent=2, sort_keys=True) for value in values.values()]}
+            else:
+                outcome = {"repositories": ["/".join(name) for name in values]}
         except RuntimeError as error:
             if not str(error).startswith("GraphQL errors:"):
                 raise
@@ -49,5 +53,5 @@ for case in json.load(sys.stdin):
         except (ValueError, TypeError, AttributeError, KeyError):
             outcome = {"error": True}
     assert len(requests) <= 1
-    results.append({"request": requests[0] if requests else None, "outcome": outcome})
+    results.append(outcome if "body" in case else {"request": requests[0] if requests else None, "outcome": outcome})
 print(json.dumps(results))

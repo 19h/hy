@@ -48,24 +48,32 @@ impl Client {
     }
 
     async fn acquire_archive(&self, archive: &acquisition::Archive) -> Result<Option<Vec<u8>>> {
-        if let Some(bytes) = cache::read(&archive.cache_path()?, None)? {
+        if let Some(path) = archive.cache_path()?
+            && let Some(bytes) = cache::read(&path, None)?
+        {
             return Ok(Some(bytes));
         }
         // Upstream consults its cache before download_release_asset checks size.
         if archive.exceeds_download_limit() {
             return Ok(None);
         }
-        let url = &archive.url;
+        let url = archive
+            .url
+            .to_utf8()
+            .map_err(|_| Error::GitHubValue("archive URL contains an unpaired surrogate".into()))?;
         if self.offline {
             return Err(Error::Other(format!("archive unavailable offline: {url}")));
         }
         let result = if url.starts_with("file://") {
-            super::fetch(url).await
+            super::fetch(&url).await
         } else {
-            http::download(url).await
+            http::download(&url).await
         };
         let bytes = result?;
-        cache::write(&archive.cache_path()?, &bytes)?;
+        let path = archive.cache_path()?.ok_or_else(|| {
+            Error::GitHubValue("archive filename cannot be encoded by the filesystem".into())
+        })?;
+        cache::write(&path, &bytes)?;
         Ok(Some(bytes))
     }
 }
@@ -103,7 +111,12 @@ pub async fn load(options: &Options, offline: bool) -> Result<LoadedRepository> 
     for archive in acquisition::Plan::from_repositories(metadata).into_archives() {
         if let Some(bytes) = client.archive(&archive).await? {
             let host = format!("https://github.com/{}", archive.repository);
-            super::archive::add_bytes(&mut catalogue, &bytes, &archive.url, Some(&host))?;
+            super::archive::add_bytes(
+                &mut catalogue,
+                &bytes,
+                &archive.url.to_utf8()?,
+                Some(&host),
+            )?;
         }
     }
     loaded.snapshot.plugins = catalogue.into_plugins()?;

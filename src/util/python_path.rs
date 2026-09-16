@@ -4,7 +4,9 @@ use crate::error::{Error, Result};
 
 mod exists;
 mod home;
+mod text;
 pub(crate) use exists::{exists, is_dir, is_file};
+pub(crate) use text::join_text;
 pub(crate) mod path;
 
 #[cfg(test)]

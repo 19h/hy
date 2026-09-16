@@ -83,7 +83,7 @@ async fn wire_reasons_and_incomplete_error_bodies_keep_consumer_boundaries() {
             let response = client.get(format!("http://{address}/fixture")).send().await.unwrap();
             assert_eq!(reason(&response), expected_reason);
             let error = if graphql {
-                read_graphql_json::<Value>(response).await.unwrap_err()
+                read_graphql_json(response).await.unwrap_err()
             } else {
                 read_search_json(response).await.unwrap_err()
             };
@@ -120,7 +120,7 @@ async fn observe(case: &Value) -> Value {
     response.extensions_mut().insert(hyper::ext::ReasonPhrase::try_from(reason).unwrap());
     let response: Response = response.into();
     let result = match case["consumer"].as_str().unwrap() {
-        "graphql" => read_graphql_json::<Value>(response).await.map(|_| ()),
+        "graphql" => read_graphql_json(response).await.map(|_| ()),
         "search" => read_search_json(response).await.map(|_| ()),
         "asset" | "source" => require_success(&response),
         _ => unreachable!(),

@@ -1,9 +1,9 @@
-//! Convert GraphQL records before applying the canonical model validators.
+//! GraphQL field extraction precedes canonical model validation.
 
-use serde_json::{Value, json};
+use crate::error::Result;
+use crate::util::python_json::Value;
 
-use crate::error::{Error, Result};
-
+use super::fields::{boolean, invalid_collection, list, required, string, text};
 use super::{Asset, Commit, Release, Repository, Tag};
 
 impl Repository {
@@ -21,75 +21,65 @@ impl Repository {
 
 impl Commit {
     fn from_graphql(value: &Value) -> Result<Self> {
-        Ok(serde_json::from_value(json!({
-            "commit_hash": required(value, "oid")?,
-            "committed_date": required(value, "committedDate")?,
-            "zipball_url": required(value, "zipballUrl")?,
-        }))?)
+        Ok(Self {
+            commit_hash: string(value, "oid")?,
+            committed_date: string(value, "committedDate")?,
+            zipball_url: string(value, "zipballUrl")?,
+        })
     }
 }
 
 impl Release {
     fn from_graphql(value: &Value) -> Result<Self> {
-        let empty = json!({});
-        let connection = value.get("releaseAssets").unwrap_or(&empty);
-        let connection = connection.as_object().ok_or_else(invalid_collection)?;
-        let assets = match connection.get("nodes") {
-            Some(nodes) => collect(nodes, |value| Asset::try_from(value.clone()))?,
+        let assets = match value.get("releaseAssets") {
             None => Vec::new(),
+            Some(Value::Object(connection)) => match connection.get("nodes") {
+                Some(nodes) => collect(nodes, Asset::from_value)?,
+                None => Vec::new(),
+            },
+            _ => return Err(invalid_collection()),
         };
-        let empty_name = json!("");
+        let empty_name = Value::String("".into());
         let tag_name = value.get("tagName").unwrap_or(&empty_name);
-        let name = value.get("name").filter(|value| super::truthy(value));
+        let name = value.get("name").filter(|value| value.truthy()).unwrap_or(tag_name);
         let target = tag_target(required(value, "tag")?)?;
-        Ok(serde_json::from_value(json!({
-            "name": name.unwrap_or(tag_name),
-            "tag_name": tag_name,
-            "commit_hash": required(target, "oid")?,
-            "created_at": required(value, "createdAt")?,
-            "published_at": required(value, "publishedAt")?,
-            "is_prerelease": required(value, "isPrerelease")?,
-            "is_draft": required(value, "isDraft")?,
-            "url": required(value, "url")?,
-            "zipball_url": required(target, "zipballUrl")?,
-            "assets": assets,
-        }))?)
+        Ok(Self {
+            name: text(name)?,
+            tag_name: text(tag_name)?,
+            commit_hash: string(target, "oid")?,
+            created_at: string(value, "createdAt")?,
+            published_at: string(value, "publishedAt")?,
+            is_prerelease: boolean(required(value, "isPrerelease")?)?,
+            is_draft: boolean(required(value, "isDraft")?)?,
+            url: string(value, "url")?,
+            zipball_url: string(target, "zipballUrl")?,
+            assets,
+        })
     }
 }
 
 impl Tag {
     fn from_graphql(value: &Value) -> Result<Self> {
         let target = tag_target(value)?;
-        Ok(serde_json::from_value(json!({
-            "tag_name": required(value, "name")?,
-            "commit_hash": required(target, "oid")?,
-            "zipball_url": required(target, "zipballUrl")?,
-            "committed_date": required(target, "committedDate")?,
-        }))?)
+        Ok(Self {
+            tag_name: string(value, "name")?,
+            commit_hash: string(target, "oid")?,
+            zipball_url: string(target, "zipballUrl")?,
+            committed_date: string(target, "committedDate")?,
+        })
     }
 }
 
 fn tag_target(value: &Value) -> Result<&Value> {
     let target = required(value, "target")?;
-    // The source unwraps exactly one annotated tag and gives it precedence
-    // over any commit fields present on the outer object.
+    // The source unwraps exactly one annotated tag.
     Ok(target.get("target").unwrap_or(target))
-}
-
-fn required<'a>(value: &'a Value, name: &str) -> Result<&'a Value> {
-    value.get(name).ok_or_else(|| Error::Other(format!("GitHub record is missing field {name}")))
 }
 
 fn collect<T>(value: &Value, parse: impl Fn(&Value) -> Result<T>) -> Result<Vec<T>> {
     match value {
-        Value::Array(values) => values.iter().map(parse).collect(),
-        // Python comprehensions accept empty iterable objects and strings.
         Value::Object(values) if values.is_empty() => Ok(Vec::new()),
         Value::String(value) if value.is_empty() => Ok(Vec::new()),
-        _ => Err(invalid_collection()),
+        _ => list(value, parse),
     }
-}
-
-fn invalid_collection() -> Error {
-    Error::Other("invalid GitHub metadata collection".into())
 }

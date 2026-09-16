@@ -6,8 +6,25 @@ pub(super) fn write_repr(value: &str, output: &mut String) {
     } else {
         '\''
     };
+    write_codepoints(value.chars().map(u32::from), quote, output);
+}
+
+pub(super) fn write_python(value: &crate::util::python_json::Text, output: &mut String) {
+    let quote = if value.contains('\'') && !value.contains('"') {
+        '"'
+    } else {
+        '\''
+    };
+    write_codepoints(value.codepoints(), quote, output);
+}
+
+fn write_codepoints(points: impl Iterator<Item = u32>, quote: char, output: &mut String) {
     output.push(quote);
-    for character in value.chars() {
+    for code in points {
+        let Some(character) = char::from_u32(code) else {
+            write!(output, "\\u{code:04x}").unwrap();
+            continue;
+        };
         match character {
             '\\' => output.push_str("\\\\"),
             '\t' => output.push_str("\\t"),

@@ -1,91 +1,61 @@
-//! Validated catalogue models; serialized field names match upstream cache records.
+//! Validated Python model values, including strings with unpaired surrogates.
 
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use crate::util::{pydantic_integer::Integer, python_json::Text};
+#[cfg(test)]
+use serde::Serialize;
 
-use crate::error::{Error, Result};
-use crate::plugin::metadata_values::deserialize_bool;
-use crate::util::pydantic_integer::Integer;
-
+mod cached;
+mod fields;
 mod graphql;
+mod serialization;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Serialize))]
 pub struct Repository {
     pub default_branch: Commit,
     pub releases: Vec<Release>,
     pub tags: Vec<Tag>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Serialize))]
 pub struct Release {
-    pub name: String,
-    pub tag_name: String,
-    pub commit_hash: String,
-    pub created_at: String,
-    pub published_at: String,
-    #[serde(deserialize_with = "deserialize_bool")]
+    pub name: Text,
+    pub tag_name: Text,
+    pub commit_hash: Text,
+    pub created_at: Text,
+    pub published_at: Text,
     pub is_prerelease: bool,
-    #[serde(deserialize_with = "deserialize_bool")]
     pub is_draft: bool,
-    pub url: String,
-    pub zipball_url: String,
+    pub url: Text,
+    pub zipball_url: Text,
     pub assets: Vec<Asset>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(try_from = "Value")]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Serialize))]
 pub struct Asset {
-    pub name: String,
-    pub download_url: String,
+    pub name: Text,
+    pub download_url: Text,
     pub size: Integer,
-    pub content_type: String,
+    pub content_type: Text,
 }
 
-impl TryFrom<Value> for Asset {
-    type Error = Error;
-
-    fn try_from(value: Value) -> Result<Self> {
-        let field = |alias, name| {
-            value
-                .get(alias)
-                .or_else(|| value.get(name))
-                .cloned()
-                .ok_or_else(|| Error::Other(format!("GitHub asset is missing field {alias}")))
-        };
-        // Pydantic prefers aliases even when their values fail validation.
-        Ok(Self {
-            name: serde_json::from_value(field("name", "name")?)?,
-            download_url: serde_json::from_value(field("downloadUrl", "download_url")?)?,
-            size: serde_json::from_value(field("size", "size")?)?,
-            content_type: serde_json::from_value(field("contentType", "content_type")?)?,
-        })
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Serialize))]
 pub struct Tag {
-    pub tag_name: String,
-    pub commit_hash: String,
-    pub zipball_url: String,
-    pub committed_date: String,
+    pub tag_name: Text,
+    pub commit_hash: Text,
+    pub zipball_url: Text,
+    pub committed_date: Text,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
+#[cfg_attr(test, derive(Serialize))]
 pub struct Commit {
-    pub commit_hash: String,
-    pub committed_date: String,
-    pub zipball_url: String,
-}
-
-pub(super) fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(value) => *value,
-        Value::Number(value) => value.as_f64() != Some(0.0),
-        Value::String(value) => !value.is_empty(),
-        Value::Array(values) => !values.is_empty(),
-        Value::Object(values) => !values.is_empty(),
-    }
+    pub commit_hash: Text,
+    pub committed_date: Text,
+    pub zipball_url: Text,
 }
 
 #[cfg(test)]

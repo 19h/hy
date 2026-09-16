@@ -34,7 +34,8 @@ pub(super) fn verify_checksum(location: &Location, bytes: &[u8]) -> Result<()> {
     if actual != location.sha256 {
         return Err(Error::Other(format!(
             "hash mismatch: expected {} but found {actual} for {}",
-            location.sha256, location.url,
+            location.sha256,
+            location.url.diagnostic(),
         )));
     }
     Ok(())

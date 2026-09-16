@@ -6,6 +6,9 @@ use serde_json::Value;
 use super::plugin_cmd::PluginSearchArgs;
 use crate::error::{Error, Result};
 use crate::plugin::{self, PluginMetadata, index};
+use crate::util::python_json::Text;
+
+mod serialization;
 
 #[derive(Serialize)]
 struct KeywordMatch {
@@ -45,7 +48,7 @@ struct VersionsReport {
 struct DownloadLocation {
     ida_versions: String,
     platforms: String,
-    url: String,
+    url: Text,
 }
 
 #[derive(Serialize)]
@@ -62,7 +65,7 @@ enum PluginQueryReport {
 }
 
 impl PluginQueryReport {
-    fn print_text(&self) {
+    fn print_text(&self) -> Result<()> {
         let metadata = match self {
             Self::Versions(report) => &report.plugin,
             Self::Exact(report) => &report.plugin,
@@ -91,13 +94,11 @@ impl PluginQueryReport {
             Self::Exact(report) => {
                 println!("\ndownload locations:");
                 for location in &report.download_locations {
-                    println!(
-                        "IDA: {}\tplatforms: {}\t{}",
-                        location.ida_versions, location.platforms, location.url
-                    );
+                    location.write_text()?;
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -419,9 +420,9 @@ pub async fn run(args: PluginSearchArgs, context: &plugin::PluginContext) -> Res
     match result {
         Ok(report) => {
             if args.json {
-                println!("{}", serde_json::to_string_pretty(&report)?);
+                println!("{}", report.to_json()?);
             } else {
-                report.print_text();
+                report.print_text()?;
             }
             Ok(())
         }

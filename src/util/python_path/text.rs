@@ -16,14 +16,7 @@ fn join_surrogates(base: &Path, name: &Text) -> Option<PathBuf> {
     use std::ffi::OsString;
     use std::os::unix::ffi::OsStringExt;
 
-    let mut bytes = Vec::new();
-    for point in name.codepoints() {
-        if (0xdc80..=0xdcff).contains(&point) {
-            bytes.push((point - 0xdc00) as u8);
-        } else {
-            bytes.extend_from_slice(char::from_u32(point)?.encode_utf8(&mut [0; 4]).as_bytes());
-        }
-    }
+    let bytes = name.to_utf8_surrogateescape().ok()?;
     // pathlib removes empty and '.' components but retains '..' and exactly
     // two leading slashes. Surrogateescape bytes cannot contain separators.
     let mut normalized = Vec::new();

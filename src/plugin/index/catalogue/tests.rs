@@ -9,7 +9,7 @@ use super::ArchiveCatalogue;
 
 const HOST: &str = "https://github.com/example/original";
 
-fn record(name: &str, version: &str, url: &str, host: &str, mask: usize) -> Value {
+pub(super) fn record(name: &str, version: &str, url: &str, host: &str, mask: usize) -> Value {
     let ida: Vec<_> = ["9.0", "9.1", "9.2", "9.3"]
         .into_iter()
         .enumerate()

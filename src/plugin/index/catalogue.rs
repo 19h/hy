@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 use super::{Location, Plugin};
 use crate::error::{Error, Result};
 use crate::plugin::{PluginManifest, PluginMetadata, parse_version};
-use crate::util::python_sort;
+use crate::util::{python_json::Text, python_sort};
 
 mod equality;
 
@@ -43,14 +43,14 @@ pub(crate) struct ArchiveCatalogue {
 }
 
 impl ArchiveCatalogue {
-    pub fn add(&mut self, url: &str, sha256: &str, descriptor: PluginManifest) -> Result<()> {
+    pub fn add(&mut self, url: &Text, sha256: &str, descriptor: PluginManifest) -> Result<()> {
         let metadata = &descriptor.metadata;
         let identity = (metadata.name.to_lowercase(), metadata.normalized_host()?);
         let variants =
             self.plugins.entry(identity).or_default().entry(metadata.version.clone()).or_default();
         let compatibility = Compatibility::from_metadata(metadata);
         variants.entry(compatibility).or_default().push(Location {
-            url: url.into(),
+            url: url.clone(),
             sha256: sha256.into(),
             descriptor,
         });
@@ -119,3 +119,5 @@ fn reject_metadata_comparisons(locations: &[&Location]) -> Result<()> {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod url_tests;

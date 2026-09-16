@@ -14,6 +14,8 @@ mod discovery;
 mod discovery_json;
 #[path = "github_catalogue/http_failure.rs"]
 mod http_failure;
+#[path = "github_catalogue/index_urls.rs"]
+mod index_urls;
 #[path = "github_catalogue/model_json.rs"]
 mod model_json;
 #[path = "github_catalogue/models.rs"]

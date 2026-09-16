@@ -49,9 +49,10 @@ impl LoadedRepository {
     }
 
     pub async fn fetch_verified(&self, location: &Location) -> Result<Vec<u8>> {
-        let bytes = match (&self.bundle_reader, location.url.strip_prefix("hcli-bundle:")) {
+        let url = location.url.to_utf8()?;
+        let bytes = match (&self.bundle_reader, url.strip_prefix("hcli-bundle:")) {
             (Some(reader), Some(member)) => reader.read(member)?,
-            _ => fetch(&location.url).await?,
+            _ => fetch(&url).await?,
         };
         transport::verify_checksum(location, &bytes)?;
         Ok(bytes)

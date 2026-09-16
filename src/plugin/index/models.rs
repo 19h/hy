@@ -4,6 +4,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::plugin::{PluginManifest, schema_version};
+use crate::util::python_json::Text;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Snapshot {
@@ -21,7 +22,7 @@ pub struct Plugin {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Location {
-    pub url: String,
+    pub url: Text,
     pub sha256: String,
     #[serde(rename = "metadata")]
     pub descriptor: PluginManifest,

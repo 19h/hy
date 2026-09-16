@@ -9,7 +9,14 @@ use crate::util::python_repr;
 /// Model cache JSON uses Python values, including strings outside Unicode scalars.
 pub(crate) fn python_sorted_ascii(value: &crate::util::python_json::Value, indent: &str) -> String {
     let mut output = String::new();
-    write_python_value(value, 0, indent, &mut output);
+    write_python_value(value, 0, indent, true, &mut output);
+    output
+}
+
+/// JSON reports retain insertion order, unlike sorted model-cache publication.
+pub(crate) fn python_ascii(value: &crate::util::python_json::Value, indent: &str) -> String {
+    let mut output = String::new();
+    write_python_value(value, 0, indent, false, &mut output);
     output
 }
 
@@ -17,6 +24,7 @@ fn write_python_value(
     value: &crate::util::python_json::Value,
     depth: usize,
     indent: &str,
+    sort_keys: bool,
     output: &mut String,
 ) {
     use crate::util::python_json::Value;
@@ -42,19 +50,21 @@ fn write_python_value(
             output.push('[');
             for (index, value) in values.iter().enumerate() {
                 separator(index, depth + 1, indent, output);
-                write_python_value(value, depth + 1, indent, output);
+                write_python_value(value, depth + 1, indent, sort_keys, output);
             }
             close(']', values.is_empty(), depth, indent, output);
         }
         Value::Object(values) => {
             let mut fields: Vec<_> = values.iter().collect();
-            fields.sort_unstable_by_key(|(key, _)| *key);
+            if sort_keys {
+                fields.sort_unstable_by_key(|(key, _)| *key);
+            }
             output.push('{');
             for (index, (key, value)) in fields.into_iter().enumerate() {
                 separator(index, depth + 1, indent, output);
                 write_codepoints(key.codepoints(), output);
                 output.push_str(": ");
-                write_python_value(value, depth + 1, indent, output);
+                write_python_value(value, depth + 1, indent, sort_keys, output);
             }
             close('}', values.is_empty(), depth, indent, output);
         }

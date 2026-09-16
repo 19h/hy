@@ -111,12 +111,7 @@ pub async fn load(options: &Options, offline: bool) -> Result<LoadedRepository> 
     for archive in acquisition::Plan::from_repositories(metadata).into_archives() {
         if let Some(bytes) = client.archive(&archive).await? {
             let host = format!("https://github.com/{}", archive.repository);
-            super::archive::add_bytes(
-                &mut catalogue,
-                &bytes,
-                &archive.url.to_utf8()?,
-                Some(&host),
-            )?;
+            super::archive::add_text_bytes(&mut catalogue, &bytes, &archive.url, Some(&host))?;
         }
     }
     loaded.snapshot.plugins = catalogue.into_plugins()?;

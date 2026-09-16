@@ -1,8 +1,7 @@
 //! Unicode code points preserve Python strings that Rust String cannot represent.
 
 use crate::error::Result;
-#[cfg(test)]
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::invalid;
 
@@ -12,6 +11,12 @@ pub(crate) struct Text(pub(super) Vec<u32>);
 impl From<&str> for Text {
     fn from(value: &str) -> Self {
         Self(value.chars().map(u32::from).collect())
+    }
+}
+
+impl From<String> for Text {
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
     }
 }
 
@@ -84,6 +89,22 @@ impl Text {
             .collect()
     }
 
+    /// CPython's default Unix filesystem/stdout codec maps U+DC80–U+DCFF to bytes.
+    #[cfg(any(unix, test))]
+    pub(crate) fn to_utf8_surrogateescape(&self) -> Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        for point in self.codepoints() {
+            if (0xdc80..=0xdcff).contains(&point) {
+                bytes.push((point - 0xdc00) as u8);
+            } else {
+                let character = char::from_u32(point)
+                    .ok_or_else(|| invalid("string contains an unencodable surrogate"))?;
+                bytes.extend_from_slice(character.encode_utf8(&mut [0; 4]).as_bytes());
+            }
+        }
+        Ok(bytes)
+    }
+
     /// CPython's UTF-8 stderr uses backslashreplace for unencodable surrogates.
     pub(crate) fn diagnostic(&self) -> String {
         let mut result = String::new();
@@ -98,10 +119,16 @@ impl Text {
     }
 }
 
-#[cfg(test)]
 impl Serialize for Text {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         let text = self.to_utf8().map_err(serde::ser::Error::custom)?;
         serializer.serialize_str(&text)
+    }
+}
+
+impl<'de> Deserialize<'de> for Text {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        // Pydantic's JSON model validator also rejects escaped unpaired surrogates.
+        String::deserialize(deserializer).map(Self::from)
     }
 }

@@ -8,12 +8,22 @@ use sha2::{Digest, Sha256};
 use super::{ArchiveCatalogue, normalize_host};
 use crate::error::{Error, Result};
 use crate::plugin::{files, read_archived_manifest};
+use crate::util::python_json::Text;
 use crate::util::python_zip::Archive;
 
 pub(crate) fn add_bytes(
     catalogue: &mut ArchiveCatalogue,
     bytes: &[u8],
     url: &str,
+    expected_host: Option<&str>,
+) -> Result<()> {
+    add_text_bytes(catalogue, bytes, &Text::from(url), expected_host)
+}
+
+pub(super) fn add_text_bytes(
+    catalogue: &mut ArchiveCatalogue,
+    bytes: &[u8],
+    url: &Text,
     expected_host: Option<&str>,
 ) -> Result<()> {
     let mut archive = Archive::new(Cursor::new(bytes))?;

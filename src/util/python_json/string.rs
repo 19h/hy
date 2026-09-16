@@ -21,6 +21,14 @@ impl From<String> for Text {
 }
 
 impl Text {
+    pub(crate) fn from_codepoints(points: impl IntoIterator<Item = u32>) -> Result<Self> {
+        let points: Vec<_> = points.into_iter().collect();
+        if points.iter().any(|&point| point > 0x10ffff) {
+            return Err(invalid("string contains an invalid Unicode code point"));
+        }
+        Ok(Self(points))
+    }
+
     pub(crate) fn starts_with(&self, character: char) -> bool {
         self.0.first() == Some(&u32::from(character))
     }

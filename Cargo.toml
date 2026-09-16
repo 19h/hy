@@ -96,7 +96,9 @@ libc = "0.2"
 percent-encoding = "2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Storage_FileSystem", "Win32_System_ProcessStatus"] }
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Networking_WinSock", "Win32_Storage_FileSystem", "Win32_System_ProcessStatus",
+] }
 winreg = "0.55"
 
 [target.'cfg(target_os = "macos")'.dependencies]

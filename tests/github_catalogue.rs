@@ -12,6 +12,9 @@ mod cache_layout;
 mod discovery;
 #[path = "github_catalogue/discovery_json.rs"]
 mod discovery_json;
+#[cfg(unix)]
+#[path = "github_catalogue/file_urls.rs"]
+mod file_urls;
 #[path = "github_catalogue/http_failure.rs"]
 mod http_failure;
 #[path = "github_catalogue/index_urls.rs"]

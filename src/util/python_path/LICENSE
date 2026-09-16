@@ -18,6 +18,13 @@ also adapts CPython v3.13.15 Lib/urllib/parse.py and Lib/urllib/request.py.
 Changes: Rust owned URL components and byte headers replace Python objects;
 request transport remains separate from lexical target construction.
 
+The catalogue file handler in plugin/index/github/file also adapts CPython
+v3.13.15 Lib/urllib/request.py, Lib/urllib/parse.py and Lib/nturl2path.py.
+Changes: Python code-point strings, Rust filesystem objects and native IPv4
+resolution preserve request/path/open boundaries without pathlib normalization.
+Native Windows operations and alternate filesystem/DNS codec profiles remain
+separate runtime verification requirements.
+
 Copyright (c) 2001-2024 Python Software Foundation; All Rights Reserved
 
 PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2

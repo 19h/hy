@@ -9,6 +9,7 @@ use crate::error::{Error, Result};
 mod acquisition;
 mod cache;
 mod discovery;
+mod file;
 mod graphql;
 mod http;
 mod metadata;
@@ -57,16 +58,18 @@ impl Client {
         if archive.exceeds_download_limit() {
             return Ok(None);
         }
-        let url = archive
-            .url
-            .to_utf8()
-            .map_err(|_| Error::GitHubValue("archive URL contains an unpaired surrogate".into()))?;
         if self.offline {
-            return Err(Error::Other(format!("archive unavailable offline: {url}")));
+            return Err(Error::Other(format!(
+                "archive unavailable offline: {}",
+                archive.url.diagnostic()
+            )));
         }
-        let result = if url.starts_with("file://") {
-            super::fetch(&url).await
+        let result = if let Some(request) = file::Request::parse(&archive.url)? {
+            file::download(request).await
         } else {
+            let url = archive.url.to_utf8().map_err(|_| {
+                Error::GitHubValue("archive URL contains an unpaired surrogate".into())
+            })?;
             http::download(&url).await
         };
         let bytes = result?;

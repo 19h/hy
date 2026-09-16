@@ -67,7 +67,7 @@ pub enum Error {
     #[error("{0}")]
     GitHubValue(String),
 
-    /// urllib URLError from catalogue request construction; eligible for retry.
+    /// urllib URLError from catalogue transport; eligible for retry.
     #[error("{0}")]
     GitHubUrl(String),
 

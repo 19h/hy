@@ -103,6 +103,7 @@ the current remaining scope.
 | A79 | Discovery response/cache decoding targets CPython 3.13.15 with its default integer limit. Unicode casing uses Rust's scalar tables, with surrogate code points separating casing contexts. | Change the interpreter's integer/recursion limits or Unicode version; probe native Windows, non-UTF-8 cache paths, locale-dependent cache decoding, resource exhaustion, malformed diagnostics and GraphQL/cache model JSON. | 276 raw-document source comparisons cover strict UTF-8 text, nonfinite values, escaped surrogates, selected-name code points, request order and exact candidate publication. Four CLI tests cover 24 invocations, including cache reuse and earlier metadata-directory probes. Discovery no longer requires serde-representable values; GraphQL/model JSON, runtime-dependent limits and exact malformed diagnostics remain open. |
 | A80 | Catalogue GraphQL/cache JSON targets CPython 3.13.15 and the actual Pydantic models under A45. Model strings retain Python code points; native filesystem observations use owned macOS fixtures. | Probe other interpreter/Pydantic versions, modified integer/recursion limits, locale-dependent cache decoding, surrogate-containing cached archive URLs or file URLs, native Windows path normalization, filesystems accepting raw-byte names, resource failures and aggregate model diagnostics. | 882 raw-model/cache-text comparisons, 116 raw GraphQL-envelope comparisons, 10,240 surrogate path encodings and two native existence probes supplement the existing model/query/acquisition corpora. Five CLI tests cover nine scenarios and thirteen macOS invocations. Model strings survive publication and filtering; cache-key, filename and HTTP-URL conversion occur at their consumers. Downstream archive-index URL representation, file-URL surrogates, runtime/platform limits and exhaustive diagnostics remain open. |
 | A81 | Shared archive-index URL ordering and consumer serialization target the pinned HCLI source and A45 runtime. Plain stdout comparisons use UTF-8 with Unix surrogateescape. | Probe surrogate file-URL transport, native Windows consoles, redirected output with alternate encodings or PYTHONIOENCODING, Rich terminal formatting, resource exhaustion and full exception text. | 2,053 index/snapshot/model-input comparisons and 2,050 search JSON/stdout codec comparisons cover every unpaired surrogate. Three CLI tests cover seven scenarios and twenty-three macOS invocations. Cached URLs survive acquisition, filtering and sorting; snapshot serialization remains strict while search JSON escapes Python strings. Other transport, codec and diagnostic profiles remain open. |
+| A82 | Catalogue file requests use CPython 3.13.15 urllib and the A45 HCLI runtime. Native reads use owned macOS fixtures, UTF-8/surrogateescape and the observed ASCII/IPv4 resolver profile; Windows path conversion is compared as code points. | Probe Unicode hostname IDNA/nameprep, alternate DNS/address ordering, resolver changes after hostname caching, alternate filesystem codecs, native Windows file opens, concurrent replacement, response-header/read failures and full exception diagnostics. | 12,040 request/path comparisons and 72 actual source file reads compare payloads, exception categories, failure phases, attempt counts and wait schedules. Four CLI tests cover fifteen scenarios/invocations. Catalogue downloads now preserve query/control text and trailing separators, enforce local-host rules, and retry file opens before cache publication. Shared repository-fetch surrogate URLs, header-stage timestamp/MIME checks and the listed runtime/codec/diagnostic profiles remain open. |
 
 ## Implemented contracts and remaining coverage
 
@@ -142,7 +143,7 @@ imply that every upstream edge case or supported operating system was tested.
 | Repository snapshot envelopes | Dedicated wire models require the plugin list, plugin host, archive URL/hash and complete versioned descriptor. Snapshot version defaults to literal 1; shared schema-version decoding accepts source literal coercions. Location descriptors reuse the local manifest model and serialize their required version while excluding $schema. Version maps preserve input document order, including equal-precedence selection. Exports sort keys, indent by four spaces, escape non-ASCII strings and apply source number formatting. Bundle and installation downloads share case-sensitive hash verification. | Depends on A52/A53. Full metadata coercion, duplicate-key/nonstandard JSON behavior, exact validation reports, repository initialization and broader version-selection behavior remain open. Sorting exported keys can change a version tie after re-import, as upstream does. |
 | Pip offline mode | Group `--offline` changes pip's index policy without disabling repository transport. It requires `--pip-find-links` or an explicit bundle repository, except for upstream's repository-free command groups. A local HTTP fixture verifies repository/archive fetches while pip receives `--no-index`. | Full upstream pip environment classification remains open. The existing Rust search `--offline` and status alias remain separate command options. |
 | Plugin bundles | Separate target, manifest, inspection, publication, download and CLI source-resolution modules. Repository packaging verifies hashes, fetches per platform, groups archives in first-seen order and names them from the first exact-name descriptor. Installation uses archive metadata under A54. All archive repositories share catalogue grouping and ordering under A55/A56; bundle locations retain member URLs and fetch through an owned reader. A57 preserves duplicate name order and last-member lookup; A58 integrates wheelhouse extraction and A59 integrates installation reads. Selected Python, inherited pip sources and 30 platform/Python targets are supported. macOS tag sequences match packaging 26.0 from the upstream lockfile. Downloads use their own source-option order, omit installation-only flags, inherit stdin/environment/cwd and preserve raw decoded failure streams. Bundle consumption flattens wheel files, rejects duplicate basenames, checks target availability even without dependencies, and respects custom sources. | Depends on A41–A50/A54–A59. Real pip wheel resolution, all multi-plugin/native archive combinations, whole-document JSON/model-error equivalence, broader acquisition/loading/selection/reference grammar, compressed-stream partial-write behavior and cross-spec staging order remain open. Tests use fixture wheels and interpreters. |
-| GitHub catalogue | Extra/ignored lists, discovery including forks, complete release/tag/commit/asset models, distribution/source archives, date/type/size filters and source identity checks. A69–A74 cover nested retries, ten-repository GraphQL batches, partial results, validation/publication order, global asset/source phases, duplicate retention, cache-before-size behavior, expiry/error rules and list/search selection. A75 uses upstream shared cache paths and JSON text, validates archive cache keys and publishes through direct file writes. A76 aligns iterable candidate-cache roots and scalar search-name failure timing. A77 adds urllib redirect methods/headers, lexical targets, loop limits and history across retries. A78 preserves HTTP reason phrases, redirect rejection messages and GraphQL error-body/UTF-8 behavior. A79 preserves discovery Python JSON values through pagination, filtering and publication. A80 extends strict UTF-8/Python JSON decoding to GraphQL and metadata caches, preserves model strings, formats Python error values and defers archive-key/filename conversion to acquisition. A81 retains Python URL strings through shared archive indexing and applies snapshot/search serialization at the consumer. Metadata expires after 86,400 seconds; archive bytes persist across tokens. | Surrogate file-URL transport, alternate stdout codecs, runtime-dependent JSON limits/casing, exhaustive model coercion/diagnostics, concurrent/partial I/O and unusual filesystem aliases, FTP execution, nonstandard URL wire normalization, additional ValueError/network-error mappings, read/transport-error diagnostics, live private repositories and native Windows remain unverified or incomplete. |
+| GitHub catalogue | Extra/ignored lists, discovery including forks, complete release/tag/commit/asset models, distribution/source archives, date/type/size filters and source identity checks. A69–A74 cover nested retries, ten-repository GraphQL batches, partial results, validation/publication order, global asset/source phases, duplicate retention, cache-before-size behavior, expiry/error rules and list/search selection. A75 uses upstream shared cache paths and JSON text, validates archive cache keys and publishes through direct file writes. A76 aligns iterable candidate-cache roots and scalar search-name failure timing. A77 adds urllib redirect methods/headers, lexical targets, loop limits and history across retries. A78 preserves HTTP reason phrases, redirect rejection messages and GraphQL error-body/UTF-8 behavior. A79 preserves discovery Python JSON values through pagination, filtering and publication. A80 extends strict UTF-8/Python JSON decoding to GraphQL and metadata caches, preserves model strings, formats Python error values and defers archive-key/filename conversion to acquisition. A81 retains Python URL strings through shared archive indexing and applies snapshot/search serialization at the consumer. A82 separates catalogue urllib file requests from ordinary plugin file fetches, preserving query/path text, host checks and retry boundaries. Metadata expires after 86,400 seconds; archive bytes persist across tokens. | Shared repository-fetch surrogate file URLs, Unicode hostname IDNA/DNS profiles, alternate stdout codecs, runtime-dependent JSON limits/casing, exhaustive model coercion/diagnostics, concurrent/partial I/O and unusual filesystem aliases, FTP execution, nonstandard URL wire normalization, additional ValueError/network-error mappings, read/transport-error diagnostics, live private repositories and native Windows remain unverified or incomplete. |
 | Python commands | Exec/script argument passthrough; separate typed doctor and explain reports; environment creation, dependency migration and persistent environment variable configuration. Explicit pip source/offline/build-isolation options and environment-check override. The Python group accepts --no-python-environment-check before the leaf; identically named arguments after exec remain child arguments. | Explain collector edge cases, IDA probe model validation, exhaustive path conversion, subprocess environment/signal behavior and cross-platform configuration edge cases remain open. Creation-specific discovery, doctor policy and execution/install guards and explain reports are covered separately below. Hy reports its own Python interpreter as not applicable because it is native Rust. |
 | Python explain report | Separate report records, installation/runtime collectors, ordered notes and complete text rendering. Overrides preserve their absent IDA probe; version collection resolves independently and uses the bounded version helper. Embedded virtualenv details come from the probe's VIRTUAL_ENV. Mismatch checks cover activated/requested roots before the final interpreter, deduplicating normalized roots. PATH candidates preserve order, deduplicate resolved aliases and exclude uv overlays. Known-installation versions use SDK/directory metadata, while selected-version reporting retains override/registry/SDK/binary/directory provenance. | Depends on A39 and acquisition/model limits under A38. The tested observations and source text rules match; full collector error handling, discovery/metadata equivalence, native Windows, noncanonical paths and terminal Rich behavior remain unverified. Native runtime identity is explicit; no fictitious HCLI Python version or own-venv branch is supplied. |
 | Python doctor | Separate state collection, filesystem observations, ordered findings, setup patterns, context notes and rendering. Version and pip are independent 10 s observations shared with creation; pip remains unknown when the resolution probe marks a managed base interpreter. Explicit HCLI overrides bypass additional IDA probing. All ten checker finding IDs and twelve pattern categories follow source precedence, including early return for a missing override interpreter and a separate unresolved-Python report. Findings retain complete details and concrete hints; arbitrary minimum-version and installation-platform findings were removed. Text groups errors before warnings and includes setup, fixes and context notes. | Depends on A33. The collector uses the selection policy covered under A37 and native installation metadata helpers. Native paths, missing-user-directory handling, live IDA execution, subprocess decoding and Rich wrapping/styling are not fully certified. A native executable has no sys.prefix environment to exclude from shell-venv discovery. |
@@ -804,8 +805,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 292 unit tests and 479
-integration tests on macOS: 771 passed, no failures. A81 records this validation;
+The latest uninterrupted serial all-target run passed 294 unit tests and 483
+integration tests on macOS: 777 passed, no failures. A82 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -3653,6 +3654,113 @@ all-target cross-compilation pass. Logs are `/tmp/hy-index-urls-full.log`,
 The upstream checkout remained clean at the pinned revision. Alternate codecs,
 native platform execution, surrogate file-URL transport and exact outer error
 diagnostics remain open; this group does not close QG3 or QG5 for full parity.
+
+### Catalogue urllib file requests and acquisition boundaries
+
+Under A82, catalogue file downloads have their own request, path and host modules
+in `src/plugin/index/github/file`. The primary HCLI contracts are
+`download_release_asset`, `download_source_archive`, their cache wrappers and
+`_urlopen_with_retry` in pinned `src/hcli/lib/ida/plugin/repo/github.py`. Those
+functions use `urllib.request.Request` and `FileHandler`; they do not use
+`fetch_plugin_archive` and its pathlib conversion. The lexical adapters follow
+CPython 3.13.15 `Lib/urllib/request.py`, `Lib/urllib/parse.py` and
+`Lib/nturl2path.py`, with adaptation provenance in `src/util/python_path/LICENSE`.
+
+Request parsing unwraps surrounding whitespace, angle brackets and the `URL:`
+prefix, recognizes case-insensitive `file`, removes the fragment, decodes the
+host and retains query/control text in the selector. Its origin-host validation
+uses the existing urllib authority checks. Python code points remain intact;
+surrogates in a discarded fragment do not prevent a successful file download.
+
+Unlike ordinary archive fetches, catalogue paths retain empty, dot and trailing
+components through OS lookup. POSIX conversion percent-decodes filesystem bytes
+with UTF-8/surrogateescape. Windows conversion retains literal surrogate code
+points, applies nturl2path drive rules, and replaces malformed percent-encoded
+UTF-8 in the same way as `unquote`. No pathlib normalization is applied. Embedded
+NUL and Unix-unencodable surrogate paths produce the source ValueError category,
+which acquisition skips; an OS stat/open failure produces the retryable URLError
+category and eventually stops acquisition.
+
+The file handler checks `stat` before ordinary host resolution. A nonempty
+numeric port prevents local acceptance. Hosts without a port resolve to IPv4 and
+must match the cached localhost/machine address set. The double-leading-slash
+selector branch has a separate, literal address check: a recognized local
+address still falls through to urllib's unknown-handler error. Native hostname
+calls use bounded initialized buffers; successful Winsock initialization is
+balanced by cleanup. The Windows dependency enables only the additional Winsock
+API feature; dependency versions and Cargo.lock are unchanged.
+
+Stat/open URLError failures receive four total attempts with waits of 2, 4 and
+8 seconds, totaling 14 seconds of configured delay. ValueError and other terminal
+failures do not retry. A returned file is read outside that boundary, matching
+the source response consumption. On Unix the opened descriptor is checked for a
+directory before returning, so directory-open failure remains inside retries.
+Cache publication follows a successful complete read. Cache hits and download
+size checks retain their earlier acquisition order.
+
+Evidence:
+
+- 12,040 source comparisons cover wrapper/scheme variants, authorities, ports,
+  queries/fragments, separators, drive spellings, percent escapes, control text
+  and all 2,048 surrogate code points in five positions. They compare parsed
+  host/selector code points, POSIX bytes, Windows code points and the special
+  double-slash branch decision, including parse/conversion failures.
+- 72 source acquisitions execute the actual HCLI download function and urllib
+  handler against Rust-owned files. They compare payloads, exception categories,
+  OS-versus-host failure phases, request attempt counts and the exact wait
+  schedule. Cases include trailing separators, directories, missing files,
+  lexical symlink parents, literal queries/tabs, percent-encoded NUL/invalid bytes,
+  local/nonlocal numeric hosts, ports and surrogate paths/hosts. Python sleep is
+  observed without wall-clock delay; mutation-rejecting audit hooks remain active.
+- Four CLI tests cover fifteen scenarios and invocations: asset/source downloads
+  choose the query-bearing filename across four request forms; invalid path
+  values skip only their archive; discarded surrogate fragments permit cache
+  publication before snapshot serialization fails; a trailing slash prevents
+  publication and later HTTP acquisition after the actual retry schedule.
+
+Bounded findings: **high impact** — reusing ordinary archive fetches could read
+the wrong file by removing query text or normalizing a trailing separator.
+**High impact** — foreign file authorities previously bypassed the catalogue's
+local-host checks. **Medium impact** — raw-byte filesystem errors and unencodable
+Python strings have different skip/retry policies. **Medium impact** — fragment
+removal occurs before filesystem conversion but does not change the indexed URL.
+
+For L URL code points and B downloaded bytes, parsing, conversion and reading use
+O(L + B) work/storage, excluding OS and DNS latency. A native hostname buffer uses
+1,024 bytes; address-cache storage is O(A) for A resolved IPv4 addresses. A failing
+open performs at most four filesystem/resolver attempts. There is no new deadline
+for filesystem/DNS calls and no new payload quota.
+
+Remaining boundaries: Rust's native resolver does not implement Python's complete
+IDNA 2003/nameprep codec for Unicode hostnames. Its address ordering and resolver
+failure details need separate differential coverage. Read-only probes of the
+actual `encodings.idna` codec map `localhost\u3002` to `localhost.` and
+`local\u00adhost` to `localhost`, while U+FFFD raises UnicodeEncodeError. Thus a
+percent-decoded invalid UTF-8 host also needs the codec's terminal-error policy;
+ordinary native resolver failure is insufficient evidence of parity. Native Windows execution,
+alternate filesystem codecs, concurrent replacement/resource exhaustion,
+custom urllib handlers, exact OSError/outer diagnostics and injected response-read
+faults remain unverified. File-response header construction also remains incomplete:
+the actual `email.utils.formatdate` accepts epoch seconds -62,135,596,800 and
+253,402,300,799 but raises ValueError one second below/above those endpoints.
+The actual `mimetypes.guess_type("//[bad]/archive.zip")` raises ValueError during
+selector parsing. Those header-stage checks occur after stat and before the
+ordinary host check; native acquisition does not yet reproduce them.
+Ordinary repository-selected surrogate file URLs still
+cross the strict UTF-8 boundary identified under A81. These limits keep QG3 and
+QG5 open for full project parity.
+
+The uninterrupted serial all-target run passed 777 tests: 294 unit tests and 483
+integration tests across 62 suites, with nine existing opt-in tests ignored and
+no failures. All five A73 source-oracle environments were enabled. The 58-test
+catalogue integration suite passes in this run. Final formatting, whitespace,
+warnings-as-errors Clippy and Windows all-target cross-compilation pass. Logs are
+`/tmp/hy-catalogue-file-source-final.log`, `/tmp/hy-catalogue-file-cli.log`,
+`/tmp/hy-catalogue-file-full.log`, `/tmp/hy-catalogue-file-clippy-final.log` and
+`/tmp/hy-catalogue-file-windows-final.log`. The initial read-oracle comparison
+exposed integer-versus-float wait representation in the fixture; the projection
+now compares binary64 seconds as the source emits them. The upstream checkout
+remained clean at the pinned revision. Full project parity remains open.
 
 ### Lint archive discovery, validation and README locations
 

@@ -109,5 +109,25 @@ fn timestamp() -> f64 {
     }
 }
 
+/// FileHandler wraps stat/open errors in URLError; reading the body happens later.
+pub(super) async fn open_file<S, W, WF>(mut open: S, mut wait: W) -> Result<std::fs::File>
+where
+    S: FnMut() -> Result<std::fs::File>,
+    W: FnMut(Duration) -> WF,
+    WF: Future<Output = ()>,
+{
+    for attempt in 1..=TRANSIENT_ATTEMPTS {
+        match open() {
+            Err(error @ Error::GitHubUrl(_)) if attempt < TRANSIENT_ATTEMPTS => {
+                let seconds = 2_u64.pow(attempt);
+                tracing::warn!(seconds, attempt, %error, "Retrying transient GitHub file failure");
+                wait(Duration::from_secs(seconds)).await;
+            }
+            result => return result,
+        }
+    }
+    unreachable!("the final file-open attempt returns its result")
+}
+
 #[cfg(test)]
 mod tests;

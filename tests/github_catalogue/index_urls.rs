@@ -2,7 +2,7 @@
 
 use super::*;
 
-fn release(commit: &str, url: &str, asset: bool) -> Value {
+pub(super) fn release(commit: &str, url: &str, asset: bool) -> Value {
     let assets = if asset {
         vec![json!({
             "name": "plugin.zip",
@@ -27,13 +27,13 @@ fn release(commit: &str, url: &str, asset: bool) -> Value {
     })
 }
 
-fn archive(sandbox: &Sandbox, version: &str, host: &str) -> Vec<u8> {
+pub(super) fn archive(sandbox: &Sandbox, version: &str, host: &str) -> Vec<u8> {
     let path = sandbox.path().join(format!("fixture-{version}.zip"));
     archive_manifest(&path, &identity_manifest(version, host), &[]);
     fs::read(path).unwrap()
 }
 
-fn cache_path(sandbox: &Sandbox, name: &str, asset: bool) -> std::path::PathBuf {
+pub(super) fn cache_path(sandbox: &Sandbox, name: &str, asset: bool) -> std::path::PathBuf {
     sandbox.path().join("cache/owner/repo").join(if asset {
         format!("release-assets/{name}/plugin.zip")
     } else {

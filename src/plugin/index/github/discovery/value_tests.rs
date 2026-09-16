@@ -2,6 +2,7 @@
 
 use serde_json::{Value, json};
 
+use super::tests::{decode_fixture, utf8_names};
 use super::*;
 
 #[test]
@@ -66,30 +67,30 @@ fn observe(case: &Value) -> Value {
     let mut urls = Vec::new();
     let mut published = None;
     let result = if case["kind"] == "cache" {
-        values::cached(&case["root"]).and_then(|names| {
+        values::cached(&decode_fixture(&case["root"])).and_then(|names| {
             select(names, Vec::new(), serde_json::from_value(case["ignored"].clone()).unwrap())
         })
     } else {
         discover(case, &mut urls).and_then(|names| {
             let names = lowercase(names);
-            published = Some(names.clone());
+            published = Some(utf8_names(names.clone()));
             select(names, Vec::new(), Vec::new())
         })
     };
     let mut outcome =
-        result.map_or_else(|_| json!({"error": true}), |names| json!({"value": names}));
+        result.map_or_else(|_| json!({"error": true}), |names| json!({"value": utf8_names(names)}));
     outcome["urls"] = json!(urls);
     outcome["published"] = json!(published);
     outcome
 }
 
-fn discover(case: &Value, urls: &mut Vec<String>) -> Result<BTreeSet<String>> {
+fn discover(case: &Value, urls: &mut Vec<String>) -> Result<BTreeSet<Text>> {
     let mut names = values::Search::default();
     for query in ENCODED_QUERIES {
         urls.push(search_url("https://api.github.com", query, 1));
-        if names.append(&case["response"])? >= PAGE_SIZE {
+        if names.append(&decode_fixture(&case["response"]))? >= PAGE_SIZE {
             urls.push(search_url("https://api.github.com", query, 2));
-            names.append(&json!({}))?;
+            names.append(&decode_fixture(&json!({})))?;
         }
     }
     names.finish()

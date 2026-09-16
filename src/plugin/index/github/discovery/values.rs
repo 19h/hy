@@ -2,23 +2,21 @@
 
 use std::collections::BTreeSet;
 
-use serde_json::Value;
-
 use crate::error::{Error, Result};
+use crate::util::python_json::{Text, Value};
 
-use super::super::models::truthy;
-
-pub(super) fn cached(value: &Value) -> Result<BTreeSet<String>> {
+pub(super) fn cached(value: &Value) -> Result<BTreeSet<Text>> {
     // Upstream applies set() to the decoded root without validating a list model.
     match value {
         Value::Object(fields) => Ok(fields.keys().cloned().collect()),
-        Value::String(text) => Ok(text.chars().map(|character| character.to_string()).collect()),
+        Value::String(text) => Ok(text.characters().collect()),
         Value::Array(values) => values
             .iter()
-            .map(|value| {
-                value.as_str().map(str::to_owned).ok_or_else(|| {
-                    Error::Other("GitHub candidate cache contains a non-string repository".into())
-                })
+            .map(|value| match value {
+                Value::String(text) => Ok(text.clone()),
+                _ => Err(Error::Other(
+                    "GitHub candidate cache contains a non-string repository".into(),
+                )),
             })
             .collect(),
         _ => Err(Error::Other("GitHub candidate cache is not iterable".into())),
@@ -27,20 +25,21 @@ pub(super) fn cached(value: &Value) -> Result<BTreeSet<String>> {
 
 #[derive(Default)]
 pub(super) struct Search {
-    names: BTreeSet<String>,
+    names: BTreeSet<Text>,
     has_non_string: bool,
 }
 
 impl Search {
     pub(super) fn append(&mut self, response: &Value) -> Result<usize> {
-        let fields = response
-            .as_object()
-            .ok_or_else(|| Error::Other("GitHub search response must be an object".into()))?;
-        let Some(items) = fields.get("items").filter(|value| truthy(value)) else {
+        let Value::Object(fields) = response else {
+            return Err(Error::Other("GitHub search response must be an object".into()));
+        };
+        let Some(items) = fields.get("items").filter(|value| value.truthy()) else {
             return Ok(0);
         };
-        let items =
-            items.as_array().ok_or_else(|| Error::Other("invalid GitHub search items".into()))?;
+        let Value::Array(items) = items else {
+            return Err(Error::Other("invalid GitHub search items".into()));
+        };
         for item in items {
             let name = item
                 .get("repository")
@@ -61,10 +60,27 @@ impl Search {
         Ok(items.len())
     }
 
-    pub(super) fn finish(self) -> Result<BTreeSet<String>> {
+    pub(super) fn finish(self) -> Result<BTreeSet<Text>> {
         if self.has_non_string {
             return Err(Error::Other("GitHub search contains a non-string repository".into()));
         }
         Ok(self.names)
     }
+}
+
+pub(super) fn encode(names: &BTreeSet<Text>) -> String {
+    let mut output = String::from("[");
+    for (index, name) in names.iter().enumerate() {
+        output.push_str(if index == 0 {
+            "\n  "
+        } else {
+            ",\n  "
+        });
+        crate::util::json_format::write_codepoints(name.codepoints(), &mut output);
+    }
+    if !names.is_empty() {
+        output.push('\n');
+    }
+    output.push(']');
+    output
 }

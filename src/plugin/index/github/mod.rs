@@ -3,8 +3,6 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use serde::de::DeserializeOwned;
-
 use super::{ArchiveCatalogue, LoadedRepository};
 use crate::error::{Error, Result};
 
@@ -34,17 +32,12 @@ struct Client {
 }
 
 impl Client {
-    async fn json<T: DeserializeOwned>(
-        &self,
-        request: reqwest::RequestBuilder,
-        endpoint: http::JsonEndpoint,
-    ) -> Result<T> {
+    async fn response(&self, request: reqwest::RequestBuilder) -> Result<reqwest::Response> {
         if self.offline {
             return Err(Error::Other("GitHub metadata is unavailable in the local cache".into()));
         }
         let request = request.bearer_auth(&self.token).build()?;
-        let response = retry::send(&self.http, request).await?;
-        http::read_json(response, endpoint).await
+        retry::send(&self.http, request).await
     }
 
     async fn archive(&self, archive: &acquisition::Archive) -> Result<Option<Vec<u8>>> {
@@ -90,8 +83,8 @@ pub async fn load(options: &Options, offline: bool) -> Result<LoadedRepository> 
     };
     let extra = discovery::read_list(options.repositories_file.as_deref())?;
     let ignored = discovery::read_list(options.ignored_file.as_deref())?;
-    let mut repositories = discovery::select(client.candidates().await?, extra, ignored)?;
-    client.warm_releases(&repositories).await?;
+    let names = discovery::select(client.candidates().await?, extra, ignored)?;
+    let mut repositories = client.warm_releases(&names).await?;
     repositories.sort_by(|left, right| left.split_once('/').cmp(&right.split_once('/')));
     let mut loaded = LoadedRepository::empty();
     let mut metadata = Vec::new();

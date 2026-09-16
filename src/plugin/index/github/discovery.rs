@@ -6,7 +6,11 @@ use std::path::Path;
 use reqwest::header;
 
 use crate::error::{Error, Result};
-use crate::util::{python_path, strings::python_trim};
+use crate::util::{
+    python_json::{self, Text},
+    python_path, python_utf8,
+    strings::python_trim,
+};
 
 use super::{Client, METADATA_LIFETIME, cache, http};
 
@@ -17,10 +21,10 @@ const ENCODED_QUERIES: [&str; 2] =
 const PAGE_SIZE: usize = 100;
 
 impl Client {
-    pub(super) async fn candidates(&self) -> Result<BTreeSet<String>> {
+    pub(super) async fn candidates(&self) -> Result<BTreeSet<Text>> {
         let path = cache::candidates_path()?;
         if let Some(bytes) = cache::read(&path, Some(METADATA_LIFETIME))? {
-            let value = serde_json::from_slice(&bytes)?;
+            let value = python_json::parse(python_utf8::decode(&bytes)?)?;
             return Ok(lowercase(values::cached(&value)?));
         }
         let mut repositories = values::Search::default();
@@ -31,7 +35,7 @@ impl Client {
                     .get(search_url(&self.base, query, page))
                     .header(header::ACCEPT, "application/vnd.github.v3+json")
                     .header(header::USER_AGENT, "ida-hcli");
-                let response = self.json(request, http::JsonEndpoint::Search).await?;
+                let response = http::read_search_json(self.response(request).await?).await?;
                 let count = repositories.append(&response)?;
                 if count < PAGE_SIZE {
                     break;
@@ -40,7 +44,7 @@ impl Client {
         }
         let repositories = lowercase(repositories.finish()?);
         // Upstream publishes discovery before selected names are parsed.
-        cache::write_json(&cache::candidates_path()?, &repositories)?;
+        cache::write_text(&cache::candidates_path()?, values::encode(&repositories))?;
         Ok(repositories)
     }
 }
@@ -80,22 +84,31 @@ fn parse_list(text: &str) -> Vec<String> {
 }
 
 pub(super) fn select(
-    candidates: BTreeSet<String>,
+    candidates: BTreeSet<Text>,
     extra: Vec<String>,
     ignored: Vec<String>,
-) -> Result<Vec<String>> {
+) -> Result<Vec<Text>> {
     let mut names = lowercase(candidates);
-    names.extend(lowercase(extra));
-    let ignored = lowercase(ignored);
+    names.extend(lowercase(extra.iter().map(|name| Text::from(name.as_str()))));
+    let ignored = lowercase(ignored.iter().map(|name| Text::from(name.as_str())));
     names.retain(|name| !ignored.contains(name));
     for name in &names {
-        parse_repository(name)?;
+        parse_name(name)?;
     }
     Ok(names.into_iter().collect())
 }
 
-fn lowercase(names: impl IntoIterator<Item = String>) -> BTreeSet<String> {
-    names.into_iter().map(|name| name.to_lowercase()).collect()
+fn lowercase(names: impl IntoIterator<Item = Text>) -> BTreeSet<Text> {
+    names.into_iter().map(|name| name.lowercase()).collect()
+}
+
+pub(super) fn parse_name(name: &Text) -> Result<(Text, Text)> {
+    name.split_once('/').filter(|(_, repo)| !repo.contains('/')).ok_or_else(|| {
+        Error::GitHubValue(format!(
+            "invalid repository format: {}. Expected format: owner/repo",
+            name.diagnostic()
+        ))
+    })
 }
 
 pub(super) fn parse_repository(name: &str) -> Result<(&str, &str)> {
@@ -118,6 +131,8 @@ fn validate_cache_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod lexical_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

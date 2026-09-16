@@ -4,7 +4,7 @@ use crate::error::Result;
 
 use super::invalid;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct Text(pub(super) Vec<u32>);
 
 impl From<&str> for Text {
@@ -14,6 +14,40 @@ impl From<&str> for Text {
 }
 
 impl Text {
+    pub(crate) fn codepoints(&self) -> impl Iterator<Item = u32> + '_ {
+        self.0.iter().copied()
+    }
+
+    pub(crate) fn characters(&self) -> impl Iterator<Item = Self> + '_ {
+        self.0.iter().map(|&point| Self(vec![point]))
+    }
+
+    pub(crate) fn split_once(&self, separator: char) -> Option<(Self, Self)> {
+        let index = self.0.iter().position(|&point| point == u32::from(separator))?;
+        Some((Self(self.0[..index].to_vec()), Self(self.0[index + 1..].to_vec())))
+    }
+
+    pub(crate) fn contains(&self, character: char) -> bool {
+        self.0.contains(&u32::from(character))
+    }
+
+    pub(crate) fn lowercase(&self) -> Self {
+        let mut output = Vec::new();
+        let mut run = String::new();
+        for &point in &self.0 {
+            if let Some(character) = char::from_u32(point) {
+                run.push(character);
+            } else {
+                // A surrogate separates casing contexts, including final sigma.
+                output.extend(run.to_lowercase().chars().map(u32::from));
+                run.clear();
+                output.push(point);
+            }
+        }
+        output.extend(run.to_lowercase().chars().map(u32::from));
+        Self(output)
+    }
+
     pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }

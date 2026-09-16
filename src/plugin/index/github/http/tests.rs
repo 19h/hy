@@ -82,12 +82,11 @@ async fn wire_reasons_and_incomplete_error_bodies_keep_consumer_boundaries() {
                 Client::builder().no_proxy().retry(reqwest::retry::never()).build().unwrap();
             let response = client.get(format!("http://{address}/fixture")).send().await.unwrap();
             assert_eq!(reason(&response), expected_reason);
-            let endpoint = if graphql {
-                JsonEndpoint::Graphql
+            let error = if graphql {
+                read_graphql_json::<Value>(response).await.unwrap_err()
             } else {
-                JsonEndpoint::Search
+                read_search_json(response).await.unwrap_err()
             };
-            let error = read_json::<Value>(response, endpoint).await.unwrap_err();
             worker.await.unwrap();
             if graphql {
                 assert!(
@@ -121,8 +120,8 @@ async fn observe(case: &Value) -> Value {
     response.extensions_mut().insert(hyper::ext::ReasonPhrase::try_from(reason).unwrap());
     let response: Response = response.into();
     let result = match case["consumer"].as_str().unwrap() {
-        "graphql" => read_json::<Value>(response, JsonEndpoint::Graphql).await.map(|_| ()),
-        "search" => read_json::<Value>(response, JsonEndpoint::Search).await.map(|_| ()),
+        "graphql" => read_graphql_json::<Value>(response).await.map(|_| ()),
+        "search" => read_search_json(response).await.map(|_| ()),
         "asset" | "source" => require_success(&response),
         _ => unreachable!(),
     };

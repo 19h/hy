@@ -100,6 +100,7 @@ the current remaining scope.
 | A76 | Discovery JSON is representable by the existing serde decoder: strings contain Unicode scalar values and numbers use its accepted grammar. Comparisons target selected names, ordered requests and publication, not Python exception types/text. | Probe nonfinite numbers, unpaired surrogates, excessive JSON nesting, malformed encodings, integer conversion limits, Unicode-version differences and later-page transport errors. | 112 actual-source comparisons and three CLI tests cover iterable candidate-cache roots and delayed scalar search-name failure. Objects contribute keys; strings contribute characters; unhashable search names fail immediately. Complete lexical/diagnostic parity remains open. |
 | A77 | Catalogue redirects use CPython 3.13.15's urllib handler under A45. Response headers are byte strings; live fixtures use owned HTTP endpoints and replayable request bodies. | Probe FTP execution, native URL-parser wire normalization, TLS/proxy differences, malformed headers, additional URL/network exception mappings and native Windows. | 927 handler/target/missing-host comparisons, two socket regressions and five CLI tests cover method/header transitions, lexical target construction, loop limits, body-read order and history across retries. Default catalogue User-Agent is pinned to Python-urllib/3.13; search retains ida-hcli. Complete urllib transport equivalence remains open. |
 | A78 | Catalogue HTTP errors use the source consumer boundaries under A45/A77. Wire comparisons use owned HTTP/1 endpoints and reason bytes accepted by the native parser. | Probe invalid status lines, additional transport/read exception text, HTTP/2, TLS/proxy transformations, live servers and native Windows. Compare the vendored Hyper tree and exact patch with the published 1.10.1 crate. | 888 source HTTP-failure comparisons, the expanded 927 redirect-message comparisons, eight socket cases and sixteen CLI scenarios cover body reads, strict UTF-8, reason text and publication order. Hyper's validated obs-text reason bytes are retained by a documented local patch. Complete transport/framing/exception-text parity remains open. |
+| A79 | Discovery response/cache decoding targets CPython 3.13.15 with its default integer limit. Unicode casing uses Rust's scalar tables, with surrogate code points separating casing contexts. | Change the interpreter's integer/recursion limits or Unicode version; probe native Windows, non-UTF-8 cache paths, locale-dependent cache decoding, resource exhaustion, malformed diagnostics and GraphQL/cache model JSON. | 276 raw-document source comparisons cover strict UTF-8 text, nonfinite values, escaped surrogates, selected-name code points, request order and exact candidate publication. Four CLI tests cover 24 invocations, including cache reuse and earlier metadata-directory probes. Discovery no longer requires serde-representable values; GraphQL/model JSON, runtime-dependent limits and exact malformed diagnostics remain open. |
 
 ## Implemented contracts and remaining coverage
 
@@ -139,7 +140,7 @@ imply that every upstream edge case or supported operating system was tested.
 | Repository snapshot envelopes | Dedicated wire models require the plugin list, plugin host, archive URL/hash and complete versioned descriptor. Snapshot version defaults to literal 1; shared schema-version decoding accepts source literal coercions. Location descriptors reuse the local manifest model and serialize their required version while excluding $schema. Version maps preserve input document order, including equal-precedence selection. Exports sort keys, indent by four spaces, escape non-ASCII strings and apply source number formatting. Bundle and installation downloads share case-sensitive hash verification. | Depends on A52/A53. Full metadata coercion, duplicate-key/nonstandard JSON behavior, exact validation reports, repository initialization and broader version-selection behavior remain open. Sorting exported keys can change a version tie after re-import, as upstream does. |
 | Pip offline mode | Group `--offline` changes pip's index policy without disabling repository transport. It requires `--pip-find-links` or an explicit bundle repository, except for upstream's repository-free command groups. A local HTTP fixture verifies repository/archive fetches while pip receives `--no-index`. | Full upstream pip environment classification remains open. The existing Rust search `--offline` and status alias remain separate command options. |
 | Plugin bundles | Separate target, manifest, inspection, publication, download and CLI source-resolution modules. Repository packaging verifies hashes, fetches per platform, groups archives in first-seen order and names them from the first exact-name descriptor. Installation uses archive metadata under A54. All archive repositories share catalogue grouping and ordering under A55/A56; bundle locations retain member URLs and fetch through an owned reader. A57 preserves duplicate name order and last-member lookup; A58 integrates wheelhouse extraction and A59 integrates installation reads. Selected Python, inherited pip sources and 30 platform/Python targets are supported. macOS tag sequences match packaging 26.0 from the upstream lockfile. Downloads use their own source-option order, omit installation-only flags, inherit stdin/environment/cwd and preserve raw decoded failure streams. Bundle consumption flattens wheel files, rejects duplicate basenames, checks target availability even without dependencies, and respects custom sources. | Depends on A41–A50/A54–A59. Real pip wheel resolution, all multi-plugin/native archive combinations, whole-document JSON/model-error equivalence, broader acquisition/loading/selection/reference grammar, compressed-stream partial-write behavior and cross-spec staging order remain open. Tests use fixture wheels and interpreters. |
-| GitHub catalogue | Extra/ignored lists, discovery including forks, complete release/tag/commit/asset models, distribution/source archives, date/type/size filters and source identity checks. A69–A74 cover nested retries, ten-repository GraphQL batches, partial results, validation/publication order, global asset/source phases, duplicate retention, cache-before-size behavior, expiry/error rules and list/search selection. A75 uses upstream shared cache paths and JSON text, validates archive cache keys and publishes through direct file writes. A76 aligns iterable candidate-cache roots and scalar search-name failure timing. A77 adds urllib redirect methods/headers, lexical targets, loop limits and history across retries. A78 preserves HTTP reason phrases, redirect rejection messages and GraphQL error-body/UTF-8 behavior. Metadata expires after 86,400 seconds; archive bytes persist across tokens. | Complete JSON lexical behavior, exhaustive model coercion/diagnostics, concurrent/partial I/O and unusual filesystem aliases, FTP execution, nonstandard URL wire normalization, additional ValueError/network-error mappings, read/transport-error diagnostics, live private repositories and native Windows remain unverified or incomplete. |
+| GitHub catalogue | Extra/ignored lists, discovery including forks, complete release/tag/commit/asset models, distribution/source archives, date/type/size filters and source identity checks. A69–A74 cover nested retries, ten-repository GraphQL batches, partial results, validation/publication order, global asset/source phases, duplicate retention, cache-before-size behavior, expiry/error rules and list/search selection. A75 uses upstream shared cache paths and JSON text, validates archive cache keys and publishes through direct file writes. A76 aligns iterable candidate-cache roots and scalar search-name failure timing. A77 adds urllib redirect methods/headers, lexical targets, loop limits and history across retries. A78 preserves HTTP reason phrases, redirect rejection messages and GraphQL error-body/UTF-8 behavior. A79 preserves discovery nonfinite numbers and surrogate strings through pagination, filtering and candidate publication, with strict UTF-8 text decoding. Metadata expires after 86,400 seconds; archive bytes persist across tokens. | GraphQL/model JSON lexical behavior, runtime-dependent JSON limits/casing, exhaustive model coercion/diagnostics, concurrent/partial I/O and unusual filesystem aliases, FTP execution, nonstandard URL wire normalization, additional ValueError/network-error mappings, read/transport-error diagnostics, live private repositories and native Windows remain unverified or incomplete. |
 | Python commands | Exec/script argument passthrough; separate typed doctor and explain reports; environment creation, dependency migration and persistent environment variable configuration. Explicit pip source/offline/build-isolation options and environment-check override. The Python group accepts --no-python-environment-check before the leaf; identically named arguments after exec remain child arguments. | Explain collector edge cases, IDA probe model validation, exhaustive path conversion, subprocess environment/signal behavior and cross-platform configuration edge cases remain open. Creation-specific discovery, doctor policy and execution/install guards and explain reports are covered separately below. Hy reports its own Python interpreter as not applicable because it is native Rust. |
 | Python explain report | Separate report records, installation/runtime collectors, ordered notes and complete text rendering. Overrides preserve their absent IDA probe; version collection resolves independently and uses the bounded version helper. Embedded virtualenv details come from the probe's VIRTUAL_ENV. Mismatch checks cover activated/requested roots before the final interpreter, deduplicating normalized roots. PATH candidates preserve order, deduplicate resolved aliases and exclude uv overlays. Known-installation versions use SDK/directory metadata, while selected-version reporting retains override/registry/SDK/binary/directory provenance. | Depends on A39 and acquisition/model limits under A38. The tested observations and source text rules match; full collector error handling, discovery/metadata equivalence, native Windows, noncanonical paths and terminal Rich behavior remain unverified. Native runtime identity is explicit; no fictitious HCLI Python version or own-venv branch is supplied. |
 | Python doctor | Separate state collection, filesystem observations, ordered findings, setup patterns, context notes and rendering. Version and pip are independent 10 s observations shared with creation; pip remains unknown when the resolution probe marks a managed base interpreter. Explicit HCLI overrides bypass additional IDA probing. All ten checker finding IDs and twelve pattern categories follow source precedence, including early return for a missing override interpreter and a separate unresolved-Python report. Findings retain complete details and concrete hints; arbitrary minimum-version and installation-platform findings were removed. Text groups errors before warnings and includes setup, fixes and context notes. | Depends on A33. The collector uses the selection policy covered under A37 and native installation metadata helpers. Native paths, missing-user-directory handling, live IDA execution, subprocess decoding and Rich wrapping/styling are not fully certified. A native executable has no sys.prefix environment to exclude from shell-venv discovery. |
@@ -801,8 +802,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 286 unit tests and 467
-integration tests on macOS: 753 passed, no failures. A78 records this validation;
+The latest uninterrupted serial all-target run passed 287 unit tests and 471
+integration tests on macOS: 758 passed, no failures. A79 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -860,6 +861,8 @@ Catalogue redirects use A77's CPython handler comparisons, socket body/URL failu
 regressions and CLI request-transition/retry-history fixtures.
 Catalogue HTTP failures use A78's actual source consumers, redirect error-message
 comparisons, wire reason/body regressions and CLI failure/publication cases.
+Discovery JSON uses A79's raw-document source comparisons and CLI decoding,
+pagination, candidate publication and metadata-probe regressions.
 The earlier A54 parallel run observed an OAuth callback shutdown
 assertion failure at `src/auth/oauth_tests.rs:158`; that assertion passed in the
 serial run. Its intermittent cause is unknown; port reuse is an unverified
@@ -3294,7 +3297,8 @@ at its pinned revision. Full project parity remains open.
 
 ### GitHub catalogue HTTP failure bodies and reason phrases
 
-Under A78, JSON callers identify their endpoint explicitly with `JsonEndpoint`.
+Under A78, JSON callers identify their endpoint explicitly (A79 replaces the
+`JsonEndpoint` enum with separate typed search and GraphQL reader functions).
 GraphQL catches HTTP failures outside the retry loop, reads the final body,
 decodes it strictly as UTF-8 and reports `HTTP <status>: <body>`. Bodies retain
 their original newlines, BOM and other valid text; Content-Type charset labels
@@ -3390,6 +3394,85 @@ and `/tmp/hy-github-http-failure-windows-final.log`. The earlier targeted CLI lo
 predates the dependency patch; the full run includes all CLI cases with it. The
 upstream checkout remained clean at its pinned revision. Full project parity
 remains open.
+
+### GitHub discovery JSON values and text decoding
+
+Under A79, search responses and candidate-cache contents use the existing
+`util/python_json` representation. They decode strict UTF-8 before parsing JSON
+text, as the pinned source does. This differs from direct-release byte decoding
+under A67: a UTF-8 BOM or UTF-16/32 body is not accepted at this text boundary.
+The primary contracts are `find_github_repos_with_plugins`,
+`get_candidate_github_repos_cache`, `set_candidate_github_repos_cache`,
+`GithubPluginRepo._get_repos` and `warm_releases_metadata_cache` in
+`src/hcli/lib/ida/plugin/repo/github.py`, plus the cache component validator in
+`src/hcli/lib/util/cache.py`, at the pinned comparison revision.
+
+Ignored fields may contain NaN, positive/negative Infinity, overflowing binary64
+numbers or unpaired surrogate strings. Selected scalar numbers still cause a
+failure after both search queries and all pages finish; arrays/objects remain
+immediate failures. Strings retain Unicode code points through deduplication,
+ordering, lowercasing, filtering and candidate-cache publication. Scalar runs are
+lowercased together to preserve contextual final sigma; surrogate code points
+separate those contexts. Candidate serialization shares ASCII escaping with the
+existing snapshot/metadata formatter and represents unpaired surrogates directly
+as JSON escapes. It preserves two-space indentation, no trailing newline and the
+platform text-newline convention.
+
+Repository parsing still precedes all metadata probes. Component validation
+occurs during each ordered cache lookup, so an invalid surrogate-containing name
+does not suppress earlier directory creation or cache-read failures. Only names
+that have passed this boundary become Rust strings for GraphQL and acquisition.
+Search and GraphQL now have separate response readers; the existing GraphQL
+success/model decoder is unchanged and remains a separate parity gap.
+
+Evidence:
+
+- 276 actual-source comparisons use raw response/cache bytes and compare selected
+  name code points, request URLs and exact publication text. They include all
+  2,048 unpaired surrogate code points, contextual Greek casing, malformed JSON,
+  duplicate keys, nonfinite constants, overflow, 4,300/4,301-digit integers,
+  128/512 nested containers, BOMs, UTF-16/32 text and invalid UTF-8. The source
+  oracle intercepts HTTP and file reads/writes; its audit hook rejects actual
+  filesystem mutation. No Python process edits files.
+- The prior 165 discovery and 112 container/timing comparisons pass with the new
+  representation. Their ordinary scalar fixtures still compare complete values.
+- Four CLI tests cover 24 invocations: ignored Python values and cache reuse,
+  deferred nonfinite-name failure over both paginated queries, surrogate cache
+  publication before parsing/component errors, ordered directory probes, and
+  strict text decoding without refresh or cache replacement after failure.
+- The 46-test catalogue integration suite, warnings-as-errors Clippy and Windows
+  all-target cross-compilation pass. Native Windows execution remains unverified.
+
+Bounded findings: **high impact** — Python-only values in unused fields previously
+rejected otherwise usable discovery results. **Medium impact** — converting strings
+to UTF-8 before publication changed which cache artifacts and earlier repository
+directories survived a failure. **Medium impact** — byte-encoding autodetection
+would incorrectly broaden the source's explicit UTF-8 text boundary. **Low impact**
+— shared ASCII escaping avoids a separate candidate-cache string formatter.
+
+For B document code points, N name entries, K retained names of maximum length W
+and R output bytes, decoding/container traversal takes O(B) work/storage, excluding
+bounded integer-conversion costs. Ordered name operations have an
+O(N W log(K + 1)) comparison bound, including duplicate entries; casing and
+publication scan retained/output text. Storage is O(B + K W + R).
+The existing arbitrary-precision parser retains the 4,300-digit default bound;
+its integer conversion has an O(D²) upper bound for D decimal digits. No document
+quota or CPython runtime-dependent recursion limit is introduced. Alternate
+Unicode/runtime versions, cache-text locales, resource failures, exact exception
+diagnostics, GraphQL/model JSON and native platform execution keep QG3/QG5 open.
+
+The uninterrupted serial all-target run passed 758 tests: 287 unit tests and 471
+integration tests across 62 suites, with nine existing opt-in tests ignored and
+no failures. All five A73 source-oracle environment variables were enabled. This
+includes the shared formatter's all-Unicode scalar comparison, the existing
+2,012-case byte decoder and the catalogue HTTP/redirect/cache/model regressions.
+The new 276-case oracle passed again after an equivalent test readability cleanup;
+final formatting, whitespace, warnings-as-errors Clippy and Windows all-target
+checks also passed. Logs are `/tmp/hy-discovery-json-source.log`,
+`/tmp/hy-discovery-json-cli.log`, `/tmp/hy-discovery-json-full.log`,
+`/tmp/hy-discovery-json-final.log`, `/tmp/hy-discovery-json-clippy-final.log` and
+`/tmp/hy-discovery-json-windows-final.log`. The upstream checkout remained clean
+at the pinned revision. Full project parity remains open.
 
 ### Lint archive discovery, validation and README locations
 

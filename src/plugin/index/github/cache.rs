@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::error::{Error, Result};
-use crate::util::python_path;
+use crate::util::{python_json::Text, python_path};
 
 pub(super) fn candidates_path() -> Result<PathBuf> {
     Ok(directory(&[])?.join("candidate_repos.json"))
@@ -16,13 +16,38 @@ pub(super) fn metadata_path(repository: &str) -> Result<PathBuf> {
 }
 
 pub(super) fn directory(parts: &[&str]) -> Result<PathBuf> {
+    let root = prepare_root()?;
+    create_directory(directory_path(&root, parts)?)
+}
+
+pub(super) fn candidate_metadata_path(repository: &Text) -> Result<PathBuf> {
+    let (owner, repo) = super::discovery::parse_name(repository)?;
+    let root = prepare_root()?;
+    let mut path = python_path::join(&root, "");
+    for part in [owner, repo] {
+        let text = part.to_utf8().map_err(|_| {
+            Error::GitHubValue(format!(
+                "Invalid path component: '{}'. Must contain only ASCII characters",
+                part.diagnostic()
+            ))
+        })?;
+        validate_component(&text)?;
+        path = python_path::join(&path, &text);
+    }
+    Ok(create_directory(path)?.join("releases.json"))
+}
+
+fn prepare_root() -> Result<PathBuf> {
     let root = crate::util::cache::default_cache_dir();
     // The source default-root helper creates its directory, but an explicit
     // HCLI_CACHE_DIR is created only after component validation succeeds.
     if std::env::var_os("HCLI_CACHE_DIR").is_none_or(|value| value.is_empty()) {
         std::fs::create_dir_all(&root)?;
     }
-    let path = directory_path(&root, parts)?;
+    Ok(root)
+}
+
+fn create_directory(path: PathBuf) -> Result<PathBuf> {
     reject_nul(&path)?;
     std::fs::create_dir_all(&path)?;
     Ok(path)
@@ -96,8 +121,12 @@ pub fn write(path: &Path, bytes: &[u8]) -> Result<()> {
 
 pub(super) fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<()> {
     let value = serde_json::to_value(value)?;
-    let mut text = crate::util::json_format::sorted_ascii(&value, "  ");
+    let text = crate::util::json_format::sorted_ascii(&value, "  ");
     crate::util::json_numbers::validate_integer_limits(&text)?;
+    write_text(path, text)
+}
+
+pub(super) fn write_text(path: &Path, mut text: String) -> Result<()> {
     if cfg!(windows) {
         text = text.replace('\n', "\r\n");
     }

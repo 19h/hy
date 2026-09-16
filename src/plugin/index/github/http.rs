@@ -4,14 +4,9 @@ use reqwest::{Client, Response, header, redirect::Policy};
 use serde::de::DeserializeOwned;
 
 use crate::error::{Error, Result};
-use crate::util::{python_utf8, strings::python_trim};
+use crate::util::{python_json, python_utf8, strings::python_trim};
 
 use super::retry;
-
-pub(super) enum JsonEndpoint {
-    Search,
-    Graphql,
-}
 
 #[derive(Clone, Debug)]
 struct ErrorReason(String);
@@ -58,11 +53,14 @@ pub(super) fn require_success(response: &Response) -> Result<()> {
     Ok(())
 }
 
-pub(super) async fn read_json<T: DeserializeOwned>(
-    response: Response,
-    endpoint: JsonEndpoint,
-) -> Result<T> {
-    if !response.status().is_success() && matches!(endpoint, JsonEndpoint::Graphql) {
+pub(super) async fn read_search_json(response: Response) -> Result<python_json::Value> {
+    require_success(&response)?;
+    let bytes = response.bytes().await?;
+    python_json::parse(python_utf8::decode(&bytes)?)
+}
+
+pub(super) async fn read_graphql_json<T: DeserializeOwned>(response: Response) -> Result<T> {
+    if !response.status().is_success() {
         let status = response.status().as_u16();
         // GraphQL catches HTTPError outside _urlopen_with_retry. Reading and
         // strict decoding can replace that error, but cannot restart the request.

@@ -74,21 +74,27 @@ fn newline(depth: usize, indent: &str, output: &mut String) {
 }
 
 fn write_string(value: &str, output: &mut String) {
+    write_codepoints(value.chars().map(u32::from), output);
+}
+
+/// ASCII JSON escaping also represents Python's unpaired surrogate code points.
+pub(crate) fn write_codepoints(points: impl IntoIterator<Item = u32>, output: &mut String) {
     output.push('"');
-    for character in value.chars() {
-        match character {
-            '"' => output.push_str("\\\""),
-            '\\' => output.push_str("\\\\"),
-            '\u{8}' => output.push_str("\\b"),
-            '\u{c}' => output.push_str("\\f"),
-            '\n' => output.push_str("\\n"),
-            '\r' => output.push_str("\\r"),
-            '\t' => output.push_str("\\t"),
-            ' '..='~' => output.push(character),
-            other => {
-                for unit in other.encode_utf16(&mut [0; 2]) {
-                    write!(output, "\\u{unit:04x}").unwrap();
-                }
+    for point in points {
+        match point {
+            0x22 => output.push_str("\\\""),
+            0x5c => output.push_str("\\\\"),
+            0x08 => output.push_str("\\b"),
+            0x0c => output.push_str("\\f"),
+            0x0a => output.push_str("\\n"),
+            0x0d => output.push_str("\\r"),
+            0x09 => output.push_str("\\t"),
+            0x20..=0x7e => output.push(char::from_u32(point).unwrap()),
+            0..=0xffff => write!(output, "\\u{point:04x}").unwrap(),
+            _ => {
+                let high = 0xd800 + ((point - 0x10000) >> 10);
+                let low = 0xdc00 + ((point - 0x10000) & 0x3ff);
+                write!(output, "\\u{high:04x}\\u{low:04x}").unwrap();
             }
         }
     }

@@ -5,7 +5,9 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -28,8 +30,50 @@ import hcli.lib.ida.plugin.repo.github as github
 from hcli.lib.util.cache import validate_path_component
 
 logging.disable(logging.CRITICAL)
+
+
+def observe_raw(case):
+    urls = []
+    publication = []
+    body = bytes(case["body"])
+    instance = object.__new__(github.GithubPluginRepo)
+    instance.token = "fixture"
+    instance.extra_repos = set()
+    instance.ignored_repos = set()
+
+    def respond(request):
+        urls.append(request.full_url)
+        return io.BytesIO(body if request.full_url.endswith("page=1") else b"{}")
+
+    def read_text(*args, **kwargs):
+        return body.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+
+    def publish(text, **kwargs):
+        assert kwargs == {"encoding": "utf-8"}
+        publication.append(text)
+
+    with patch.object(github, "_urlopen_with_retry", side_effect=respond), patch.object(
+        github, "get_candidate_github_repos_cache_path", return_value=Path("fixture")
+    ), patch.object(Path, "exists", return_value=case["kind"] == "raw_cache"), patch.object(
+        Path, "stat", return_value=SimpleNamespace(st_mtime=time.time())
+    ), patch.object(Path, "read_text", side_effect=read_text), patch.object(
+        Path, "write_text", side_effect=publish
+    ):
+        try:
+            names = ["/".join(parts) for parts in instance._get_repos()]
+            outcome = {"value": [[ord(character) for character in name] for name in names]}
+        except (ValueError, TypeError, AttributeError, KeyError):
+            outcome = {"error": True}
+    outcome["urls"] = urls
+    outcome["published"] = publication[0] if publication else None
+    return outcome
+
+
 results = []
 for case in json.load(sys.stdin):
+    if case["kind"].startswith("raw_"):
+        results.append(observe_raw(case))
+        continue
     urls = []
     publication = []
     try:

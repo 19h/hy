@@ -2,7 +2,7 @@
 
 use super::*;
 
-fn snapshot(sandbox: &Sandbox, server: &Server, extra: &[&str]) -> std::process::Output {
+pub(super) fn snapshot(sandbox: &Sandbox, server: &Server, extra: &[&str]) -> std::process::Output {
     let mut args = vec!["plugin", "--repo", "github"];
     args.extend_from_slice(extra);
     args.extend(["repo", "snapshot"]);
@@ -14,7 +14,7 @@ fn snapshot(sandbox: &Sandbox, server: &Server, extra: &[&str]) -> std::process:
         .unwrap()
 }
 
-fn empty_repository(base: &str) -> Value {
+pub(super) fn empty_repository(base: &str) -> Value {
     json!({
         "defaultBranchRef": {"target": commit(base, "default")},
         "releases": {"nodes": []},

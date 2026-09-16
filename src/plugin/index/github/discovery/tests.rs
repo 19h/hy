@@ -112,11 +112,14 @@ fn observe(case: &Value) -> Value {
         "list" => json!({"value": parse_list(case["text"].as_str().unwrap())}),
         "select" => {
             let result = select(
-                serde_json::from_value(case["candidates"].clone()).unwrap(),
+                values::cached(&decode_fixture(&case["candidates"])).unwrap(),
                 serde_json::from_value(case["extra"].clone()).unwrap(),
                 serde_json::from_value(case["ignored"].clone()).unwrap(),
             );
-            result.map_or_else(|_| json!({"error": true}), |names| json!({"value": names}))
+            result.map_or_else(
+                |_| json!({"error": true}),
+                |names| json!({"value": utf8_names(names)}),
+            )
         }
         "component" => {
             json!({"valid": validate_cache_name(case["name"].as_str().unwrap()).is_ok()})
@@ -126,7 +129,7 @@ fn observe(case: &Value) -> Value {
             let mut names = values::Search::default();
             for query in ENCODED_QUERIES {
                 urls.push(search_url("https://api.github.com", query, 1));
-                match names.append(&case["response"]) {
+                match names.append(&decode_fixture(&case["response"])) {
                     Ok(count) => {
                         if count >= PAGE_SIZE {
                             urls.push(search_url("https://api.github.com", query, 2));
@@ -135,10 +138,18 @@ fn observe(case: &Value) -> Value {
                     Err(_) => return json!({"error": true, "urls": urls}),
                 }
             }
-            json!({"value": names.finish().unwrap(), "urls": urls})
+            json!({"value": utf8_names(names.finish().unwrap()), "urls": urls})
         }
         _ => unreachable!(),
     }
+}
+
+pub(super) fn decode_fixture(value: &Value) -> python_json::Value {
+    python_json::parse(&value.to_string()).unwrap()
+}
+
+pub(super) fn utf8_names(names: impl IntoIterator<Item = Text>) -> Vec<String> {
+    names.into_iter().map(|name| name.to_utf8().unwrap()).collect()
 }
 
 #[test]

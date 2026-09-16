@@ -120,3 +120,49 @@ fn trailing_file_separators_fail_without_publishing_or_fetching_later_archives()
     assert!(!cache_path(&sandbox, "second", false).exists());
     assert!(server.requests().is_empty());
 }
+
+#[test]
+fn file_response_date_policy_uses_the_retained_filesystem_timestamp() {
+    use std::time::{Duration, UNIX_EPOCH};
+
+    for asset in [false, true] {
+        let sandbox = Sandbox::new();
+        archive(&sandbox, "1.0", "https://github.com/owner/repo");
+        let path = sandbox.path().join("fixture-1.0.zip");
+        let file = fs::File::options().write(true).open(&path).unwrap();
+        let modified = UNIX_EPOCH + Duration::from_secs(253_402_300_800);
+        file.set_modified(modified).unwrap();
+        let retained = file.metadata().unwrap().modified().unwrap();
+        assert!(retained >= UNIX_EPOCH && retained <= modified);
+        let invalid_year = retained == modified;
+        if !invalid_year {
+            eprintln!(
+                "filesystem clamped the year-10000 fixture to {retained:?}; testing its retained valid date"
+            );
+        }
+        let bytes = archive(&sandbox, "2.0", "https://github.com/owner/repo");
+        let server = Server::start(move |request, _| {
+            assert_eq!(request.path, "/second");
+            Response::zip(bytes.clone())
+        });
+        // A retained invalid year must fail before the foreign-host check. On
+        // filesystems that clamp it into range, exercise normal local acquisition.
+        let host = if invalid_year {
+            "192.0.2.1"
+        } else {
+            "localhost"
+        };
+        let url = format!("file://{host}{}", path.display());
+        prepare(
+            &sandbox,
+            &serde_json::to_string(&url).unwrap(),
+            asset,
+            Some(&format!("{}/second", server.url)),
+        );
+        let output = snapshot(&sandbox, &server);
+        assert_success(&output);
+        assert_eq!(cache_path(&sandbox, "first", asset).is_file(), !invalid_year);
+        assert!(cache_path(&sandbox, "second", asset).is_file());
+        assert_eq!(server.requests().len(), 1);
+    }
+}

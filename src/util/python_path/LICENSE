@@ -25,6 +25,13 @@ resolution preserve request/path/open boundaries without pathlib normalization.
 Native Windows operations and alternate filesystem/DNS codec profiles remain
 separate runtime verification requirements.
 
+The catalogue file-header timestamp adapter in plugin/index/github/file/headers
+also adapts CPython v3.13.15 Python/pytime.c, Modules/_datetimemodule.c and
+Modules/posixmodule.c. Changes: native Rust timestamp values and platform calendar
+calls replace Python objects; header consumers preserve the source error classes.
+The observed macOS ARM64 stat conversion uses fused binary64 multiplication and
+addition; other compiler contraction profiles require separate verification.
+
 Copyright (c) 2001-2024 Python Software Foundation; All Rights Reserved
 
 PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2

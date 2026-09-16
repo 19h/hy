@@ -37,14 +37,7 @@ impl Request {
             return Ok(None);
         }
         // Request.__init__ also calls urlparse to determine origin_req_host.
-        // Surrogates have no NFKC mapping; replacing them here preserves delimiter
-        // and IP-validation decisions, without altering the retained components.
-        let validation: String = value
-            .iter()
-            .map(|&point| char::from_u32(point).unwrap_or(char::REPLACEMENT_CHARACTER))
-            .collect();
-        url_parts::Parts::parse(&validation)
-            .map_err(|error| Error::GitHubValue(error.to_string()))?;
+        validate_components(value.iter().copied())?;
 
         let remainder = &value[colon + 1..];
         let (host, selector) = if remainder.starts_with(&ascii("//")) {
@@ -74,6 +67,21 @@ impl Request {
             && !self.host.is_empty()
             && !self.host.equals("localhost")
     }
+
+    /// mimetypes.guess_type parses the selector independently of the full URL.
+    pub(super) fn validate_mime_selector(&self) -> Result<()> {
+        validate_components(self.selector.codepoints())
+    }
+}
+
+fn validate_components(points: impl Iterator<Item = u32>) -> Result<()> {
+    // Surrogates have no NFKC mapping. This scalar view preserves delimiter and
+    // IP-validation decisions; the retained request components remain unchanged.
+    let validation: String =
+        points.map(|point| char::from_u32(point).unwrap_or(char::REPLACEMENT_CHARACTER)).collect();
+    url_parts::Parts::parse(&validation)
+        .map(|_| ())
+        .map_err(|error| Error::GitHubValue(error.to_string()))
 }
 
 fn trim(mut value: &[u32]) -> &[u32] {

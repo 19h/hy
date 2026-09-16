@@ -5,6 +5,7 @@ use std::io::Read;
 
 use crate::error::{Error, Result};
 
+mod headers;
 mod host;
 mod path;
 mod request;
@@ -32,7 +33,13 @@ fn open(request: &Request) -> Result<File> {
     if native_contains_nul(&path) {
         return Err(Error::GitHubValue("embedded null byte".into()));
     }
-    std::fs::metadata(&path).map_err(url_error)?;
+    let metadata = std::fs::metadata(&path).map_err(url_error)?;
+    let modified = headers::modified(&metadata).map_err(url_error)?;
+    open_after_stat(request, &path, modified)
+}
+
+fn open_after_stat(request: &Request, path: &std::path::Path, modified: f64) -> Result<File> {
+    headers::validate(request, modified)?;
     if !request.host.is_empty() && !host::resolves_locally(&request.host)? {
         return Err(url_error("file not on local host"));
     }

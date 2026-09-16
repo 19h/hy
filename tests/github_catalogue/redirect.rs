@@ -156,7 +156,11 @@ fn redirect_loops_apply_repeat_and_distinct_target_limits() {
         });
         let output = snapshot(&sandbox, &server);
         assert!(!output.status.success());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("HTTP 302"));
+        let error = String::from_utf8_lossy(&output.stderr);
+        assert!(error.contains("HTTP Error 302:"));
+        assert!(
+            error.contains("lead to an infinite loop.\nThe last 30x error message was:\nFixture")
+        );
         assert_eq!(
             server.requests().len(),
             if distinct {
@@ -194,7 +198,9 @@ fn retry_attempts_share_redirect_history_with_the_original_request() {
     });
     let output = snapshot(&sandbox, &server);
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("HTTP 302"));
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("HTTP Error 302:"));
+    assert!(error.contains("lead to an infinite loop.\nThe last 30x error message was:\nFixture"));
     assert_eq!(server.requests().len(), 7);
     assert!(!sandbox.path().join("cache/candidate_repos.json").exists());
 }

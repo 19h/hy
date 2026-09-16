@@ -23,6 +23,29 @@ struct Next {
     headers: HeaderMap,
 }
 
+enum Decision {
+    Stop,
+    Follow(Next),
+    Reject(Rejection),
+}
+
+enum Rejection {
+    Scheme(String),
+    Loop,
+}
+
+impl Rejection {
+    fn message(self, reason: &str) -> String {
+        match self {
+            Self::Scheme(url) => format!("{reason} - Redirection to url '{url}' is not allowed"),
+            Self::Loop => format!(
+                "The HTTP server returned a redirect error that would lead to an infinite loop.\n\
+                 The last 30x error message was:\n{reason}"
+            ),
+        }
+    }
+}
+
 impl History {
     fn next(
         &mut self,
@@ -31,34 +54,35 @@ impl History {
         request_headers: &HeaderMap,
         status: u16,
         response_headers: &HeaderMap,
-    ) -> Result<Option<Next>> {
+    ) -> Result<Decision> {
         if !matches!(status, 301 | 302 | 303 | 307 | 308) {
-            return Ok(None);
+            return Ok(Decision::Stop);
         }
         // Unlike HTTPX, urllib uses the first Location, with URI as a fallback.
         let Some(location) =
             response_headers.get(header::LOCATION).or_else(|| response_headers.get("uri"))
         else {
-            return Ok(None);
+            return Ok(Decision::Stop);
         };
         let Some(url) = target::resolve(current, location.as_bytes())? else {
-            return Ok(None);
+            let location = location.as_bytes().iter().map(|byte| char::from(*byte)).collect();
+            return Ok(Decision::Reject(Rejection::Scheme(location)));
         };
         if !matches!(*method, Method::GET | Method::HEAD)
             && !(*method == Method::POST && matches!(status, 301..=303))
         {
-            return Ok(None);
+            return Ok(Decision::Stop);
         }
         if self.visits.get(&url).copied().unwrap_or(0) >= MAX_REPEATS
             || self.visits.len() >= MAX_DISTINCT_TARGETS
         {
-            return Ok(None);
+            return Ok(Decision::Reject(Rejection::Loop));
         }
         *self.visits.entry(url.clone()).or_default() += 1;
         let mut headers = request_headers.clone();
         headers.remove(header::CONTENT_LENGTH);
         headers.remove(header::CONTENT_TYPE);
-        Ok(Some(Next {
+        Ok(Decision::Follow(Next {
             url,
             method: if *method == Method::HEAD {
                 Method::HEAD
@@ -79,16 +103,22 @@ pub(super) async fn send(
     loop {
         let method = request.method().clone();
         let headers = request.headers().clone();
-        let response = client.execute(request).await?;
-        let Some(next) = history.next(
+        let mut response = client.execute(request).await?;
+        let decision = history.next(
             &current,
             &method,
             &headers,
             response.status().as_u16(),
             response.headers(),
-        )?
-        else {
-            return Ok(response);
+        )?;
+        let next = match decision {
+            Decision::Follow(next) => next,
+            Decision::Stop => return Ok(response),
+            Decision::Reject(rejection) => {
+                let message = rejection.message(&super::http::reason(&response));
+                super::http::replace_reason(&mut response, message);
+                return Ok(response);
+            }
         };
         // urllib consumes accepted redirect bodies inside urlopen. A read error
         // therefore belongs to the retry boundary, unlike the final body read.

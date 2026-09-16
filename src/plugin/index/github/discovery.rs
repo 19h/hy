@@ -8,7 +8,7 @@ use reqwest::header;
 use crate::error::{Error, Result};
 use crate::util::{python_path, strings::python_trim};
 
-use super::{Client, METADATA_LIFETIME, cache};
+use super::{Client, METADATA_LIFETIME, cache, http};
 
 mod values;
 
@@ -31,7 +31,7 @@ impl Client {
                     .get(search_url(&self.base, query, page))
                     .header(header::ACCEPT, "application/vnd.github.v3+json")
                     .header(header::USER_AGENT, "ida-hcli");
-                let response = self.json(request).await?;
+                let response = self.json(request, http::JsonEndpoint::Search).await?;
                 let count = repositories.append(&response)?;
                 if count < PAGE_SIZE {
                     break;

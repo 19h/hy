@@ -19,6 +19,7 @@ pub mod python_path;
 pub mod python_regex;
 pub mod python_repr;
 pub mod python_sort;
+pub mod python_utf8;
 pub mod python_zip;
 pub mod realpath;
 pub mod strings;

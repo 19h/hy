@@ -1,0 +1,32 @@
+diff --git a/src/proto/h1/role.rs b/src/proto/h1/role.rs
+index 544f16e..d864831 100644
+--- a/src/proto/h1/role.rs
++++ b/src/proto/h1/role.rs
+@@ -1005,0 +1006,16 @@ trait HeaderNameWriter {
++#[cfg(feature = "client")]
++// httparse validates obs-text but represents any reason containing it as "".
++// Recover those bytes only after the complete response has passed its parser.
++fn reason_with_obs_text(bytes: &[u8]) -> Option<&[u8]> {
++    let line = bytes
++        .split(|byte| *byte == b'\n')
++        .find(|line| !line.is_empty() && *line != b"\r")?;
++    let line = line.strip_suffix(b"\r").unwrap_or(line);
++    let version_end = line.iter().position(|byte| *byte == b' ')?;
++    let status = &line[version_end + 1..];
++    let code_start = status.iter().position(|byte| *byte != b' ')?;
++    let after_code = status.get(code_start + 3..)?;
++    let reason = after_code.strip_prefix(b" ")?;
++    reason.iter().any(|byte| *byte >= 0x80).then_some(reason)
++}
++
+@@ -1043,0 +1060,5 @@ impl Http1Transaction for Client {
++                            let reason = if reason.is_empty() {
++                                reason_with_obs_text(bytes).unwrap_or(reason.as_bytes())
++                            } else {
++                                reason.as_bytes()
++                            };
+@@ -1045,2 +1066,2 @@ impl Http1Transaction for Client {
+-                            if Some(reason) != status.canonical_reason() {
+-                                Some(Bytes::copy_from_slice(reason.as_bytes()))
++                            if Some(reason) != status.canonical_reason().map(str::as_bytes) {
++                                Some(Bytes::copy_from_slice(reason))

@@ -34,14 +34,17 @@ struct Client {
 }
 
 impl Client {
-    async fn json<T: DeserializeOwned>(&self, request: reqwest::RequestBuilder) -> Result<T> {
+    async fn json<T: DeserializeOwned>(
+        &self,
+        request: reqwest::RequestBuilder,
+        endpoint: http::JsonEndpoint,
+    ) -> Result<T> {
         if self.offline {
             return Err(Error::Other("GitHub metadata is unavailable in the local cache".into()));
         }
         let request = request.bearer_auth(&self.token).build()?;
         let response = retry::send(&self.http, request).await?;
-        http::require_success(&response)?;
-        Ok(response.json().await?)
+        http::read_json(response, endpoint).await
     }
 
     async fn archive(&self, archive: &acquisition::Archive) -> Result<Option<Vec<u8>>> {

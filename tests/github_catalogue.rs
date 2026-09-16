@@ -10,6 +10,8 @@ mod cache;
 mod cache_layout;
 #[path = "github_catalogue/discovery.rs"]
 mod discovery;
+#[path = "github_catalogue/http_failure.rs"]
+mod http_failure;
 #[path = "github_catalogue/models.rs"]
 mod models;
 #[path = "github_catalogue/redirect.rs"]

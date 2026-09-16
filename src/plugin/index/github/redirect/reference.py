@@ -86,6 +86,10 @@ def observe(case):
             else:
                 target = None
             if target is None:
+                if not 200 <= step["status"] < 300:
+                    urllib.request.HTTPDefaultErrorHandler().http_error_default(
+                        request, body, step["status"], "Fixture", response_headers
+                    )
                 event = {"stop": step["status"]}
             else:
                 event = {
@@ -98,11 +102,13 @@ def observe(case):
             # Observe the boundary while the caller still owns the HTTPError;
             # releasing its response wrapper would close the body during GC.
             errors.append(error)
-            event = {"stop": step["status"]}
+            event = {"stop": step["status"], "message": str(error)}
         except ValueError:
             event = {"error": True}
         if case["kind"] == "target":
-            return {"url": event["url"]} if "url" in event else event
+            if "url" in event:
+                return {"url": event["url"]}
+            return {key: value for key, value in event.items() if key != "message"}
         event.update(read=body.was_read, close=body.was_closed)
         events.append(event)
         if "url" not in event:

@@ -99,6 +99,7 @@ the current remaining scope.
 | A75 | Catalogue cache interoperability uses stable owned paths, represented A73 models and the configured HCLI cache root. Source write operations are intercepted; actual fixture writes are performed only by Rust. | Probe native Windows, concurrent readers/writers, permission changes, partial writes, non-UTF-8 roots, unusual filesystem aliases and nonstandard JSON/model values. | 47 source path/text projections and five CLI tests cover shared locations, formatting, direct getter interoperability, cache-key skip boundaries, missing asset parents and file-symlink publication. Native token/origin partitions and atomic cache replacement are removed. Legacy hashed files remain unused and retained; exact concurrent/partial-I/O and all-platform equivalence remain open. |
 | A76 | Discovery JSON is representable by the existing serde decoder: strings contain Unicode scalar values and numbers use its accepted grammar. Comparisons target selected names, ordered requests and publication, not Python exception types/text. | Probe nonfinite numbers, unpaired surrogates, excessive JSON nesting, malformed encodings, integer conversion limits, Unicode-version differences and later-page transport errors. | 112 actual-source comparisons and three CLI tests cover iterable candidate-cache roots and delayed scalar search-name failure. Objects contribute keys; strings contribute characters; unhashable search names fail immediately. Complete lexical/diagnostic parity remains open. |
 | A77 | Catalogue redirects use CPython 3.13.15's urllib handler under A45. Response headers are byte strings; live fixtures use owned HTTP endpoints and replayable request bodies. | Probe FTP execution, native URL-parser wire normalization, TLS/proxy differences, malformed headers, additional URL/network exception mappings and native Windows. | 927 handler/target/missing-host comparisons, two socket regressions and five CLI tests cover method/header transitions, lexical target construction, loop limits, body-read order and history across retries. Default catalogue User-Agent is pinned to Python-urllib/3.13; search retains ida-hcli. Complete urllib transport equivalence remains open. |
+| A78 | Catalogue HTTP errors use the source consumer boundaries under A45/A77. Wire comparisons use owned HTTP/1 endpoints and reason bytes accepted by the native parser. | Probe invalid status lines, additional transport/read exception text, HTTP/2, TLS/proxy transformations, live servers and native Windows. Compare the vendored Hyper tree and exact patch with the published 1.10.1 crate. | 888 source HTTP-failure comparisons, the expanded 927 redirect-message comparisons, eight socket cases and sixteen CLI scenarios cover body reads, strict UTF-8, reason text and publication order. Hyper's validated obs-text reason bytes are retained by a documented local patch. Complete transport/framing/exception-text parity remains open. |
 
 ## Implemented contracts and remaining coverage
 
@@ -138,7 +139,7 @@ imply that every upstream edge case or supported operating system was tested.
 | Repository snapshot envelopes | Dedicated wire models require the plugin list, plugin host, archive URL/hash and complete versioned descriptor. Snapshot version defaults to literal 1; shared schema-version decoding accepts source literal coercions. Location descriptors reuse the local manifest model and serialize their required version while excluding $schema. Version maps preserve input document order, including equal-precedence selection. Exports sort keys, indent by four spaces, escape non-ASCII strings and apply source number formatting. Bundle and installation downloads share case-sensitive hash verification. | Depends on A52/A53. Full metadata coercion, duplicate-key/nonstandard JSON behavior, exact validation reports, repository initialization and broader version-selection behavior remain open. Sorting exported keys can change a version tie after re-import, as upstream does. |
 | Pip offline mode | Group `--offline` changes pip's index policy without disabling repository transport. It requires `--pip-find-links` or an explicit bundle repository, except for upstream's repository-free command groups. A local HTTP fixture verifies repository/archive fetches while pip receives `--no-index`. | Full upstream pip environment classification remains open. The existing Rust search `--offline` and status alias remain separate command options. |
 | Plugin bundles | Separate target, manifest, inspection, publication, download and CLI source-resolution modules. Repository packaging verifies hashes, fetches per platform, groups archives in first-seen order and names them from the first exact-name descriptor. Installation uses archive metadata under A54. All archive repositories share catalogue grouping and ordering under A55/A56; bundle locations retain member URLs and fetch through an owned reader. A57 preserves duplicate name order and last-member lookup; A58 integrates wheelhouse extraction and A59 integrates installation reads. Selected Python, inherited pip sources and 30 platform/Python targets are supported. macOS tag sequences match packaging 26.0 from the upstream lockfile. Downloads use their own source-option order, omit installation-only flags, inherit stdin/environment/cwd and preserve raw decoded failure streams. Bundle consumption flattens wheel files, rejects duplicate basenames, checks target availability even without dependencies, and respects custom sources. | Depends on A41–A50/A54–A59. Real pip wheel resolution, all multi-plugin/native archive combinations, whole-document JSON/model-error equivalence, broader acquisition/loading/selection/reference grammar, compressed-stream partial-write behavior and cross-spec staging order remain open. Tests use fixture wheels and interpreters. |
-| GitHub catalogue | Extra/ignored lists, discovery including forks, complete release/tag/commit/asset models, distribution/source archives, date/type/size filters and source identity checks. A69–A74 cover nested retries, ten-repository GraphQL batches, partial results, validation/publication order, global asset/source phases, duplicate retention, cache-before-size behavior, expiry/error rules and list/search selection. A75 uses upstream shared cache paths and JSON text, validates archive cache keys and publishes through direct file writes. A76 aligns iterable candidate-cache roots and scalar search-name failure timing. A77 adds urllib redirect methods/headers, lexical targets, loop limits and history across retries. Metadata expires after 86,400 seconds; archive bytes persist across tokens. | Complete JSON lexical behavior, exhaustive model coercion/diagnostics, concurrent/partial I/O and unusual filesystem aliases, FTP execution, nonstandard URL wire normalization, additional ValueError/network-error mappings, HTTP failure diagnostics, live private repositories and native Windows remain unverified or incomplete. |
+| GitHub catalogue | Extra/ignored lists, discovery including forks, complete release/tag/commit/asset models, distribution/source archives, date/type/size filters and source identity checks. A69–A74 cover nested retries, ten-repository GraphQL batches, partial results, validation/publication order, global asset/source phases, duplicate retention, cache-before-size behavior, expiry/error rules and list/search selection. A75 uses upstream shared cache paths and JSON text, validates archive cache keys and publishes through direct file writes. A76 aligns iterable candidate-cache roots and scalar search-name failure timing. A77 adds urllib redirect methods/headers, lexical targets, loop limits and history across retries. A78 preserves HTTP reason phrases, redirect rejection messages and GraphQL error-body/UTF-8 behavior. Metadata expires after 86,400 seconds; archive bytes persist across tokens. | Complete JSON lexical behavior, exhaustive model coercion/diagnostics, concurrent/partial I/O and unusual filesystem aliases, FTP execution, nonstandard URL wire normalization, additional ValueError/network-error mappings, read/transport-error diagnostics, live private repositories and native Windows remain unverified or incomplete. |
 | Python commands | Exec/script argument passthrough; separate typed doctor and explain reports; environment creation, dependency migration and persistent environment variable configuration. Explicit pip source/offline/build-isolation options and environment-check override. The Python group accepts --no-python-environment-check before the leaf; identically named arguments after exec remain child arguments. | Explain collector edge cases, IDA probe model validation, exhaustive path conversion, subprocess environment/signal behavior and cross-platform configuration edge cases remain open. Creation-specific discovery, doctor policy and execution/install guards and explain reports are covered separately below. Hy reports its own Python interpreter as not applicable because it is native Rust. |
 | Python explain report | Separate report records, installation/runtime collectors, ordered notes and complete text rendering. Overrides preserve their absent IDA probe; version collection resolves independently and uses the bounded version helper. Embedded virtualenv details come from the probe's VIRTUAL_ENV. Mismatch checks cover activated/requested roots before the final interpreter, deduplicating normalized roots. PATH candidates preserve order, deduplicate resolved aliases and exclude uv overlays. Known-installation versions use SDK/directory metadata, while selected-version reporting retains override/registry/SDK/binary/directory provenance. | Depends on A39 and acquisition/model limits under A38. The tested observations and source text rules match; full collector error handling, discovery/metadata equivalence, native Windows, noncanonical paths and terminal Rich behavior remain unverified. Native runtime identity is explicit; no fictitious HCLI Python version or own-venv branch is supplied. |
 | Python doctor | Separate state collection, filesystem observations, ordered findings, setup patterns, context notes and rendering. Version and pip are independent 10 s observations shared with creation; pip remains unknown when the resolution probe marks a managed base interpreter. Explicit HCLI overrides bypass additional IDA probing. All ten checker finding IDs and twelve pattern categories follow source precedence, including early return for a missing override interpreter and a separate unresolved-Python report. Findings retain complete details and concrete hints; arbitrary minimum-version and installation-platform findings were removed. Text groups errors before warnings and includes setup, fixes and context notes. | Depends on A33. The collector uses the selection policy covered under A37 and native installation metadata helpers. Native paths, missing-user-directory handling, live IDA execution, subprocess decoding and Rich wrapping/styling are not fully certified. A native executable has no sys.prefix environment to exclude from shell-venv discovery. |
@@ -800,8 +801,8 @@ git diff --check
 ```
 
 Regression tests exercise isolated CLI operations and native protocol compilation.
-The latest uninterrupted serial all-target run passed 284 unit tests and 463
-integration tests on macOS: 747 passed, no failures. A77 records this validation;
+The latest uninterrupted serial all-target run passed 286 unit tests and 467
+integration tests on macOS: 753 passed, no failures. A78 records this validation;
 A59 retains the history of its earlier interrupted runs and fixture corrections.
 Clippy warnings are treated as errors. Rustfmt, whitespace checks and Windows
 cross-compilation also pass.
@@ -857,6 +858,8 @@ Discovery JSON containers use A76's source caller/request/publication comparison
 and CLI cache-root and scalar-name regressions.
 Catalogue redirects use A77's CPython handler comparisons, socket body/URL failure
 regressions and CLI request-transition/retry-history fixtures.
+Catalogue HTTP failures use A78's actual source consumers, redirect error-message
+comparisons, wire reason/body regressions and CLI failure/publication cases.
 The earlier A54 parallel run observed an OAuth callback shutdown
 assertion failure at `src/auth/oauth_tests.rs:158`; that assertion passed in the
 serial run. Its intermittent cause is unknown; port reuse is an unverified
@@ -3288,6 +3291,105 @@ Logs are `/tmp/hy-github-redirect-source-final.log`,
 `/tmp/hy-github-redirect-final.log`, `/tmp/hy-github-redirect-clippy-final.log` and
 `/tmp/hy-github-redirect-windows-final.log`. The upstream checkout remained clean
 at its pinned revision. Full project parity remains open.
+
+### GitHub catalogue HTTP failure bodies and reason phrases
+
+Under A78, JSON callers identify their endpoint explicitly with `JsonEndpoint`.
+GraphQL catches HTTP failures outside the retry loop, reads the final body,
+decodes it strictly as UTF-8 and reports `HTTP <status>: <body>`. Bodies retain
+their original newlines, BOM and other valid text; Content-Type charset labels
+do not change decoding. A read failure or UnicodeDecodeError replaces the HTTP
+status error and does not restart acquisition. Search and release/source archive
+failures instead report `HTTP Error <status>: <reason>` without reading the body.
+The primary contracts are the four acquisition functions and GraphQL client's
+`query` in the pinned upstream catalogue module.
+
+HTTP/1 reason phrases use CPython's Latin-1 decoding and Unicode whitespace
+stripping. Redirect rejection retains urllib's forbidden-scheme explanation or
+its multiline loop explanation. GraphQL still reports the response body for
+these HTTPError instances; it does not substitute the redirect explanation.
+`util/python_utf8.rs` extracts the existing strict decoder from subprocess text
+handling. Subprocess callers retain their own universal-newline conversion;
+HTTP error bodies do not acquire that conversion. A43's 86,279 text comparisons
+and 242 version outcomes remain the existing regression evidence for that path.
+
+The wire regression identified a dependency-level loss of data: httparse 1.10.1
+validates HTTP obs-text (0x80–0xFF) in a reason phrase but returns an empty string
+for the entire phrase. Hyper 1.10.1 then stored that empty string in its response
+extension. Application-level decoding alone could not recover the bytes.
+
+Hyper 1.10.1 is therefore retained locally under `vendor/hyper`, with one
+implementation file changed. After httparse validates a complete response, the
+patch recovers a raw reason only when the parser returned an empty string and
+the validated status line contains obs-text in its reason. Existing ASCII and
+empty reason handling, status/header validation and message framing
+use the previous paths. Both the helper and client implementation keep their
+client feature gates. No new unsafe code is introduced.
+
+Provenance and review:
+
+- The published crate checksum was verified as
+  `55281c53a1894c864990125767da440a4e630446785086f52523b20033b74498`;
+  its recorded upstream revision is `e3bcd379118e707b3e49185b047d49ebbaa943fc`.
+- Of 68 retained upstream files, only `src/proto/h1/role.rs` differs. This was
+  checked byte-for-byte against the installed registry copy, including the
+  manifests, README and MIT license. The crate-local rustfmt configuration keeps
+  upstream formatting separate from Hy's settings.
+- `vendor/hyper/PATCHES.md` documents the change and removal condition.
+  `vendor/hyper/reason-phrase.patch` records the exact zero-context delta; its
+  reverse application check passes against the working tree.
+- Cargo.lock changes only Hyper's registry-source/checksum fields. Unrelated
+  Windows dependency rewrites produced during resolution were removed, and the
+  resulting pinned lockfile passes offline locked builds.
+
+Evidence:
+
+- 888 actual-source comparisons cover ten error statuses and all four consumers,
+  ten body values, simulated incomplete reads, and 448 reason-byte projections.
+  They compare complete HTTP/UTF-8 error messages and whether the body was read.
+  Read-exception classes are compared by their failure boundary; native network
+  error text is not equated with Python's IncompleteRead text. Source transport
+  is intercepted and the oracle rejects filesystem mutation/network access.
+- A77's 927 source cases now also compare redirect rejection messages, including
+  ordinary method rejection, forbidden schemes, and repeated/distinct-target
+  loop errors. Their previous request/header/history assertions remain intact.
+- Eight real socket cases combine canonical, Latin-1, empty and Unicode-whitespace
+  reasons with search/GraphQL error policies and truncated bodies. This regression
+  failed before the dependency patch and passes with raw reason preservation.
+- Four CLI tests cover sixteen scenarios: six unmodified GraphQL error texts,
+  three strict decoding failures, three search/archive failures with invalid UTF-8
+  bodies, and four forbidden-scheme redirects. They assert request counts and
+  candidate/metadata/archive publication boundaries. The previous CLI loop tests
+  now assert the full source explanation.
+
+Bounded findings: **high impact** — GraphQL service explanations are observable
+instead of a generic status. **Medium impact** — malformed GraphQL error bodies
+can replace the status failure, while the same archive/search bodies remain
+unread. **Medium impact** — a transport dependency can discard reason bytes before
+application code sees them. **Medium impact** — the local Hyper patch requires
+comparison when that dependency is upgraded and affects shared HTTP consumers.
+
+Reading a B-byte GraphQL error body and formatting its message takes O(B) time
+and storage. Reason recovery scans the validated status line in O(L) time for
+line length L; the application then decodes/trims its retained bytes in O(L).
+No extra retry, body quota, deadline or network request is introduced. Arbitrary
+malformed HTTP framing, additional URL/transport exception mappings and text,
+FTP, native URL normalization and other-platform runtime behavior keep QG3/QG5
+open.
+
+The uninterrupted A78 serial all-target run, with the patched Hyper dependency,
+passed 753 tests: 286 unit tests and 467 integration tests across 62 suites, with
+nine existing opt-in tests ignored and no failures. All five A73 source-oracle
+environment variables were retained. The 888-case comparison and wire regression
+were rechecked after Clippy's equivalent test-iterator cleanup. Formatting,
+whitespace checks, Clippy with warnings denied and Windows all-target
+cross-compilation passed. Logs are `/tmp/hy-github-http-failure-source-patched.log`,
+`/tmp/hy-github-http-failure-cli.log`, `/tmp/hy-github-http-failure-full.log`,
+`/tmp/hy-github-http-failure-final.log`, `/tmp/hy-github-http-failure-clippy-final.log`
+and `/tmp/hy-github-http-failure-windows-final.log`. The earlier targeted CLI log
+predates the dependency patch; the full run includes all CLI cases with it. The
+upstream checkout remained clean at its pinned revision. Full project parity
+remains open.
 
 ### Lint archive discovery, validation and README locations
 

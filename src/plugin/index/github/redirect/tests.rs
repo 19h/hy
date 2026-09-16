@@ -254,7 +254,7 @@ fn observe(case: &Value) -> Value {
             response_headers.append(name, HeaderValue::from_bytes(&bytes).unwrap());
         }
         match history.next(&current, &method, &headers, status, &response_headers) {
-            Ok(Some(next)) => {
+            Ok(Decision::Follow(next)) => {
                 let fields: serde_json::Map<_, _> = next
                     .headers
                     .iter()
@@ -266,10 +266,17 @@ fn observe(case: &Value) -> Value {
                 headers = next.headers;
             }
             result => {
-                let mut event = if result.is_err() {
-                    json!({"error": true})
-                } else {
-                    json!({"stop": status})
+                let mut event = match result {
+                    Err(_) => json!({"error": true}),
+                    Ok(Decision::Reject(rejection)) => json!({
+                        "stop": status,
+                        "message": format!("HTTP Error {status}: {}", rejection.message("Fixture")),
+                    }),
+                    Ok(Decision::Stop) if !(200..300).contains(&status) => json!({
+                        "stop": status, "message": format!("HTTP Error {status}: Fixture"),
+                    }),
+                    Ok(Decision::Stop) => json!({"stop": status}),
+                    Ok(Decision::Follow(_)) => unreachable!(),
                 };
                 event["read"] = json!(false);
                 event["close"] = json!(false);

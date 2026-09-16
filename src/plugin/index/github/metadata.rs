@@ -2,7 +2,7 @@
 
 use crate::error::{Error, Result};
 
-use super::{Client, METADATA_LIFETIME, cache, graphql, models::Repository};
+use super::{Client, METADATA_LIFETIME, cache, graphql, http, models::Repository};
 
 const BATCH_SIZE: usize = 10;
 
@@ -42,8 +42,12 @@ impl Client {
             return Ok(Vec::new());
         }
         let body = graphql::request(repositories)?;
-        let response =
-            self.json(self.http.post(format!("{}/graphql", self.base)).json(&body)).await?;
+        let response = self
+            .json(
+                self.http.post(format!("{}/graphql", self.base)).json(&body),
+                http::JsonEndpoint::Graphql,
+            )
+            .await?;
         graphql::decode(repositories, response)
     }
 

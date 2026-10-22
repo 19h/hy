@@ -21,15 +21,28 @@ struct Choice<'a> {
 }
 
 pub fn prompt(metadata: &PluginMetadata) -> Result<Map<String, Value>> {
-    let settings: Vec<_> =
-        metadata.settings.iter().filter(|(_, descriptor)| descriptor.is_promptable()).collect();
+    collect(metadata, false)
+}
+
+pub(super) fn missing(metadata: &PluginMetadata) -> Result<Map<String, Value>> {
+    collect(metadata, true)
+}
+
+fn collect(metadata: &PluginMetadata, only_missing: bool) -> Result<Map<String, Value>> {
+    let existing = plugin::get_all_plugin_settings(&metadata.name)?;
+    let settings: Vec<_> = metadata
+        .settings
+        .iter()
+        .filter(|(key, descriptor)| {
+            descriptor.is_promptable() && (!only_missing || !existing.contains_key(*key))
+        })
+        .collect();
     if settings.is_empty() {
         return Ok(Map::new());
     }
     if !tui::is_interactive() {
         return Err(Error::Other("setup requires an interactive terminal".into()));
     }
-    let existing = plugin::get_all_plugin_settings(&metadata.name)?;
     let plural = if settings.len() == 1 {
         ""
     } else {
@@ -44,9 +57,7 @@ pub fn prompt(metadata: &PluginMetadata) -> Result<Map<String, Value>> {
         .collect::<Result<Vec<_>>>()?;
     let mut answers = Map::new();
     for question in questions {
-        if let Some(value) = prompt_one(&question)?
-            && question.descriptor.default.as_ref() != Some(&value)
-        {
+        if let Some(value) = prompt_one(&question)? {
             answers.insert(question.key.into(), value);
         }
     }

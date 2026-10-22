@@ -25,7 +25,7 @@ pub(super) fn summary() -> String {
             .filter(|email| !email.is_empty());
         lines.push(match email {
             Some(email) => format!("  Auth: {email}"),
-            None => format!("  Auth: Not logged in → {} login", env.binary_name),
+            None => format!("  Auth: Not logged in → {} login", env.display_command()),
         });
     }
 
@@ -40,27 +40,34 @@ pub(super) fn summary() -> String {
             lines.push(format!("  IDA: IDA{version} at {}", path.display()));
         } else {
             lines.push(format!("  IDA: Not found at {}", path.display()));
-            lines.push(format!("       → {} ida install -d ida-pro:latest -y", env.binary_name));
+            lines.push(format!(
+                "       → {} ida install -d ida-pro:latest -y",
+                env.display_command()
+            ));
         }
     } else if instances.is_empty() {
         lines.push("  IDA: Not installed".into());
         lines.push(format!(
             "       → {} ida install -d ida-pro:latest -l LICENSE_ID -y",
-            env.binary_name
+            env.display_command()
         ));
-        lines.push(format!("       Find your license ID with: {} license list", env.binary_name));
+        lines.push(format!(
+            "       Find your license ID with: {} license list",
+            env.display_command()
+        ));
     } else {
         let valid = instances.values().filter(|path| valid_installation(Path::new(path))).count();
         lines.push(format!(
             "  IDA: {} instance(s), no default set ({valid} valid)",
             instances.len()
         ));
-        lines.push(format!("       → {} ida switch", env.binary_name));
+        lines.push(format!("       → {} ida switch", env.display_command()));
     }
 
     if let Ok(ida_config) = crate::plugin::read_ida_config() {
-        let library =
-            ida_config["Paths"]["ida-install-dir"].as_str().filter(|path| !path.is_empty());
+        let library = ida_config["Paths"]["ida-install-dir"]
+            .as_str()
+            .filter(|path| !path.trim().is_empty() && Path::new(path).is_absolute());
         if let Some(library) = library {
             let path = ida::normalize_install_dir(Path::new(library));
             if path.exists() && ida::is_idalib_capable(&path) {

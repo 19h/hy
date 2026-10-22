@@ -36,6 +36,12 @@ pub struct PluginMetadata {
     pub logo_path: Option<String>,
     #[serde(default)]
     pub python_dependencies: super::PythonDependencies,
+    #[serde(default, deserialize_with = "super::requirements::deserialize_python")]
+    pub requires_python: Option<String>,
+    #[serde(default)]
+    pub dependencies: Vec<super::requirements::Requirement>,
+    #[serde(default)]
+    pub components: Vec<super::components::Component>,
     #[serde(
         default,
         deserialize_with = "settings::setting_descriptors",

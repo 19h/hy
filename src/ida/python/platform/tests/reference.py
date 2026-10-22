@@ -79,11 +79,15 @@ def session_result(module, case):
 def file_result(module, case):
     file = MemoryFile(case["initial"])
     step = module.ConfigurationStep(case["kind"], "", file, case["content"], None, False)
+    if case["kind"] == "shell-profile":
+        step = dataclasses.replace(step, env_var_name="FOO")
+    preview = module.preview_profile_change(step) if case["kind"] == "shell-profile" else None
     result = module.execute_step(step)
     return {
         "skipped": result.skipped,
         "data": list(file.data),
         "message": result.message,
+        "preview": preview,
     }
 
 

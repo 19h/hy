@@ -41,20 +41,19 @@ fn upgrade_searches_all_repositories_using_installed_identity() {
     let status = sandbox.run(&["plugin", "status", "--json", "EXAMPLE"]);
     assert_success(&status);
     let report: serde_json::Value = serde_json::from_slice(&status.stdout).unwrap();
-    assert_eq!(report["plugins"][0]["in_repository"], false);
-    assert_eq!(report["plugins"][0]["upgradable_to"], serde_json::Value::Null);
-    let ambiguous = sandbox.run(&["plugin", "upgrade", "example"]);
-    assert!(!ambiguous.status.success());
-    assert!(String::from_utf8_lossy(&ambiguous.stderr).contains("multiple repositories"));
+    assert_eq!(report["plugins"][0]["in_repository"], true);
+    assert_eq!(report["plugins"][0]["upgradable_to"], "3.0");
+    assert_success(&sandbox.run(&["plugin", "upgrade", "example"]));
+    assert_eq!(installed_manifest(&sandbox)["plugin"]["version"], "3.0");
     assert_success(&sandbox.run(&["plugin", "repo", "remove", "duplicate"]));
 
     let unchanged = sandbox.run(&["plugin", "upgrade", "example"]);
-    assert!(!unchanged.status.success());
-    assert!(String::from_utf8_lossy(&unchanged.stderr).contains("not newer"));
+    assert_success(&unchanged);
+    assert!(String::from_utf8_lossy(&unchanged.stderr).contains("up to date"));
 
     let foreign = sandbox.run(&["plugin", "upgrade", "unrelated/example"]);
     assert!(!foreign.status.success());
-    assert_eq!(installed_manifest(&sandbox)["plugin"]["version"], "2.0");
+    assert_eq!(installed_manifest(&sandbox)["plugin"]["version"], "3.0");
 }
 
 #[test]
@@ -85,7 +84,8 @@ fn install_upgrade_keeps_equal_or_newer_files_and_settings() {
     assert!(!output.status.success());
     // Invalid versions are rejected while selecting archive descriptors.
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("ida-plugin.json not found in archive")
+        String::from_utf8_lossy(&output.stderr)
+            .contains("no valid ida-plugin.json found in archive")
     );
     assert_eq!(installed_manifest(&sandbox)["plugin"]["version"], "2.0");
     assert_eq!(fs::read(&configuration).unwrap(), before);

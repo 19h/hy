@@ -141,15 +141,16 @@ pub struct BundleCreateArgs {
     /// Plugin repository (URL or local snapshot JSON) for resolving specs
     #[arg(long)]
     pub repo: Option<String>,
-    /// Plugin specs (name==version[@host]) and/or local plugin ZIPs
+    /// Plugin names, version ranges, local directories, or plugin ZIPs
     #[arg(required = true)]
     pub plugin_specs: Vec<String>,
 }
 
 #[derive(Debug, Args)]
 pub struct PluginUninstallArgs {
-    /// Plugin name
-    pub name: String,
+    /// Installed plugin names, optionally prefixed with their repository
+    #[arg(required = true)]
+    pub names: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -178,6 +179,9 @@ pub struct PluginStatusArgs {
     pub json: bool,
     #[arg(long = "skip-upgrade-check", visible_alias = "offline")]
     pub offline: bool,
+    /// Display the components included in each installed suite
+    #[arg(long)]
+    pub show_components: bool,
 }
 
 #[derive(Debug, Args)]
@@ -349,7 +353,21 @@ fn run_schema(args: PluginSchemaArgs) -> Result<()> {
 // ── plugin uninstall ────────────────────────────────────────────────────
 
 async fn run_uninstall(args: PluginUninstallArgs) -> Result<()> {
-    crate::plugin::uninstall(&args.name).await?;
-    fmt::success(&format!("Plugin '{}' uninstalled.", args.name));
+    for name in args.names {
+        let reference = crate::plugin::index::parse_reference(&name)?;
+        for installed in crate::plugin::installed_plugins()? {
+            if crate::plugin::components::names(&installed.metadata)
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(&reference.name))
+            {
+                return Err(crate::error::Error::PluginInstall(format!(
+                    "'{}' is a component of '{}'; uninstall the suite instead",
+                    reference.name, installed.metadata.name
+                )));
+            }
+        }
+        crate::plugin::uninstall(&reference.name).await?;
+        fmt::success(&format!("Plugin '{}' uninstalled.", reference.name));
+    }
     Ok(())
 }

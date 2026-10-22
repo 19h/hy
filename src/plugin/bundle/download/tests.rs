@@ -46,7 +46,7 @@ fn download_arguments_match_upstream_for_all_target_platforms_and_pip_flags() {
                         )
                         .unwrap();
                         let command = command.as_std();
-                        assert_eq!(command.get_envs().count(), 0);
+                        assert_eq!(command.get_envs().count(), 4);
                         assert!(command.get_current_dir().is_none());
                         let argv: Vec<_> = std::iter::once(command.get_program())
                             .chain(command.get_args())
@@ -63,7 +63,7 @@ fn download_arguments_match_upstream_for_all_target_platforms_and_pip_flags() {
     }
     assert_eq!(cases.len(), 2304);
     compare(&cases);
-    digest(&cases, "2248c6de1a79faaf1df8e5bc66d56fe1b859837d45e906a8859858ccf9ae1eba");
+    digest(&cases, "75e7b1a4cba451e14a51bf3a4cdf80184a93340a28c6c5d53dda7ae8601714a8");
 }
 
 #[test]

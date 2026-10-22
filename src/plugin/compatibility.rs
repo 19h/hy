@@ -161,7 +161,7 @@ mod tests {
     #[test]
     fn omitted_lists_default_to_the_pinned_catalogue() {
         let plugin: PluginMetadata = serde_json::from_value(input()).unwrap();
-        assert_eq!(plugin.ida_versions.len(), 63);
+        assert_eq!(plugin.ida_versions.len(), 64);
         assert_eq!(plugin.platforms.len(), 6);
         assert!(is_ida_version_compatible(&plugin, "10.0"));
         assert!(!is_ida_version_compatible(&plugin, "11.0"));

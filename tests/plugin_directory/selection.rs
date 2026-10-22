@@ -29,7 +29,7 @@ fn every_valid_descriptor_counts_before_an_upgrade_can_be_skipped() {
         let config = fs::read(sandbox.config_path()).ok();
         let output = sandbox.run(&["plugin", "install", "-U", source.to_str().unwrap()]);
         assert!(!output.status.success(), "accepted second descriptor named {name}");
-        assert!(String::from_utf8_lossy(&output.stderr).contains("containing one plugin"));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("multiple unrelated plugins"));
         assert_eq!(fs::read(sandbox.config_path()).ok(), config);
         assert_eq!(
             fs::read(sandbox.path().join("idausr/plugins/example/plugin.py")).unwrap(),

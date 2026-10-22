@@ -21,6 +21,7 @@ fn exact_search_json_preserves_surrogates_with_source_escaping_and_field_order()
                 unreachable!()
             };
             let report = PluginQueryReport::Exact(ExactVersionReport {
+                repo: None,
                 plugin: plugin.clone(),
                 download_locations: vec![DownloadLocation {
                     ida_versions: "9.0".into(),

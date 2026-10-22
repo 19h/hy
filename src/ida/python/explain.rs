@@ -75,7 +75,7 @@ pub async fn explain() -> Result<EnvironmentReport> {
         &environment,
         venv.as_ref(),
         &version,
-        &crate::config::Env::global().binary_name,
+        crate::config::Env::global().display_command(),
     );
     report.python_environment = Some(environment);
     report.idapython_virtualenv = venv;

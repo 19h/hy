@@ -30,6 +30,7 @@ impl Fixture {
         let python = sandbox.path().join("python");
         fs::write(&python, include_str!("plugin_bundle_pip/python.sh")).unwrap();
         fs::set_permissions(&python, fs::Permissions::from_mode(0o755)).unwrap();
+        support::fake_uv(&python);
         let events = sandbox.path().join("events");
         let output = sandbox.path().join("bundle.zip");
         let mut args = vec![
@@ -87,7 +88,7 @@ fn bundle_download_inherits_process_state_and_captures_success_streams() {
         .env("PYTHONHOME", "/fixture/base python")
         .env("VIRTUAL_ENV", "/fixture/active")
         .env("PYTHONUTF8", "0")
-        .env("PATH", "/fixture/bin:/other path/bin")
+        .env("PATH", format!("{}:/fixture/bin:/other path/bin", fixture.sandbox.path().display()))
         .env("HY_TEST_PIP_STDOUT", "captured bundle stdout")
         .env("HY_TEST_PIP_STDERR", "captured bundle stderr")
         .output()
@@ -95,9 +96,10 @@ fn bundle_download_inherits_process_state_and_captures_success_streams() {
     assert_success(&output);
     let events = fixture.events();
     assert!(
-        events.contains(
-            "environment:/fixture/base python|/fixture/active|0|/fixture/bin:/other path/bin\n"
-        ),
+        events.contains(&format!(
+            "environment:|/fixture/active|0|{}:/fixture/bin:/other path/bin\n",
+            fixture.sandbox.path().display()
+        )),
         "{events}"
     );
     assert!(events.contains("stdin:bundle-input\n"), "{events}");

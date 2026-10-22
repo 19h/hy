@@ -102,7 +102,7 @@ impl DoctorReport {
         if let Some(pattern) = &self.pattern {
             writeln!(output, "Setup: {}\n  {}\n", pattern.name, pattern.description).unwrap();
         }
-        let binary = &crate::config::Env::global().binary_name;
+        let binary = &crate::config::Env::global().display_command();
         if self.findings.is_empty() {
             writeln!(
                 output,

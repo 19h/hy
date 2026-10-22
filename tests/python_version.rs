@@ -33,7 +33,10 @@ fn version_probe_inherits_stdin_without_consuming_the_childs_remaining_input() {
         .output()
         .unwrap();
     assert_success(&output);
-    assert!(rig.fixture.calls().contains("version:fixture-home|fixture-venv|0\n"));
+    assert!(rig.fixture.calls().contains(&format!(
+        "version:|{}|0\n",
+        rig.fixture.python.parent().unwrap().parent().unwrap().display()
+    )));
     assert!(rig.fixture.calls().contains("version-input:probe-line\n"));
     assert_eq!(output.stdout, b"child-input:child-line\n");
 }

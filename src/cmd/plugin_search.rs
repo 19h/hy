@@ -42,6 +42,7 @@ struct VersionsReport {
     plugin: Value,
     installed_version: Option<String>,
     versions: Vec<VersionEntry>,
+    repo: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -55,6 +56,7 @@ struct DownloadLocation {
 struct ExactVersionReport {
     plugin: Value,
     download_locations: Vec<DownloadLocation>,
+    repo: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -241,7 +243,11 @@ fn keyword_report(catalogue: &Catalogue, query: Option<String>) -> KeywordReport
             upgradable,
         });
     }
-    results.sort_by_key(|entry| entry.name.to_lowercase());
+    results.sort_by_key(|entry| {
+        let repo = entry.repo.as_deref();
+        let (local, community, repository) = super::plugin_listing::repository_order(repo);
+        (local, community, repository.to_owned(), entry.name.to_lowercase())
+    });
     KeywordReport {
         query,
         results,
@@ -311,6 +317,7 @@ fn version_report(
         plugin: report_metadata(&latest[0].descriptor.metadata)?,
         installed_version: installed.map(str::to_owned),
         versions: entries,
+        repo: None,
     })
 }
 
@@ -341,6 +348,7 @@ fn exact_report(candidate: &index::Plugin, version: &str) -> Result<ExactVersion
     Ok(ExactVersionReport {
         plugin: report_metadata(&locations[0].descriptor.metadata)?,
         download_locations,
+        repo: None,
     })
 }
 
@@ -360,11 +368,20 @@ pub async fn run(args: PluginSearchArgs, context: &plugin::PluginContext) -> Res
         if args.json {
             println!("{}", serde_json::to_string_pretty(&report)?);
         } else {
+            let (_, default) = index::repositories()?;
+            let mut group = None;
             for result in report.results {
+                if group.as_ref().is_some_and(|group| group != &result.repo) {
+                    println!();
+                }
+                group = Some(result.repo.clone());
+                let reference = super::plugin_listing::install_reference(
+                    &result.name,
+                    result.repo.as_deref(),
+                    &default,
+                );
                 println!(
-                    "{}/{}\t{}\t{}",
-                    result.repo.as_deref().unwrap_or(""),
-                    result.name,
+                    "{reference}\t{}\t{}",
                     result.version,
                     result.repository.as_deref().unwrap_or("")
                 );
@@ -408,12 +425,17 @@ pub async fn run(args: PluginSearchArgs, context: &plugin::PluginContext) -> Res
         return Err(Error::ChildExit(1));
     }
     let result = match candidates.first() {
-        None => Err(Error::NotFound(reference.name)),
-        Some((_, candidate)) => {
+        None => Err(Error::NotFound(reference.name.clone())),
+        Some((repo, candidate)) => {
             match reference.spec.strip_prefix("==").filter(|spec| !spec.contains(',')) {
-                Some(version) => exact_report(candidate, version).map(PluginQueryReport::Exact),
-                None => version_report(&catalogue, candidate, &reference.spec)
-                    .map(PluginQueryReport::Versions),
+                Some(version) => exact_report(candidate, version).map(|mut report| {
+                    report.repo = repo.map(str::to_owned);
+                    PluginQueryReport::Exact(report)
+                }),
+                None => version_report(&catalogue, candidate, &reference.spec).map(|mut report| {
+                    report.repo = repo.map(str::to_owned);
+                    PluginQueryReport::Versions(report)
+                }),
             }
         }
     };
@@ -423,6 +445,20 @@ pub async fn run(args: PluginSearchArgs, context: &plugin::PluginContext) -> Res
                 println!("{}", report.to_json()?);
             } else {
                 report.print_text()?;
+                let (_, default) = index::repositories()?;
+                let repo = candidates.first().and_then(|(repo, _)| *repo);
+                let prefix = repo
+                    .filter(|repo| *repo != default)
+                    .map(|repo| format!("{repo}/"))
+                    .unwrap_or_default();
+                let host =
+                    reference.host.as_ref().map(|host| format!("@{host}")).unwrap_or_default();
+                println!(
+                    "\ninstall with: {} plugin install {prefix}{}{}{host}",
+                    crate::config::Env::global().display_command(),
+                    reference.name,
+                    reference.spec
+                );
             }
             Ok(())
         }

@@ -21,7 +21,7 @@ def require_read_only(event, arguments):
 
 sys.addaudithook(require_read_only)
 sys.path.insert(0, str(Path(sys.argv[1]) / "src"))
-from hcli.commands.plugin.lint import _lint_plugin_archive
+from hcli.commands.plugin.lint import LintResult, _lint_plugin_archive
 from hcli.lib.console import console
 
 logging.disable(logging.CRITICAL)
@@ -31,10 +31,11 @@ results = []
 for filename in json.load(sys.stdin):
     with console.capture() as captured:
         try:
-            findings = _lint_plugin_archive(Path(filename).read_bytes(), filename)
-            if findings == 0:
+            result = LintResult()
+            _lint_plugin_archive(Path(filename).read_bytes(), filename, result)
+            if not result.recommendations and not result.errors:
                 console.print("no recommendations")
-            success = True
+            success = not result.errors
         except Exception:
             success = False
     results.append({"success": success, "output": captured.get()})

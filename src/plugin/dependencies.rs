@@ -86,6 +86,58 @@ pub fn parse_inline_dependencies(script: &str) -> Result<Vec<String>> {
     Ok(metadata.dependencies)
 }
 
+pub(crate) fn dependencies_from_archive(bytes: &[u8]) -> Result<Vec<String>> {
+    use std::io::Cursor;
+    let mut archive = crate::util::python_zip::Archive::new(Cursor::new(bytes))?;
+    let manifests = super::components::archive_manifests(&mut archive)?;
+    let mut seen = std::collections::HashSet::new();
+    let mut dependencies = Vec::new();
+    fn collect(
+        metadata: &PluginMetadata,
+        prefix: &str,
+        archive: &mut crate::util::python_zip::Archive<Cursor<&[u8]>>,
+        seen: &mut std::collections::HashSet<String>,
+        dependencies: &mut Vec<String>,
+    ) -> Result<()> {
+        if !seen.insert(metadata.name.clone()) {
+            return Ok(());
+        }
+        if let Some(entry) = inline_entry_point(metadata)? {
+            let name = super::archive_paths::reference(prefix, entry);
+            let bytes = archive.read(&name)?;
+            let script = std::str::from_utf8(&bytes)
+                .map_err(|error| Error::PluginInstall(format!("{name}: {error}")))?;
+            dependencies.extend(parse_inline_dependencies(script)?);
+        } else {
+            dependencies.extend(explicit_dependencies(metadata));
+        }
+        for component in &metadata.components {
+            if let super::components::Component::Inline(descriptor) = component {
+                collect(
+                    &descriptor.metadata,
+                    &format!("{prefix}{}/", descriptor.metadata.name),
+                    archive,
+                    seen,
+                    dependencies,
+                )?;
+            }
+        }
+        Ok(())
+    }
+    for (path, manifest) in manifests {
+        collect(
+            &manifest.metadata,
+            &super::archive_paths::descriptor_prefix(&path),
+            &mut archive,
+            &mut seen,
+            &mut dependencies,
+        )?;
+    }
+    let mut unique = std::collections::HashSet::new();
+    dependencies.retain(|dependency| unique.insert(dependency.clone()));
+    Ok(dependencies)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

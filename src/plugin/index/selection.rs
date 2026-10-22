@@ -37,11 +37,6 @@ impl Identity {
     }
 }
 
-/// Catalogue scans retain their existing best-effort handling of malformed hosts.
-pub fn matches_reference(plugin: &Plugin, reference: &Reference) -> bool {
-    Identity::new(reference).and_then(|identity| identity.matches(plugin)).unwrap_or(false)
-}
-
 pub fn matching_plugins<'a>(
     snapshot: &'a Snapshot,
     reference: &Reference,

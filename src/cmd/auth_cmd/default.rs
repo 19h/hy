@@ -25,7 +25,10 @@ fn apply(args: DefaultArgs) -> Result<bool> {
         let creds = auth.list_credentials();
         if creds.is_empty() {
             fmt::warning("No credentials found.");
-            eprintln!("Use 'hy login' or 'hy auth key install' to add credentials.");
+            eprintln!(
+                "Use '{0} login' or '{0} auth key install' to add credentials.",
+                crate::config::Env::global().display_command()
+            );
             return Ok(false);
         }
 

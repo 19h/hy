@@ -188,7 +188,11 @@ fn timeout_closes_the_listener_and_partially_received_requests() {
         .write_all(b"POST /token HTTP/1.1\r\nHost: localhost\r\nContent-Length: 1000\r\n\r\n{")
         .unwrap();
     assert!(callback.finish().is_none());
-    assert!(TcpStream::connect(address).is_err());
+    let deadline = std::time::Instant::now() + Duration::from_secs(1);
+    while TcpStream::connect(address).is_ok() {
+        assert!(std::time::Instant::now() < deadline, "callback listener remained open");
+        std::thread::sleep(Duration::from_millis(5));
+    }
     let mut byte = [0];
     match stream.read(&mut byte) {
         Ok(0) => {}

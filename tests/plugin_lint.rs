@@ -62,7 +62,7 @@ fn lint_reports_validation_findings_but_rejects_missing_paths() {
     descriptor["plugin"]["logoPath"] = json!("absent.svg");
     archive_manifest(&package, &descriptor, &[]);
     let output = sandbox.run(&["plugin", "lint", package.to_str().unwrap()]);
-    assert_success(&output);
+    assert_eq!(output.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&output.stdout).contains("logo file not found"));
     assert!(
         !sandbox
@@ -143,7 +143,7 @@ fn lint_matches_upstream_findings_and_exit_boundaries() {
         let valid = !matches!(case, "invalid-metadata" | "missing-entry" | "missing-descriptor");
         for path in [&directory, &package] {
             let output = sandbox.run(&["plugin", "lint", path.to_str().unwrap()]);
-            assert_success(&output);
+            assert_eq!(output.status.success(), valid, "{case}: {output:?}");
             let report = String::from_utf8_lossy(&output.stdout);
             assert_eq!(report.trim() == "no recommendations", case == "complete", "{case}");
             assert_eq!(report.contains("Error"), !valid, "{case}: {report}");

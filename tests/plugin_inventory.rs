@@ -96,14 +96,14 @@ fn status_distinguishes_managed_minimal_legacy_and_broken_entries() {
 }
 
 #[test]
-fn named_status_preserves_requested_order_and_repeated_names() {
+fn named_status_sorts_installed_names_and_preserves_repetitions() {
     let sandbox = Sandbox::new();
     descriptor(&sandbox, "alpha", &manifest("alpha"));
     descriptor(&sandbox, "zeta", &manifest("zeta"));
     let (success, entries) = status(&sandbox, &["ZETA", "alpha", "zeta"]);
     assert!(success);
     let names: Vec<_> = entries.iter().map(|entry| entry["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["zeta", "alpha", "zeta"]);
+    assert_eq!(names, ["alpha", "zeta", "zeta"]);
 }
 
 #[test]

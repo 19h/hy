@@ -30,7 +30,7 @@ pub async fn resolve() -> Result<ResolvedPython> {
     }
     let probe = probe_ida().await.map_err(|_| Error::PythonNotFound(PROBE_FAILED.into()))?;
     Ok(ResolvedPython {
-        exe: derive(&probe, &crate::config::Env::global().binary_name)?,
+        exe: derive(&probe, crate::config::Env::global().display_command())?,
         source: "derived from idat probe".into(),
         ida_probe: Some(probe),
     })

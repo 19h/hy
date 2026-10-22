@@ -4,6 +4,7 @@ import ast
 import dataclasses
 import json
 import logging
+import os
 import re
 import sys
 import tomllib
@@ -46,14 +47,16 @@ load("lib/ida/plugin/bundle.py", {
     "_PLATFORM_CONFIG", "_manylinux_tags", "_mac_platform_tags",
     "_build_pip_platform_tags", "PipTarget",
 })
-load("commands/plugin/bundle.py", {"_download_wheelhouse"})
+load("commands/plugin/bundle.py", {"_PipDownloadError", "_download_wheelhouse"})
+context["os"] = os
+context["PARENT_PYTHON_ENV_VARS"] = {"PYTHONHOME", "PYTHONPATH", "PYTHONEXECUTABLE", "PYTHONSTARTUP"}
 context["find_current_python_executable"] = lambda: Path("fixture-python")
 results = []
 for case in json.load(sys.stdin):
     calls = []
 
     def run(argv, **kwargs):
-        assert kwargs == {"capture_output": True, "check": False}
+        assert kwargs == {"capture_output": True, "check": False, "env": {key: value for key, value in os.environ.items() if key not in context["PARENT_PYTHON_ENV_VARS"]}}
         calls.append(argv)
         return SimpleNamespace(
             returncode=1 if case["mode"] == "error" else 0,
@@ -68,7 +71,7 @@ for case in json.load(sys.stdin):
     target = context["PipTarget"](case["platform"], case["version"])
     try:
         context["_download_wheelhouse"](
-            case.get("dependencies", []), target, Path("wheelhouse"), options,
+            Path("fixture-python"), case.get("dependencies", []), target, Path("wheelhouse"), options,
         )
         assert case["mode"] == "plan"
         results.append(calls[0])

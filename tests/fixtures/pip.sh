@@ -29,6 +29,10 @@ for argument in "$@"; do
     case "$previous" in
         --dest) destination=$argument ;;
         --find-links) find_links=$argument ;;
+        --constraint)
+            printf '%s\n' '--constraint-contents--' >> "$HY_TEST_PIP_ARGUMENTS"
+            /bin/cat "$argument" >> "$HY_TEST_PIP_ARGUMENTS"
+            ;;
     esac
     previous=$argument
 done

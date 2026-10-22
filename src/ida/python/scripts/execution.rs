@@ -5,29 +5,12 @@ use std::process::ExitStatus;
 
 use tokio::process::Command;
 
-use super::super::environment;
 use crate::error::{Error, Result};
 
 pub(super) fn command(python: &Path, program: &Path) -> Command {
     let mut command = Command::new(program);
-    command.env_remove("PYTHONHOME");
-    if let Some(root) = environment::venv_root(python) {
-        command.env("VIRTUAL_ENV", root);
-    } else {
-        command.env_remove("VIRTUAL_ENV");
-    }
-
-    let directory = python.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    let mut path = directory.as_os_str().to_owned();
-    if let Some(inherited) = std::env::var_os("PATH").filter(|value| !value.is_empty()) {
-        path.push(if cfg!(windows) {
-            ";"
-        } else {
-            ":"
-        });
-        path.push(inherited);
-    }
-    command.env("PATH", path).kill_on_drop(true);
+    super::super::configure_environment(&mut command, python);
+    command.kill_on_drop(true);
     command
 }
 

@@ -36,7 +36,9 @@ pub(super) fn extract<R: Read + Seek>(
             )));
         }
         let target = destination.join(basename);
-        if !target.starts_with(destination) {
+        if crate::util::realpath::resolve(&target)?.parent()
+            != Some(crate::util::realpath::resolve(destination)?.as_path())
+        {
             return Err(Error::PluginInstall(format!("invalid wheelhouse filename: {basename}")));
         }
         archive.copy_to(&name, || std::fs::File::create(&target))?;

@@ -102,7 +102,10 @@ pub fn config_entry(session: &SupabaseSession) -> Result<(String, serde_json::Va
 /// The caller persists the returned session and credential together.
 pub fn ensure_fresh_session(expected_email: &str) -> Result<SupabaseSession> {
     let session = load_session()?.ok_or_else(|| {
-        Error::Authentication("No Supabase session found. Run `hy login` first.".into())
+        Error::Authentication(format!(
+            "No Supabase session found. Run `{} login` first.",
+            crate::config::Env::global().display_command()
+        ))
     })?;
     verify_session_email(&session.access_token, expected_email)?;
 

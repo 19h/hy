@@ -8,6 +8,8 @@ pub use plugin_access::PluginAccessDenied;
 /// Top-level error type for all hcli operations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("{0}")]
+    BundleDownload(String),
     #[error("child process exited with status {0}")]
     ChildExit(i32),
     #[error("{0}")]
@@ -38,7 +40,7 @@ pub enum Error {
     },
 
     // ── Auth errors ─────────────────────────────────────────────────────
-    #[error("Not logged in — run `hy login` first")]
+    #[error("Not logged in - run `{} login` first", crate::config::Env::global().display_command())]
     NotLoggedIn,
 
     #[allow(dead_code)]

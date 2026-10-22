@@ -10,16 +10,14 @@ from hcli.lib.ida.plugin import (
     get_metadatas_with_paths_from_plugin_archive,
     validate_metadata_in_plugin_archive,
 )
+from hcli.lib.ida.plugin.components import find_root_manifest_in_archive
 
 results = []
 for case in json.load(sys.stdin):
     data = Path(case["path"]).read_bytes()
     try:
         if case["name"] is None:
-            items = list(get_metadatas_with_paths_from_plugin_archive(data))
-            if len(items) != 1:
-                raise ValueError("requires one plugin")
-            path, metadata = items[0]
+            path, metadata = find_root_manifest_in_archive(data)
         else:
             path, metadata = get_metadata_from_plugin_archive(data, case["name"])
         try:

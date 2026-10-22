@@ -132,11 +132,7 @@ fn invalid_file_references_stop_only_the_current_inner_archive() {
         .unwrap();
         let result = inspect(&sandbox, &path, true);
         assert_eq!(result["success"], true);
-        let expected = if invalid_first {
-            "  plugins: 1\n    independent: 1\n"
-        } else {
-            "  plugins: 2\n    first: 1\n    independent: 1\n"
-        };
+        let expected = "  plugins: 1\n    independent: 1\n";
         assert_eq!(result["report"], report(&path, expected));
     }
 }

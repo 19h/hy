@@ -1,98 +1,114 @@
-//! Resolve local bundle archives and platform-specific repository distributions.
+//! Resolve every bundle target independently, retaining archive ownership and local pins.
 
+use std::collections::HashMap;
+use std::io::Cursor;
+use std::path::Path;
+
+use indexmap::IndexMap;
+
+use super::plugin_cmd::BundleCreateArgs;
 use crate::error::{Error, Result};
-use crate::plugin::{self, PluginContext, bundle::ResolvedPluginArchive, index};
+use crate::plugin::repositories::Repositories;
+use crate::plugin::requirements::Requirement;
+use crate::plugin::{self, PluginContext, bundle, index, requirements, resolve};
+use crate::util::python_zip::Archive;
 
-mod archives;
-mod local;
-mod reference;
-
-use archives::{Archive, Archives};
-
-pub struct Sources<'a> {
-    context: &'a PluginContext,
-    repository_override: Option<&'a str>,
-    repositories: Option<Vec<(Option<String>, index::LoadedRepository)>>,
-}
-
-impl<'a> Sources<'a> {
-    pub fn new(context: &'a PluginContext, repository_override: Option<&'a str>) -> Self {
-        Self {
-            context,
-            repository_override,
-            repositories: None,
-        }
-    }
-
-    async fn load(&mut self) -> Result<()> {
-        if self.repositories.is_some() {
-            return Ok(());
-        }
-        let configured = match self.repository_override {
-            Some(source) => vec![(
-                None,
-                index::Repository {
-                    url: source.into(),
-                },
-            )],
-            None => self.context.repositories()?,
-        };
-        let explicit = self.repository_override.is_some() || self.context.repository.is_some();
-        let mut repositories = Vec::new();
-        for (name, repository) in configured {
-            match self.context.load_repository(name.as_deref(), &repository.url, false).await {
-                Ok(repository) => repositories.push((name, repository)),
-                Err(error) if explicit => return Err(error),
-                Err(error) => {
-                    tracing::warn!(repository = ?name, %error, "bundle repository unavailable")
-                }
-            }
-        }
-        self.repositories = Some(repositories);
-        Ok(())
-    }
-
-    pub async fn resolve(
-        &mut self,
-        spec: &str,
-        platforms: &[String],
-    ) -> Result<Vec<ResolvedPluginArchive>> {
-        if let Some(archives) = local::resolve(spec, platforms)? {
-            return Ok(archives);
-        }
-        let reference = reference::prepare(spec)?;
-        if reference.spec.chars().nth(1) != Some('=')
-            || reference.spec.get(2..).and_then(plugin::parse_version).is_none()
+pub(super) async fn resolve(
+    args: &BundleCreateArgs,
+    context: &PluginContext,
+    targets: &[bundle::PipTarget],
+) -> Result<Vec<bundle::ResolvedCell>> {
+    let mut local = IndexMap::new();
+    let mut roots = Vec::new();
+    let mut scopes = HashMap::new();
+    for spec in &args.plugin_specs {
+        let expanded = crate::util::python_path::expand_user(spec)?;
+        let path = Path::new(&expanded);
+        if path.is_dir() && path.join("ida-plugin.json").is_file()
+            || path.exists() && spec.ends_with(".zip")
         {
-            return Err(Error::Other(format!(
-                "invalid plugin version spec: {}{}",
-                reference.name, reference.spec,
-            )));
-        }
-        self.load().await?;
-        let mut candidates = Vec::new();
-        for (_, repository) in self.repositories.as_ref().expect("loaded above") {
-            for _ in index::matching_plugins(&repository.snapshot, &reference)? {
-                candidates.push(repository);
+            let bytes = if path.is_dir() {
+                plugin::pack_directory(&path.canonicalize()?)?
+            } else {
+                std::fs::read(path)?
+            };
+            let mut archive = Archive::new(Cursor::new(&bytes))?;
+            let manifests = plugin::components::archive_manifests(&mut archive)?;
+            let references = plugin::files::ArchiveReferences::read(&archive);
+            for (path, manifest) in &manifests {
+                references.validate(
+                    &manifest.metadata,
+                    &plugin::archive_paths::descriptor_prefix(path),
+                )?;
             }
+            let metadata = plugin::select_archived_plugin(&mut archive, None)?.metadata;
+            local.insert(metadata.name.clone(), (bytes, metadata));
+        } else {
+            let reference = index::parse_reference(spec)?;
+            if let Some(repo) = reference.repo {
+                scopes.insert(reference.name.to_lowercase(), repo);
+            }
+            roots.push(Requirement::parse(spec)?);
         }
-        let repository = match candidates.as_slice() {
-            [repository] => *repository,
-            [] => return Err(Error::NotFound(format!("plugin {spec} in configured repositories"))),
-            _ => {
-                return Err(Error::Other(format!(
-                    "ambiguous plugin {spec}; qualify its repository and host"
+    }
+    let fixed: Vec<_> = local.values().map(|(_, metadata)| metadata.clone()).collect();
+    let pool = if roots.is_empty()
+        && fixed.iter().all(|metadata| requirements::collect(metadata).is_empty())
+    {
+        Repositories::empty()
+    } else {
+        Repositories::load(context, &scopes, args.repo.as_deref()).await?
+    };
+    let mut cached: HashMap<(_, _), Vec<u8>> = HashMap::new();
+    let mut cells = Vec::new();
+    for target in targets {
+        let cell = resolve::Cell {
+            platform: target.ida_platform.clone(),
+            ida_version: None,
+            python_version: Some(target.python_version.clone()),
+            check_python: true,
+        };
+        for metadata in &fixed {
+            // Local roots may intentionally package several platforms, but their
+            // Python constraint must admit every requested target.
+            if let Some(requirement) = &metadata.requires_python
+                && !requirements::python_matches(&target.python_version, requirement)
+            {
+                return Err(Error::PluginInstall(format!(
+                    "{} {} requires Python {requirement}, which excludes target {}",
+                    metadata.name,
+                    metadata.version,
+                    target.id()
                 )));
             }
-        };
-        let mut archives = Archives::default();
-        for platform in platforms {
-            let location =
-                index::select_for_platform(&repository.snapshot, &reference, platform, None)?;
-            let bytes = repository.fetch_verified(location).await?;
-            archives
-                .insert(Archive::new(location.descriptor.metadata.name.clone(), bytes), platform);
         }
-        archives.finish().into_iter().map(Archive::resolve).collect()
+        let resolution = resolve::resolve(&pool.snapshot, &roots, &cell, &fixed, &[])?;
+        for warning in resolution.warnings.iter().chain(&resolution.skipped) {
+            crate::util::fmt::warning(&format!("{}: {warning}", target.id()));
+        }
+        let mut plugins = IndexMap::new();
+        for (name, (bytes, metadata)) in &local {
+            plugins.insert(name.clone(), (bytes.clone(), metadata.clone()));
+        }
+        for (name, location) in resolution.selected {
+            let key = (location.url.clone(), location.sha256.clone());
+            let bytes = match cached.get(&key) {
+                Some(bytes) => bytes.clone(),
+                None => {
+                    let bytes = pool.fetch(&location).await?;
+                    cached.insert(key, bytes.clone());
+                    bytes
+                }
+            };
+            plugins.insert(name, (bytes, location.descriptor.metadata));
+        }
+        let mut root_names: Vec<_> = fixed.iter().map(|metadata| metadata.name.clone()).collect();
+        root_names.extend(roots.iter().map(|requirement| requirement.name.clone()));
+        cells.push(bundle::ResolvedCell {
+            target: target.clone(),
+            plugins,
+            roots: root_names,
+        });
     }
+    Ok(cells)
 }

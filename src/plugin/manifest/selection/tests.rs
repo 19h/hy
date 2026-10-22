@@ -123,6 +123,6 @@ fn selection_and_reference_validation_match_source_independently() {
     #[cfg(unix)]
     assert_eq!(
         format!("{:x}", Sha256::digest(serde_json::to_vec(&expected).unwrap())),
-        "e31b3c282e461be4b3835b5e2feffb20e359f63708dbd4eb8e81aeca66e0afe6",
+        "4097d3b95627209203a3406f5a174f96f422defab7d821b4d6f61ca83c2a0f53",
     );
 }

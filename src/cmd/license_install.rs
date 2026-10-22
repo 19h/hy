@@ -14,6 +14,11 @@ pub(super) async fn run(args: LicenseInstallArgs) -> Result<()> {
     let target = match args.ida_dir {
         Some(path) => path,
         None => {
+            if !tui::is_interactive() {
+                return Err(Error::Other(
+                    "provide IDA_DIR when installing a license without a terminal".into(),
+                ));
+            }
             let Some(path) = select_target().await else {
                 return Ok(());
             };
@@ -23,7 +28,7 @@ pub(super) async fn run(args: LicenseInstallArgs) -> Result<()> {
     let target = absolute_path(&target)?;
     if !target.exists() {
         let choices = vec!["y. Yes".into(), "n. No".into()];
-        if tui::select("Create directory?", &choices, 0) != Some(0) {
+        if tui::is_interactive() && tui::select("Create directory?", &choices, 0) != Some(0) {
             return Ok(());
         }
         std::fs::create_dir_all(&target)?;

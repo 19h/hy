@@ -1,87 +1,114 @@
-//! Stage plugin archives and wheelhouses, then publish the completed bundle.
+//! Stage per-target plugin closures and publish a completed bundle atomically.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+
+use indexmap::IndexMap;
+use sha2::{Digest, Sha256};
 
 use super::{BundleCreatedBy, BundleManifest, BundleTargetPlatformTag, PipTarget};
 use crate::error::{Error, Result};
+use crate::plugin::PluginMetadata;
 
-// ── bundle creation ─────────────────────────────────────────────────────
-
-/// A resolved plugin archive ready to be placed in a bundle.
-pub struct ResolvedPluginArchive {
-    pub name: String,
-    pub version: String,
-    pub bytes: Vec<u8>,
-    /// Platforms this exact archive serves (used for filename suffixing
-    /// when a plugin ships per-platform builds). Empty = all platforms.
-    pub platforms: Vec<String>,
+pub struct ResolvedCell {
+    pub target: PipTarget,
+    pub plugins: IndexMap<String, (Vec<u8>, PluginMetadata)>,
+    pub roots: Vec<String>,
 }
 
-/// Create a plugin bundle archive at `output`.
-///
-/// `archives` are the resolved plugin zips; `targets` the pip targets to
-/// build wheelhouses for. Wheel downloading shells out to
-/// the selected interpreter when a plugin declares an explicit requirement list.
+struct Variant {
+    name: String,
+    version: String,
+    bytes: Vec<u8>,
+    targets: Vec<PipTarget>,
+}
+
 pub async fn create_bundle(
     output: &Path,
-    archives: &[ResolvedPluginArchive],
-    targets: &[PipTarget],
+    cells: &[ResolvedCell],
     pip: &crate::ida::python::PipOptions,
     status: impl Fn(&str),
 ) -> Result<()> {
     let staging = tempfile::tempdir()?;
     let plugins_dir = staging.path().join("plugins");
     std::fs::create_dir_all(&plugins_dir)?;
-    let deps_dir = staging.path().join("dependencies").join("python");
+    let deps_dir = staging.path().join("dependencies/python");
     std::fs::create_dir_all(&deps_dir)?;
-
-    let mut all_python_deps: Vec<String> = Vec::new();
-
-    for archive in archives {
-        crate::plugin::validate_name(&archive.name)?;
-        let suffix = if archive.platforms.is_empty() {
-            String::new()
-        } else {
-            format!("-{}", archive.platforms.join("+"))
-        };
-        let filename = format!("{}-{}{}.zip", archive.name, archive.version, suffix);
-        if filename.contains(['/', '\\']) {
-            return Err(Error::PluginInstall(
-                "plugin version cannot be used in a bundle filename".into(),
-            ));
-        }
-        let dest = plugins_dir.join(&filename);
-        if !dest.exists() {
-            std::fs::write(&dest, &archive.bytes)?;
-        }
-
-        for metadata in super::metadata::descriptors(&archive.bytes)? {
-            // Bundle creation collects only explicit lists in the source CLI.
-            // Inline script metadata is resolved by installation, not this stage.
-            if let crate::plugin::PythonDependencies::Requirements(requirements) =
-                metadata.python_dependencies
-            {
-                all_python_deps.extend(requirements);
-            }
-        }
-    }
-
+    let mut variants: IndexMap<(String, [u8; 32]), Variant> = IndexMap::new();
     let mut target_manifests = Vec::new();
-    for target in targets {
-        let wh_dir = deps_dir.join(target.id());
-        std::fs::create_dir_all(&wh_dir)?;
-
-        if !all_python_deps.is_empty() {
-            status(&format!(
-                "downloading wheels for {} Python {}",
-                target.ida_platform, target.python_version
-            ));
-            super::download::wheelhouse(&all_python_deps, target, &wh_dir, pip).await?;
-            verify_wheelhouse(&wh_dir, target)?;
+    for cell in cells {
+        let destination = deps_dir.join(cell.target.id());
+        std::fs::create_dir_all(&destination)?;
+        status(&format!(
+            "downloading wheels for {} Python {}",
+            cell.target.ida_platform, cell.target.python_version
+        ));
+        let accepted = super::cell::prepare(cell, &destination, pip).await?;
+        verify_wheelhouse(&destination, &cell.target)?;
+        for (name, (bytes, _)) in &cell.plugins {
+            if !accepted.contains(&name.to_lowercase()) {
+                continue;
+            }
+            let digest: [u8; 32] = Sha256::digest(bytes).into();
+            let mut archive = crate::util::python_zip::Archive::new(std::io::Cursor::new(bytes))?;
+            let version =
+                crate::plugin::select_archived_plugin(&mut archive, Some(name))?.metadata.version;
+            variants
+                .entry((name.clone(), digest))
+                .or_insert_with(|| Variant {
+                    name: name.clone(),
+                    version,
+                    bytes: bytes.clone(),
+                    targets: Vec::new(),
+                })
+                .targets
+                .push(cell.target.clone());
         }
-        target_manifests.push(BundleTargetPlatformTag::from_target(target)?);
+        target_manifests.push(BundleTargetPlatformTag::from_target(&cell.target)?);
     }
-
+    let mut counts = HashMap::new();
+    for variant in variants.values() {
+        *counts.entry(variant.name.clone()).or_insert(0) += 1;
+    }
+    let mut filenames = Vec::new();
+    for variant in variants.values() {
+        let suffix = if counts[&variant.name] > 1 {
+            let mut platforms: Vec<_> =
+                variant.targets.iter().map(|target| target.ida_platform.clone()).collect();
+            platforms.sort();
+            platforms.dedup();
+            format!("-{}", platforms.join("+"))
+        } else {
+            String::new()
+        };
+        filenames.push(format!("{}-{}{suffix}.zip", variant.name, variant.version));
+    }
+    let mut occurrences = HashMap::new();
+    for filename in &filenames {
+        *occurrences.entry(filename).or_insert(0) += 1;
+    }
+    let duplicates: HashSet<_> = occurrences
+        .into_iter()
+        .filter(|(_, count)| *count > 1)
+        .map(|(filename, _)| filename.clone())
+        .collect();
+    for (variant, mut filename) in variants.into_values().zip(filenames) {
+        if duplicates.contains(&filename) {
+            let mut targets: Vec<_> = variant.targets.iter().map(PipTarget::id).collect();
+            targets.sort();
+            filename = format!("{}-{}-{}.zip", variant.name, variant.version, targets.join("+"));
+        }
+        if filename.contains(['/', '\\', ':']) {
+            return Err(Error::PluginInstall("invalid bundle archive filename".into()));
+        }
+        let path = plugins_dir.join(filename);
+        if path.exists() && std::fs::read(&path)? != variant.bytes {
+            return Err(Error::PluginInstall(
+                "different archives map to one bundle filename".into(),
+            ));
+        }
+        std::fs::write(path, variant.bytes)?;
+    }
     let manifest = BundleManifest {
         version: 1,
         kind: "hcli-plugin-bundle".into(),
@@ -92,11 +119,8 @@ pub async fn create_bundle(
         },
         target_platform_tags: target_manifests,
     };
-    let manifest_bytes = serde_json::to_vec_pretty(&manifest)?;
-
     status("writing bundle archive");
-    write_bundle_zip(output, &manifest_bytes, staging.path())?;
-    Ok(())
+    write_bundle_zip(output, &serde_json::to_vec_pretty(&manifest)?, staging.path())
 }
 
 fn verify_wheelhouse(wh_dir: &Path, target: &PipTarget) -> Result<()> {

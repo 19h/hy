@@ -27,7 +27,7 @@ fn setup() -> (Fixture, Command) {
 }
 
 #[test]
-fn pip_inherits_environment_and_stdin_and_keeps_success_output_captured() {
+fn pip_sanitizes_environment_inherits_stdin_and_captures_success_output() {
     let (fixture, mut command) = setup();
     let input = fixture.sandbox.path().join("stdin");
     fs::write(&input, "for-resolution\nfor-installation\n").unwrap();
@@ -48,7 +48,11 @@ fn pip_inherits_environment_and_stdin_and_keeps_success_output_captured() {
     assert_eq!(
         environments,
         vec![
-            "environment:/fixture/base python|/fixture/parent environment|0|/fixture/bin:/other path/bin";
+            format!(
+                "environment:|{}|0|{}:/fixture/bin:/other path/bin",
+                fixture.python.parent().unwrap().parent().unwrap().display(),
+                fixture.python.parent().unwrap().display(),
+            );
             2
         ]
     );

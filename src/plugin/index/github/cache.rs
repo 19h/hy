@@ -1,10 +1,10 @@
 //! Upstream catalogue paths and publication; metadata expires after one day.
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 use crate::error::{Error, Result};
-use crate::util::{python_json::Text, python_path};
+use crate::util::{python_json::Text, python_path, python_time};
 
 pub(super) fn candidates_path() -> Result<PathBuf> {
     Ok(directory(&[])?.join("candidate_repos.json"))
@@ -97,23 +97,16 @@ fn read_path(
         return Ok(None);
     }
     if let Some(lifetime) = lifetime {
-        let now = clock();
-        let modified = std::fs::metadata(path)?.modified()?;
+        let now = python_time::clock(clock())?;
+        let modified = python_time::modified(&std::fs::metadata(path)?)?;
         // Python subtracts two binary64 epoch timestamps, including future dates.
-        let age = epoch_seconds(now) - epoch_seconds(modified);
+        let age = now - modified;
         if age > lifetime.as_secs_f64() {
             std::fs::remove_file(path)?;
             return Ok(None);
         }
     }
     Ok(Some(std::fs::read(path)?))
-}
-
-fn epoch_seconds(time: SystemTime) -> f64 {
-    match time.duration_since(UNIX_EPOCH) {
-        Ok(duration) => duration.as_secs_f64(),
-        Err(error) => -error.duration().as_secs_f64(),
-    }
 }
 
 pub fn write(path: &Path, bytes: &[u8]) -> Result<()> {

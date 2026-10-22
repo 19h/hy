@@ -10,6 +10,21 @@ use super::*;
 
 mod cases;
 
+#[cfg(unix)]
+#[test]
+fn existing_wheel_symlinks_cannot_redirect_extraction() {
+    let directory = tempfile::tempdir().unwrap();
+    let destination = directory.path().join("wheelhouse");
+    let outside = directory.path().join("outside.whl");
+    std::fs::create_dir(&destination).unwrap();
+    std::fs::write(&outside, b"retain").unwrap();
+    std::os::unix::fs::symlink(&outside, destination.join("example.whl")).unwrap();
+    let bytes = zip(&[Member::new(b"dependencies/python/target/example.whl", b"replacement")]);
+    let mut archive = Archive::new(Cursor::new(bytes)).unwrap();
+    assert!(extract(&mut archive, "dependencies/python/target/", &destination).is_err());
+    assert_eq!(std::fs::read(outside).unwrap(), b"retain");
+}
+
 #[test]
 fn wheelhouse_extraction_matches_source_members_and_partial_files() {
     let directory = tempfile::tempdir().unwrap();
@@ -66,6 +81,6 @@ fn wheelhouse_extraction_matches_source_members_and_partial_files() {
     #[cfg(unix)]
     assert_eq!(
         format!("{:x}", Sha256::digest(serde_json::to_vec(&expected).unwrap())),
-        "10d66bca4c66b218e0e3820fd81e917773d542fc025a7eb14317e24f00fe8d19",
+        "bcd7f423166b1dcc14b5102c4654bf498951feb0a68915674fc29d7a57fe6bdc",
     );
 }

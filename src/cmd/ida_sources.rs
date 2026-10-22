@@ -62,7 +62,7 @@ fn list() -> Result<()> {
         fmt::warning("No sources configured.");
         fmt::info(&format!(
             "Add sources with: {} ida source add <name> <path>",
-            Env::global().binary_name
+            Env::global().display_command()
         ));
         return Ok(());
     }
@@ -121,7 +121,7 @@ fn remove(name: &str) -> Result<()> {
         fmt::warning(&format!("Source not found: '{name}'"));
         fmt::info(&format!(
             "Use `{} ida source list` to see configured sources.",
-            Env::global().binary_name
+            Env::global().display_command()
         ));
         return Ok(());
     }

@@ -160,6 +160,11 @@ pub fn resolve_install_dir() -> crate::error::Result<ResolvedInstallDir> {
         .as_str()
         .or_else(|| config["paths"]["ida_install_dir"].as_str())
         .ok_or(crate::error::Error::IdaNotFound)?;
+    if configured.trim().is_empty() || !Path::new(configured).is_absolute() {
+        return Err(crate::error::Error::Other(
+            "ida-config.json: ida-install-dir must be a nonempty absolute path".into(),
+        ));
+    }
     let path = normalize_install_dir(Path::new(configured));
     if !path.is_dir() {
         return Err(crate::error::Error::Other(

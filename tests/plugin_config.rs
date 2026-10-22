@@ -135,7 +135,11 @@ fn explicit_install_configuration_does_not_prompt_for_other_required_settings() 
         "enabled=false",
         package.to_str().unwrap(),
     ]));
-    assert!(!sandbox.path().join("idausr/ida-config.json").exists());
+    let config: serde_json::Value =
+        serde_json::from_slice(&fs::read(sandbox.path().join("idausr/ida-config.json")).unwrap())
+            .unwrap();
+    assert_eq!(config["Plugins"]["example"]["settings"]["enabled"], false);
+    assert!(config["Plugins"]["example"]["settings"].get("token").is_none());
 }
 
 #[test]

@@ -57,7 +57,8 @@ pub fn read_metadata_from_directory(dir: &std::path::Path) -> crate::error::Resu
         )));
     }
     let text = std::fs::read_to_string(&manifest_path)?;
-    let manifest: PluginManifest = serde_json::from_str(&text)?;
+    let mut manifest: PluginManifest = serde_json::from_str(&text)?;
     super::validate_directory_files(&manifest.metadata, dir)?;
+    super::components::expand_directory(&mut manifest.metadata, dir, 0)?;
     Ok(manifest.metadata)
 }

@@ -88,7 +88,7 @@ pub async fn doctor() -> Result<DoctorReport> {
         }
     };
     let state = collect::collect(&resolved, collect::ProbeMode::AllowAdditional).await?;
-    report.findings = findings::check(&state, &crate::config::Env::global().binary_name);
+    report.findings = findings::check(&state, crate::config::Env::global().display_command());
     report.pattern = Some(pattern::identify(&state, &report.findings));
     report.notes = notes::collect(&state).await?;
     report.ok = !report.findings.iter().any(|finding| finding.severity == Severity::Error);
@@ -104,7 +104,7 @@ pub async fn doctor() -> Result<DoctorReport> {
 
 fn unresolved_findings(variable: Option<&str>, error: &str) -> Vec<Finding> {
     let mut findings = Vec::new();
-    let binary = &crate::config::Env::global().binary_name;
+    let binary = &crate::config::Env::global().display_command();
     if let Some(path) = variable
         && !std::path::Path::new(path).is_file()
     {

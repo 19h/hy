@@ -87,7 +87,8 @@ fn installer_application_is_executed_and_its_product_is_published() {
     assert!(!destination.join("installer.app").exists());
     assert!(!sandbox.path().join("idausr/ida-config.json").exists());
     let arguments = fs::read_to_string(arguments).unwrap();
-    assert!(arguments.starts_with("--mode\nunattended\n--debugtrace\n"));
+    assert!(arguments.starts_with("--mode\nunattended\n--prefix\n"));
+    assert!(!arguments.contains("--debugtrace"));
     assert!(!arguments.contains("--installpassword"));
     let listing = sandbox.run(&["ida", "list"]);
     assert_success(&listing);
@@ -102,10 +103,11 @@ fn existing_destination_is_preserved_without_running_the_installer() {
     fs::create_dir(&destination).unwrap();
     fs::write(destination.join("sentinel"), "retain").unwrap();
     let arguments = sandbox.path().join("arguments");
-    assert_success(&sandbox.run_with_env(
+    let output = sandbox.run_with_env(
         &["ida", "install", installer.to_str().unwrap(), "-i", destination.to_str().unwrap(), "-y"],
         &[("HY_TEST_INSTALLER_ARGUMENTS", &arguments)],
-    ));
+    );
+    assert_eq!(output.status.code(), Some(1));
     assert!(!arguments.exists());
     assert_eq!(fs::read_to_string(destination.join("sentinel")).unwrap(), "retain");
 }

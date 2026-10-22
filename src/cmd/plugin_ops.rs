@@ -4,14 +4,10 @@ use crate::error::{Error, Result};
 use crate::plugin::{self, index};
 use std::path::{Path, PathBuf};
 
-mod source;
-use source::Source;
+pub(super) mod source;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum UpgradePolicy {
-    KeepCurrentIfNewer,
-    RequireNewer,
-}
+mod existing;
+pub(super) use existing::{InstallAction, installation_action};
 
 pub(super) fn ida_version() -> Option<String> {
     crate::config::Env::global()
@@ -20,91 +16,41 @@ pub(super) fn ida_version() -> Option<String> {
         .or_else(plugin::detect_current_ida_version)
 }
 
-fn combined_dependencies(
-    metadata: &plugin::PluginMetadata,
-    proposed: Vec<String>,
-) -> Result<Vec<String>> {
+fn installed_constraints(metadata: &plugin::PluginMetadata) -> Result<Vec<String>> {
     let mut dependencies = Vec::new();
     for installed in plugin::installed_plugins()? {
         if installed.metadata.name.eq_ignore_ascii_case(&metadata.name) {
             continue;
         }
-        dependencies
-            .extend(plugin::dependencies_from_directory(&installed.metadata, &installed.path)?);
+        let Ok(requirements) =
+            plugin::components::python_dependencies(&installed.metadata, &installed.path)
+        else {
+            continue;
+        };
+        for value in requirements {
+            match value.parse::<pep508_rs::Requirement>() {
+                Ok(mut requirement) => {
+                    if !requirement.extras.is_empty() {
+                        crate::util::fmt::warning(&format!(
+                            "{}: removing extras from Python constraint {value}",
+                            installed.metadata.name
+                        ));
+                        requirement.extras.clear();
+                    }
+                    dependencies.push(requirement.to_string());
+                }
+                Err(_) => crate::util::fmt::warning(&format!(
+                    "{}: ignoring invalid Python constraint {value}",
+                    installed.metadata.name
+                )),
+            }
+        }
     }
-    dependencies.extend(proposed);
     Ok(dependencies)
 }
 
 pub async fn install(args: PluginInstallArgs, context: &plugin::PluginContext) -> Result<()> {
-    let source = source::classify(&args.source, args.editable)?;
-    if let Source::Directory(path) = &source {
-        return install_local(
-            plugin::InstallationSource::directory(path, args.editable)?,
-            &args,
-            None,
-            context,
-            None,
-            UpgradePolicy::KeepCurrentIfNewer,
-        )
-        .await;
-    }
-    let temporary = tempfile::tempdir()?;
-    let mut loaded = None;
-    let mut selected_name = None;
-    let source = match source {
-        Source::Archive(path) => path,
-        remote => {
-            let bytes = match remote {
-                Source::GitHub => index::github_archive(&args.source).await?,
-                Source::Download => index::fetch(&args.source).await?,
-                Source::Repository => {
-                    let reference = index::parse_reference(&args.source)?;
-                    let repository = loaded.insert(context.load_for(&reference).await?);
-                    let location =
-                        index::select(&repository.snapshot, &reference, ida_version().as_deref())?;
-                    selected_name = Some(location.descriptor.metadata.name.clone());
-                    repository.fetch_verified(location).await?
-                }
-                Source::Directory(_) | Source::Archive(_) => unreachable!("local source handled"),
-            };
-            let path = temporary.path().join("plugin.zip");
-            std::fs::write(&path, bytes)?;
-            path
-        }
-    };
-    if plugin::bundle::is_plugin_bundle_zip(&source) {
-        let bundle = index::load(&source.to_string_lossy(), true).await?;
-        for entry in &bundle.snapshot.plugins {
-            let reference = index::Reference {
-                name: entry.name.clone(),
-                spec: String::new(),
-                host: None,
-                repo: None,
-            };
-            let location = index::select(&bundle.snapshot, &reference, ida_version().as_deref())?;
-            install_local(
-                plugin::InstallationSource::archive(bundle.fetch_verified(location).await?)?,
-                &args,
-                bundle.bundle_reader(),
-                context,
-                Some(&location.descriptor.metadata.name),
-                UpgradePolicy::KeepCurrentIfNewer,
-            )
-            .await?;
-        }
-    } else {
-        install_local(
-            plugin::InstallationSource::archive(std::fs::read(&source)?)?,
-            &args,
-            loaded.as_ref().and_then(index::LoadedRepository::bundle_reader),
-            context,
-            selected_name.as_deref(),
-            UpgradePolicy::KeepCurrentIfNewer,
-        )
-        .await?;
-    }
-    Ok(())
+    super::plugin_plan::install(args, context).await
 }
 
 fn extract_wheelhouse(
@@ -144,63 +90,38 @@ pub(super) async fn install_local(
     bundle: Option<&plugin::bundle::BundleReader>,
     context: &plugin::PluginContext,
     selected_name: Option<&str>,
-    upgrade_policy: UpgradePolicy,
 ) -> Result<()> {
     let replace = args.force || args.upgrade || args.editable;
     let editable_path = distribution.editable_path().map(Path::to_path_buf);
     let metadata = distribution.metadata(selected_name)?;
-    let candidate_version = plugin::parse_version(&metadata.version).ok_or_else(|| {
-        Error::PluginInstall(format!("invalid plugin version: {}", metadata.version))
-    })?;
-    let installed = match plugin::installed_plugin_path(&metadata.name) {
-        Ok(path) => match plugin::read_installed_metadata_from_path(&path) {
-            Ok(metadata) => Some(metadata),
-            Err(error) if args.editable => {
-                tracing::debug!(%error, "replacing broken installation with editable source");
-                None
-            }
-            Err(error) => {
-                return Err(Error::PluginInstall(format!(
-                    "existing plugin {} is invalid: {error}; remove it with `hy plugin uninstall {}`",
-                    metadata.name, metadata.name
-                )));
-            }
-        },
-        Err(Error::PluginNotInstalled(_)) => None,
-        Err(error) => return Err(error),
-    };
-    let was_installed = installed.is_some();
-    if let Some(old) = installed {
-        let installed_version = plugin::parse_version(&old.version).ok_or_else(|| {
-            Error::PluginInstall(format!("invalid installed plugin version: {}", old.version))
-        })?;
-        if old.normalized_host()? != metadata.normalized_host()? {
-            return Err(Error::PluginInstall(
-                "replacement belongs to a different plugin repository".into(),
-            ));
-        }
-        if args.upgrade
-            && !args.editable
-            && !candidate_version.cmp_precedence(&installed_version).is_gt()
-        {
-            if upgrade_policy == UpgradePolicy::RequireNewer {
-                return Err(Error::PluginInstall(format!(
-                    "{}=={} is not newer than installed version {}",
-                    metadata.name, metadata.version, old.version,
-                )));
-            }
-            crate::util::fmt::success(&format!("Already installed {}=={}", old.name, old.version));
+    let was_installed = match installation_action(&metadata, args)? {
+        InstallAction::Install {
+            was_installed,
+        } => was_installed,
+        InstallAction::Keep(installed) => {
+            existing::report_current(&installed);
             return Ok(());
         }
-    } else if upgrade_policy == UpgradePolicy::RequireNewer {
-        return Err(Error::PluginNotInstalled(metadata.name));
+    };
+    if let Some(requirement) = &metadata.requires_python {
+        let version = crate::ida::python::full_version().await?;
+        if !version
+            .as_deref()
+            .is_some_and(|version| plugin::requirements::python_matches(version, requirement))
+        {
+            return Err(Error::PluginInstall(format!(
+                "{} requires Python {requirement}; detected {}",
+                metadata.name,
+                version.as_deref().unwrap_or("unknown")
+            )));
+        }
     }
     let prepared = distribution.prepare(ida_version().as_deref(), replace, &metadata)?;
     let proposed = prepared.dependencies()?;
     let dependencies = if proposed.is_empty() {
         None
     } else {
-        Some(combined_dependencies(&metadata, proposed.clone())?)
+        Some(installed_constraints(&metadata)?)
     };
     let wheelhouse_temp = tempfile::tempdir()?;
     let bundle = bundle.filter(|_| !context.pip.has_custom_sources());
@@ -235,13 +156,14 @@ pub(super) async fn install_local(
         resolved.as_ref().map(|python| python.exe.as_path()),
     )
     .await?;
-    if let Some(dependencies) = dependencies {
+    if let Some(constraints) = dependencies {
         let resolved = resolved.as_ref().expect("dependency interpreter resolved");
         let mut pip = context.pip.clone();
         pip.no_build_isolation |= args.no_build_isolation;
-        crate::ida::python::verify_dependencies(
+        crate::ida::python::verify_with_constraints(
             &resolved.exe,
-            &dependencies,
+            &proposed,
+            &constraints,
             &pip,
             wheelhouse.as_deref(),
         )
@@ -257,17 +179,42 @@ pub(super) async fn install_local(
             }
             other => other,
         })?;
-        crate::ida::python::install_dependencies(
+        crate::ida::python::install_with_constraints(
             &resolved.exe,
-            &dependencies,
+            &proposed,
+            &constraints,
             &pip,
             wheelhouse.as_deref(),
         )
         .await?;
     }
     let target = prepared.publish(registration)?;
-    let configuration = super::plugin_settings::for_install(&metadata, &args.config)
-        .and_then(|values| plugin::set_plugin_settings(&metadata.name, &values));
+    let configuration =
+        plugin::components::metadata_tree(&metadata).into_iter().try_for_each(|component| {
+            let arguments: Vec<_> = args
+                .config
+                .iter()
+                .filter_map(|argument| {
+                    let (key, value) = argument.split_once('=')?;
+                    match key.split_once('.') {
+                        Some((name, key)) if name.eq_ignore_ascii_case(&component.name) => {
+                            Some(format!("{key}={value}"))
+                        }
+                        Some((name, _))
+                            if plugin::components::metadata_tree(&metadata)
+                                .iter()
+                                .any(|component| component.name.eq_ignore_ascii_case(name)) =>
+                        {
+                            None
+                        }
+                        _ if component.name == metadata.name => Some(argument.clone()),
+                        _ => None,
+                    }
+                })
+                .collect();
+            super::plugin_settings::for_install(component, &arguments)
+                .and_then(|values| plugin::set_plugin_settings(&component.name, &values))
+        });
     if let Err(error) = configuration {
         if !was_installed {
             plugin::uninstall(&metadata.name).await.map_err(|cleanup| {
@@ -344,16 +291,25 @@ pub async fn repo(command: RepoCommands, context: &plugin::PluginContext) -> Res
         RepoCommands::Snapshot => {
             let mut snapshot = index::Snapshot {
                 version: 1,
-                plugins: vec![],
+                plugins: Vec::new(),
             };
-            for (name, repo) in context.repositories()? {
-                snapshot.plugins.extend(
-                    context
-                        .load_repository(name.as_deref(), &repo.url, false)
-                        .await?
-                        .snapshot
-                        .plugins,
-                );
+            for (name, repository) in context.repositories()? {
+                let loaded =
+                    match context.load_repository(name.as_deref(), &repository.url, false).await {
+                        Ok(loaded) => loaded,
+                        Err(error) if context.repository.is_some() => return Err(error),
+                        Err(error) => {
+                            crate::util::fmt::warning(&format!(
+                                "skipping plugin repository {}: {error}",
+                                name.as_deref().unwrap_or("repository")
+                            ));
+                            continue;
+                        }
+                    };
+                for note in loaded.notes {
+                    crate::util::fmt::warning(&note);
+                }
+                snapshot.plugins.extend(loaded.snapshot.plugins);
             }
             println!("{}", snapshot.to_json()?);
         }

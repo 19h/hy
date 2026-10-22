@@ -12,7 +12,7 @@ use crate::util::python_integer;
 pub(super) fn reactive(
     headers: &HeaderMap,
     attempt: u32,
-    now: impl Fn() -> f64,
+    now: impl Fn() -> Result<f64>,
 ) -> Result<Duration> {
     if let Some(value) = header(headers, "retry-after") {
         let seconds = integer(&value, "retry-after")?.clamp(60.into(), 3600.into());
@@ -26,7 +26,10 @@ pub(super) fn reactive(
     Ok(Duration::from_secs((60 * 2_u64.pow(attempt - 1)).min(3600)))
 }
 
-pub(super) fn proactive(headers: &HeaderMap, now: impl Fn() -> f64) -> Result<Option<Duration>> {
+pub(super) fn proactive(
+    headers: &HeaderMap,
+    now: impl Fn() -> Result<f64>,
+) -> Result<Option<Duration>> {
     let (Some(remaining), Some(reset)) =
         (header(headers, "x-ratelimit-remaining"), header(headers, "x-ratelimit-reset"))
     else {
@@ -39,12 +42,14 @@ pub(super) fn proactive(headers: &HeaderMap, now: impl Fn() -> f64) -> Result<Op
     Ok((seconds < 3600.0).then(|| Duration::from_secs_f64(seconds)))
 }
 
-fn reset_delta(value: &str, now: impl Fn() -> f64) -> Result<f64> {
-    let reset = integer(value, "x-ratelimit-reset")?
+fn reset_delta(value: &str, now: impl Fn() -> Result<f64>) -> Result<f64> {
+    let reset = integer(value, "x-ratelimit-reset")?;
+    let current = now()?;
+    let reset = reset
         .to_f64()
         .filter(|value| value.is_finite())
         .ok_or_else(|| Error::Other("GitHub rate-limit timestamp exceeds binary64 range".into()))?;
-    Ok(reset - now())
+    Ok(reset - current)
 }
 
 fn integer(value: &str, name: &str) -> Result<BigInt> {

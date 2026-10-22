@@ -35,7 +35,13 @@ fn pip_import_and_version_share_inherited_stdin_with_the_requested_child() {
     assert_success(&output);
     let calls = fixture.calls();
     assert!(calls.contains("pip-input:pip-line\nversion-input:version-line\n"), "{calls}");
-    assert!(calls.contains("pip-env:fixture-home|fixture-venv|0\n"), "{calls}");
+    assert!(
+        calls.contains(&format!(
+            "pip-env:|{}|0\n",
+            fixture.python.parent().unwrap().parent().unwrap().display()
+        )),
+        "{calls}"
+    );
     assert_eq!(output.stdout, b"child-input:child-line\n");
 }
 

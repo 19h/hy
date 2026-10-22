@@ -66,8 +66,9 @@ impl GoTrueClient {
         let response = self.request(Method::GET, "user", Some(token))?.send()?;
         if !response.status().is_success() {
             return Err(Error::Authentication(format!(
-                "GoTrue user validation failed ({}); run `hy login`",
-                response.status()
+                "GoTrue user validation failed ({}); run `{} login`",
+                response.status(),
+                crate::config::Env::global().display_command()
             )));
         }
         let user: User = response

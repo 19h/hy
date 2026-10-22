@@ -7,7 +7,7 @@ use crate::plugin::index;
 use crate::util::python_path;
 
 #[derive(Debug, PartialEq, Eq)]
-pub(super) enum Source {
+pub(crate) enum Source {
     Directory(PathBuf),
     Archive(PathBuf),
     GitHub,
@@ -15,7 +15,7 @@ pub(super) enum Source {
     Repository,
 }
 
-pub(super) fn classify(value: &str, editable: bool) -> Result<Source> {
+pub(crate) fn classify(value: &str, editable: bool) -> Result<Source> {
     let expanded = PathBuf::from(python_path::expand_user(value)?);
     if editable {
         if !python_path::is_dir(&expanded)? {

@@ -11,9 +11,6 @@ pub use prompt::prompt;
 
 pub fn for_install(metadata: &PluginMetadata, arguments: &[String]) -> Result<Map<String, Value>> {
     let settings = &metadata.settings;
-    if settings.is_empty() {
-        return Ok(Map::new());
-    }
     let existing = plugin::get_all_plugin_settings(&metadata.name)?;
     if !arguments.is_empty() {
         let mut values = Map::new();
@@ -28,11 +25,13 @@ pub fn for_install(metadata: &PluginMetadata, arguments: &[String]) -> Result<Ma
         for (key, value) in &values {
             settings[key].validate_value(key, value)?;
         }
-        values.retain(|key, value| settings[key].default.as_ref() != Some(value));
         return Ok(values);
     }
+    if settings.is_empty() {
+        return Ok(Map::new());
+    }
     if crate::util::tui::is_interactive() {
-        return prompt(metadata);
+        return prompt::missing(metadata);
     }
     let missing: Vec<_> = settings
         .iter()

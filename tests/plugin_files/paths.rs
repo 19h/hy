@@ -48,10 +48,18 @@ fn literal_reference_names_survive_cataloguing_installation_and_inline_dependenc
         let python = sandbox.path().join("python");
         fake_python(&python);
         let arguments = sandbox.path().join("pip-arguments");
-        assert_success(&sandbox.run_with_env(
+        let output = sandbox.run_with_env(
             &["plugin", "--no-python-environment-check", "install", package.to_str().unwrap()],
             &[("HCLI_CURRENT_IDA_PYTHON_EXE", &python), ("HY_TEST_PIP_ARGUMENTS", &arguments)],
-        ));
+        );
+        if filename.contains(':') || (cfg!(windows) && filename.contains('\\')) {
+            assert_eq!(output.status.code(), Some(1));
+            assert!(String::from_utf8_lossy(&output.stderr).contains("unsafe path"));
+            assert!(!sandbox.path().join("idausr/plugins/example").exists());
+            assert!(!arguments.exists());
+            continue;
+        }
+        assert_success(&output);
         assert_eq!(
             fs::read(sandbox.path().join("idausr/plugins/example").join(filename)).unwrap(),
             SCRIPT,

@@ -171,7 +171,7 @@ fn dependency_checks_reject_errors_before_pip_or_publication_and_allow_warnings(
 }
 
 #[test]
-fn malformed_neighbor_dependencies_fail_before_interpreter_checks() {
+fn malformed_neighbor_dependencies_do_not_replace_the_candidate_error() {
     let fixture = Fixture::new(false);
     let neighbor = fixture.sandbox.path().join("idausr/plugins/neighbor");
     fs::create_dir_all(&neighbor).unwrap();
@@ -185,8 +185,8 @@ fn malformed_neighbor_dependencies_fail_before_interpreter_checks() {
     let output =
         fixture.command(&["plugin", "install", package.to_str().unwrap()]).output().unwrap();
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid PEP 723 metadata"));
-    assert!(fixture.calls().is_empty());
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("invalid PEP 723 metadata"));
+    assert!(!fixture.calls().is_empty());
     assert!(!fixture.sandbox.path().join("idausr/plugins/example").exists());
 }
 

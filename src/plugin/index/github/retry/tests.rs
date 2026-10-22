@@ -82,7 +82,7 @@ async fn observe(steps: &[Step]) -> Value {
             clock.set(clock.get() + seconds);
             std::future::ready(())
         },
-        || clock.get(),
+        || Ok(clock.get()),
     )
     .await;
     let outcome = match result {

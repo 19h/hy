@@ -5,7 +5,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::os::unix::net::UnixListener;
 use std::process::{Command, Stdio};
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};

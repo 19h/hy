@@ -26,6 +26,11 @@ impl Fixture {
         let sandbox = Sandbox::new();
         let bin = sandbox.path().join("bin");
         fs::create_dir(&bin).unwrap();
+        for program in ["uv", "uvx", "git"] {
+            let path = bin.join(program);
+            fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
         let calls = sandbox.path().join("agent-calls");
         if let Some(agent) = agent {
             let executable = bin.join(agent);
@@ -58,13 +63,31 @@ esac
         let new = sandbox.path().join("new.zip");
         archive_manifest(&new, &descriptor, &[]);
         let bytes = fs::read(new).unwrap();
+        let checksum = {
+            use sha2::{Digest, Sha256};
+            format!("{:x}", Sha256::digest(&bytes))
+        };
         let server = Server::start(move |request, base| match request.path.as_str() {
+            "/repository.json" => Response::json(json!({"version":1,"plugins":[{
+                "name":"ida-mcp", "host":"https://github.com/HexRaysSA/ida-mcp", "versions":{"2.0.0":[{
+                    "url":format!("{base}/plugin.zip"),"sha256":checksum,"metadata":descriptor
+                }]}
+            }]})),
             "/repos/HexRaysSA/ida-mcp/releases/latest" => Response::json(json!({
                 "assets": [{"name": "ida-mcp.zip", "browser_download_url": format!("{base}/plugin.zip"), "size": bytes.len()}],
             })),
             "/plugin.zip" => Response::zip(bytes.clone()),
             _ => Response::missing(),
         });
+        fs::write(
+            sandbox.path().join("idausr/ida-config.json"),
+            serde_json::to_vec(&json!({"Settings":{
+                "plugin-repositories":{"fixture":{"url":format!("{}/repository.json",server.url)}},
+                "default-plugin-repository":"fixture"
+            }}))
+            .unwrap(),
+        )
+        .unwrap();
         Self {
             sandbox,
             server,
@@ -164,11 +187,13 @@ fn selection_cancellation_and_missing_agents_preserve_the_completed_plugin_upgra
         let fixture = Fixture::new((stage != "missing").then_some("claude"), false);
         if stage == "missing" {
             let output = fixture.command().output().unwrap();
-            assert_eq!(output.status.code(), Some(1));
+            assert_eq!(output.status.code(), Some(0));
             assert!(
                 String::from_utf8_lossy(&output.stderr)
-                    .contains("no supported agent command found")
+                    .contains("No supported agent command found")
             );
+            let configuration: Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(configuration["mcpServers"]["ida"]["command"], "uvx");
         } else {
             let mut terminal = Terminal::start(fixture.command());
             terminal.wait_for("Select an agent:");
@@ -204,7 +229,10 @@ fn agent_failure_returns_command_error_without_undoing_the_plugin_upgrade() {
 fn plugin_download_failure_prevents_agent_discovery_and_execution() {
     let fixture = Fixture::new(Some("codex"), false);
     let unavailable = Server::start(|_, _| Response::missing());
-    let output = fixture.command().env("GITHUB_API_URL", &unavailable.url).output().unwrap();
+    fs::write(fixture.sandbox.path().join("idausr/ida-config.json"), serde_json::to_vec(&json!({"Settings":{
+        "plugin-repositories":{"fixture":{"url":unavailable.url}}, "default-plugin-repository":"fixture"
+    }})).unwrap()).unwrap();
+    let output = fixture.command().output().unwrap();
     assert_eq!(output.status.code(), Some(1));
     assert!(!fixture.calls.exists());
     assert!(!String::from_utf8_lossy(&output.stdout).contains("Select an agent:"));

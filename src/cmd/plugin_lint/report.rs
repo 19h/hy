@@ -59,6 +59,24 @@ pub(super) fn metadata(metadata: &PluginMetadata, source: &str) -> usize {
             }
         }
     }
+    let github = url::Url::parse(&metadata.urls.repository)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+        .is_some_and(|host| host == "github.com" || host == "www.github.com");
+    if !github {
+        for (index, requirement) in metadata.dependencies.iter().enumerate() {
+            if requirement.host.is_none() {
+                recommendation(
+                    source,
+                    &format!(
+                        "plugin.dependencies[{index}]: use name@host format ('{}@<host>') to avoid ambiguity across repositories",
+                        requirement.name
+                    ),
+                );
+                findings += 1;
+            }
+        }
+    }
     findings
 }
 

@@ -20,6 +20,7 @@ static CATEGORIES: Lazy<Vec<String>> = Lazy::new(|| {
 });
 
 pub(super) fn validate(metadata: &PluginMetadata) -> Result<()> {
+    super::components::validate_names(metadata)?;
     super::validate_name(&metadata.name)?;
     if super::parse_version(&metadata.version).is_none() {
         return Err(Error::PluginInstall(format!("invalid plugin version: {}", metadata.version)));

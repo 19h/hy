@@ -1,5 +1,6 @@
 """Read owned Rust fixtures through upstream cache getters; intercept deletion."""
 
+import _testcapi
 import json
 import logging
 import os
@@ -39,7 +40,11 @@ for case in json.load(sys.stdin):
 
     with ExitStack() as stack:
         stack.enter_context(patch.object(Path, "unlink", unlink))
-        clock = stack.enter_context(patch.object(github.time, "time", return_value=case["now"]))
+        now = (
+            _testcapi.PyTime_AsSecondsDouble(case["now_ns"])
+            if "now_ns" in case else case["now"]
+        )
+        clock = stack.enter_context(patch.object(github.time, "time", return_value=now))
         stack.enter_context(patch.object(
             github, "get_candidate_github_repos_cache_path", return_value=path
         ))

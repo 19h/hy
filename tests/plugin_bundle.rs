@@ -160,7 +160,16 @@ fn bundle_creation_inherits_sources_and_selects_canonical_platform_variants() {
             "https://extra.example/simple",
             "/wheels with spaces",
         ] {
-            assert_eq!(calls.lines().filter(|line| *line == argument).count(), 2, "{argument}");
+            let expected = if argument.ends_with("-dependency") {
+                1
+            } else {
+                2
+            };
+            assert_eq!(
+                calls.lines().filter(|line| *line == argument).count(),
+                expected,
+                "{argument}"
+            );
         }
         let info = sandbox.run(&["plugin", "bundle", "info", output.to_str().unwrap()]);
         assert_success(&info);

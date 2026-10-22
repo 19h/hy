@@ -109,6 +109,18 @@ pub fn validate_name(name: &str) -> Result<()> {
 
 /// Read plugin metadata from an installed plugin directory.
 pub fn read_installed_metadata(name: &str) -> Result<PluginMetadata> {
+    let reference = super::index::parse_reference(name)?;
+    let name = reference.name.as_str();
+    let installed = installed_plugins()?;
+    let components: Vec<_> = installed
+        .iter()
+        .flat_map(|record| super::components::metadata_tree(&record.metadata))
+        .filter(|metadata| metadata.name.eq_ignore_ascii_case(name))
+        .cloned()
+        .collect();
+    if let [metadata] = components.as_slice() {
+        return Ok(metadata.clone());
+    }
     let mut matches = installed_plugins()?
         .into_iter()
         .filter(|record| record.metadata.name.eq_ignore_ascii_case(name));

@@ -7,10 +7,8 @@ mod plan;
 
 pub(super) use detection::Context;
 pub(super) use execute::{StepResult, execute, verify};
-pub(super) use plan::{Action, build};
-
-#[cfg(test)]
-pub(super) use plan::Kind;
+pub(super) use files::preview_profile;
+pub(super) use plan::{Action, Kind, build};
 
 #[cfg(test)]
 mod tests;

@@ -55,8 +55,8 @@ fn platform_plans_match_upstream_steps_warnings_and_manual_instructions() {
         }
     }
     assert_eq!(cases.len(), 504);
-    verify_digest(&cases, "9b2d7a8899648b748934458b4260276eb73d54488ed8373305f6957ccb0082c6");
     reference::compare("plans", &cases);
+    verify_digest(&cases, "78598204a769b8fb9992849a36ea9143c5b7a2461992d98c7d7890263e7ae18c");
 }
 
 #[test]
@@ -120,11 +120,14 @@ fn file_updates_match_source_without_rewriting_skipped_files() {
                 if let Some(bytes) = &initial {
                     std::fs::write(&path, bytes).unwrap();
                 }
+                let preview = (kind == Kind::ShellProfile)
+                    .then(|| super::files::preview_profile(&path, content).unwrap());
                 let (skipped, message) = super::files::apply(kind, &path, content).unwrap();
                 let expected = json!({
                     "skipped": skipped,
                     "data": std::fs::read(&path).unwrap(),
                     "message": message.replace(path.to_str().unwrap(), "<path>"),
+                    "preview": preview,
                 });
                 if skipped {
                     assert_eq!(expected["data"], json!(initial.as_ref().unwrap()));
@@ -138,8 +141,8 @@ fn file_updates_match_source_without_rewriting_skipped_files() {
             }
         }
     }
-    verify_digest(&cases, "7b526a38c5037a9b99cb729e1f53a6cb501e2126d2accc131334ee414e6d692c");
     reference::compare("files", &cases);
+    verify_digest(&cases, "cfa97acd11daa803728f615c57e93716fcb7781c9780b1d95bc3ad9e5bfa5a5f");
 }
 
 // Adapt the native operation enum to the source dataclass only at the oracle boundary.
@@ -169,6 +172,7 @@ fn plan_snapshot(plan: &Plan) -> Value {
                 "file_content": content,
                 "command": command,
                 "needs_logout": step.needs_logout,
+                "env_var_name": if step.kind == Kind::ShellProfile { json!(plan.env_var_name) } else { Value::Null },
             })
         })
         .collect();

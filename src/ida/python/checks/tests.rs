@@ -74,7 +74,9 @@ fn version_outcomes_decode_both_streams_before_checking_status() {
     digest(&cases, "526175975c4adb4c561fa65c5da2d046258b63491a2efd0cfe0ccaa1f1009efa");
     let command = super::version_command(Path::new("fixture-python"));
     let command = command.as_std();
-    assert_eq!(command.get_envs().count(), 0);
+    for name in ["PYTHONHOME", "PYTHONPATH", "PYTHONEXECUTABLE", "PYTHONSTARTUP", "VIRTUAL_ENV"] {
+        assert!(command.get_envs().any(|(key, value)| key == name && value.is_none()));
+    }
     assert!(command.get_current_dir().is_none());
     assert_eq!(
         command.get_args().collect::<Vec<_>>(),
@@ -120,7 +122,9 @@ async fn pip_availability_matches_source_status_policy_without_decoding_output()
     compare(&cases);
     digest(&cases, "79caf3f49ab82a9fcafdf2382fcf34b0d3b4d7016cf501aaa0476e11a35fe887");
     let command = super::pip_command(Path::new("fixture-python"));
-    assert_eq!(command.as_std().get_envs().count(), 0);
+    for name in ["PYTHONHOME", "PYTHONPATH", "PYTHONEXECUTABLE", "PYTHONSTARTUP", "VIRTUAL_ENV"] {
+        assert!(command.as_std().get_envs().any(|(key, value)| key == name && value.is_none()));
+    }
     assert!(command.as_std().get_current_dir().is_none());
     assert_eq!(command.as_std().get_args().collect::<Vec<_>>(), ["-c", "import pip"]);
 }

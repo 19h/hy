@@ -41,7 +41,19 @@ fn pip_argument_plans_match_upstream_defaults_sources_and_bundle_merging() {
                                 operation,
                             );
                             let command = command.as_std();
-                            assert_eq!(command.get_envs().count(), 0);
+                            for name in [
+                                "PYTHONHOME",
+                                "PYTHONPATH",
+                                "PYTHONEXECUTABLE",
+                                "PYTHONSTARTUP",
+                                "VIRTUAL_ENV",
+                            ] {
+                                assert!(
+                                    command
+                                        .get_envs()
+                                        .any(|(key, value)| key == name && value.is_none())
+                                );
+                            }
                             assert!(command.get_current_dir().is_none());
                             let argv: Vec<_> = std::iter::once(command.get_program())
                                 .chain(command.get_args())

@@ -24,7 +24,9 @@ mod plugin_bundle_targets;
 pub mod plugin_cmd;
 mod plugin_config;
 mod plugin_lint;
+mod plugin_listing;
 pub mod plugin_ops;
+mod plugin_plan;
 mod plugin_search;
 mod plugin_settings;
 mod plugin_status;
@@ -92,9 +94,11 @@ pub enum Commands {
     },
 
     /// Manage IDA plugins
+    #[command(visible_alias = "extension")]
     Plugin(plugin_cmd::PluginArgs),
 
     /// Manage extensions
+    #[command(name = "hcli-extensions")]
     Extension {
         #[command(subcommand)]
         command: extension::ExtensionCommands,

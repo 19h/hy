@@ -33,7 +33,11 @@ pub async fn run(args: IdaInstallArgs) -> Result<()> {
             "Directory already exists: {}. Choose another --install-dir or remove it first.",
             destination.display()
         ));
-        return Ok(());
+        return if ida::ida_binary_path(&destination).is_some() {
+            Ok(())
+        } else {
+            Err(Error::ChildExit(1))
+        };
     }
     let set_default = args.set_default && !args.no_set_default;
     let accept_eula = args.accept_eula && !args.no_accept_eula;
@@ -46,7 +50,30 @@ pub async fn run(args: IdaInstallArgs) -> Result<()> {
         println!("Create Python environment: {}", ida::ida_user_dir().join("venv").display());
     }
     if args.dry_run {
-        println!("Dry run: installer execution and post-install configuration skipped.");
+        let mut actions = vec![format!("Extract installer to: {}", destination.display())];
+        if args.license_id.is_some() {
+            actions.push(format!(
+                "Install license to: {}",
+                ida::executable_dir(&destination).display()
+            ));
+        }
+        if set_default {
+            actions.push("Set as hy default IDA instance".into());
+            actions.push(format!(
+                "Update default IDA path in: {} (only if the installation includes idalib)",
+                ida::ida_user_dir().join("ida-config.json").display()
+            ));
+        }
+        if accept_eula {
+            actions.push("Accept EULA (only if the installation includes idalib)".into());
+        }
+        if args.create_python_environment {
+            actions.push("Create and configure IDA's Python environment".into());
+        }
+        println!("Dry run: would perform the following actions:");
+        for (index, action) in actions.iter().enumerate() {
+            println!("  {}. {action}", index + 1);
+        }
         return Ok(());
     }
     if cfg!(target_os = "linux")

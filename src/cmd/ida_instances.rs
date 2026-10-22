@@ -108,6 +108,10 @@ fn list() -> Result<()> {
     let default = ConfigStore::global().get_str("ida.default").unwrap_or("").to_owned();
     if instances.is_empty() {
         fmt::info("No IDA instances registered.");
+        fmt::info(&format!(
+            "Use '{} ida add --auto' to discover and add IDA installations.",
+            crate::config::Env::global().display_command()
+        ));
         return Ok(());
     }
     listing::print(&instances, &default);

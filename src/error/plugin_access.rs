@@ -22,7 +22,7 @@ impl fmt::Display for PluginAccessDenied {
             .filter(|name| !name.is_empty())
             .map_or_else(|| "the plugin repository".into(), |name| format!("repository '{name}'"));
         write!(formatter, "Access denied (HTTP {}) by {where_}. ", self.status)?;
-        let binary = &crate::config::Env::global().binary_name;
+        let binary = &crate::config::Env::global().display_command();
         if !self.authenticated {
             write!(formatter, "Run '{binary} login' and try again.")
         } else if self.status == 401 {

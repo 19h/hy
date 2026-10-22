@@ -1,4 +1,4 @@
-//! Bundle creation collects literal requirements; installation resolves inline scripts.
+//! Bundle creation resolves explicit and inline requirements before packaging.
 #![cfg(unix)]
 
 use std::fs;
@@ -40,7 +40,7 @@ fn create(sandbox: &Sandbox, output: &Path, packages: &[&Path]) -> std::process:
 }
 
 #[test]
-fn inline_bundle_creation_does_not_inspect_scripts_or_resolve_python() {
+fn inline_bundle_creation_validates_scripts_and_downloads_their_requirements() {
     for (entry, script) in [
         (
             "inline.py",
@@ -56,10 +56,24 @@ fn inline_bundle_creation_does_not_inspect_scripts_or_resolve_python() {
         let member = format!("package/{entry}");
         let members: Vec<_> = script.map(|script| (member.as_str(), script)).into_iter().collect();
         archive_manifest(&package, &descriptor("example", json!("inline"), entry), &members);
-        reference::compare(&package, json!({"name": "example", "dependencies": []}));
-        assert_success(&create(&sandbox, &output, &[&package]).output().unwrap());
+        let python = sandbox.path().join("python");
+        fake_python(&python);
+        let result = create(&sandbox, &output, &[&package]).output().unwrap();
+        if script.is_none()
+            || entry == "native"
+            || script.is_some_and(|script| script.ends_with(b"[\n# ///\n"))
+        {
+            assert!(!result.status.success());
+            assert!(!output.exists());
+            continue;
+        }
+        reference::compare(
+            &package,
+            json!({"name": "example", "dependencies": ["inline-only==1"]}),
+        );
+        assert_success(&result);
         let mut archive = zip::ZipArchive::new(fs::File::open(&output).unwrap()).unwrap();
-        assert!(!archive.file_names().any(|name| name.ends_with(".whl")));
+        assert!(archive.file_names().any(|name| name.ends_with(".whl")));
         let mut embedded = archive.by_name("plugins/example-1.zip").unwrap();
         let mut bytes = Vec::new();
         embedded.read_to_end(&mut bytes).unwrap();
@@ -68,7 +82,7 @@ fn inline_bundle_creation_does_not_inspect_scripts_or_resolve_python() {
 }
 
 #[test]
-fn mixed_archives_preserve_explicit_requirement_order_and_duplicates() {
+fn mixed_archives_collect_inline_requirements_and_deduplicate_packages() {
     let sandbox = Sandbox::new();
     let first = sandbox.path().join("first.zip");
     let inline = sandbox.path().join("inline.zip");
@@ -78,14 +92,18 @@ fn mixed_archives_preserve_explicit_requirement_order_and_duplicates() {
         &descriptor("first", json!(["first==1", "shared==2"]), "plugin.py"),
         &[],
     );
-    archive_manifest(&inline, &descriptor("inline", json!("inline"), "missing.py"), &[]);
+    archive_manifest(
+        &inline,
+        &descriptor("inline", json!("inline"), "inline.py"),
+        &[("package/inline.py", b"# /// script\n# dependencies = ['inline==1']\n# ///\n")],
+    );
     archive_manifest(
         &second,
         &descriptor("second", json!(["shared==2", "second==3"]), "plugin.py"),
         &[],
     );
     reference::compare(&first, json!({"name": "first", "dependencies": ["first==1", "shared==2"]}));
-    reference::compare(&inline, json!({"name": "inline", "dependencies": []}));
+    reference::compare(&inline, json!({"name": "inline", "dependencies": ["inline==1"]}));
     reference::compare(
         &second,
         json!({"name": "second", "dependencies": ["shared==2", "second==3"]}),
@@ -103,7 +121,7 @@ fn mixed_archives_preserve_explicit_requirement_order_and_duplicates() {
     );
     let calls = fs::read_to_string(calls).unwrap();
     assert_eq!(calls.matches("--invocation--\n").count(), 1);
-    assert!(calls.ends_with("first==1\nshared==2\nshared==2\nsecond==3\n"), "{calls}");
+    assert!(calls.ends_with("first==1\nshared==2\ninline==1\nsecond==3\n"), "{calls}");
 }
 
 #[test]
@@ -111,7 +129,7 @@ fn local_bundle_descriptor_discovery_matches_source_suffix_and_count_rules() {
     use std::io::Write;
     use zip::write::SimpleFileOptions;
 
-    let valid = serde_json::to_vec(&descriptor("example", json!([]), "missing.py")).unwrap();
+    let valid = serde_json::to_vec(&descriptor("example", json!([]), "plugin.py")).unwrap();
     for entries in [
         vec![("otherida-plugin.json", valid.as_slice())],
         vec![("ida-plugin.json", b"invalid".as_slice()), ("otherida-plugin.json", &valid)],
@@ -126,13 +144,17 @@ fn local_bundle_descriptor_discovery_matches_source_suffix_and_count_rules() {
             writer.start_file(*name, SimpleFileOptions::default()).unwrap();
             writer.write_all(bytes).unwrap();
         }
+        for root in ["", "one/", "two/"] {
+            writer.start_file(format!("{root}plugin.py"), SimpleFileOptions::default()).unwrap();
+            writer.write_all(b"# fixture").unwrap();
+        }
         writer.finish().unwrap();
         let expected = match entries[0].0 {
             "one/ida-plugin.json" => json!({
-                "error": "plugin archive must contain a single plugin, found: example, example",
+                "error": "archive contains multiple unrelated plugins (example, example); specify which one to install",
             }),
             "unrelated.json" => {
-                json!({"error": format!("no ida-plugin.json found in {}", package.display())})
+                json!({"error": "no valid ida-plugin.json found in archive"})
             }
             _ => json!({"name": "example", "dependencies": []}),
         };
@@ -158,10 +180,10 @@ fn installing_an_inline_only_bundle_still_resolves_script_dependencies() {
         &descriptor("example", json!("inline"), "inline.py"),
         &[("package/inline.py", b"# /// script\n# dependencies = ['inline-only==1']\n# ///\n")],
     );
-    assert_success(&create(&sandbox, &output, &[&package]).output().unwrap());
     let python = sandbox.path().join("python");
     let calls = sandbox.path().join("pip-calls");
     fake_python(&python);
+    assert_success(&create(&sandbox, &output, &[&package]).output().unwrap());
     assert_success(
         &sandbox
             .command(&[

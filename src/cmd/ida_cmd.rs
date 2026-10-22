@@ -220,6 +220,9 @@ pub async fn run_python_command(args: PythonArgs) -> Result<()> {
         PythonCommands::Doctor {
             json,
         } => {
+            let installation = crate::ida::resolve_install_dir()?;
+            crate::ida::idat_path(&installation.path)
+                .ok_or_else(|| crate::error::Error::NotFound("idat executable".into()))?;
             let report = python::doctor().await?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&report)?);
@@ -235,6 +238,9 @@ pub async fn run_python_command(args: PythonArgs) -> Result<()> {
         PythonCommands::ExplainEnvironment {
             json,
         } => {
+            let installation = crate::ida::resolve_install_dir()?;
+            crate::ida::idat_path(&installation.path)
+                .ok_or_else(|| crate::error::Error::NotFound("idat executable".into()))?;
             let report = python::explain().await?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&report)?);

@@ -2,8 +2,10 @@
 
 import ast
 import dataclasses
+import contextlib
 import json
 import sys
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,12 +14,15 @@ names = {
     "CantInstallPackagesError", "PipOptions", "merge_bundle_pip_options", "_format_pip_error",
     "externally_managed_environment_message", "_raise_for_known_pip_errors",
     "verify_pip_can_install_packages", "pip_install_packages",
+    "_get_constraint_args",
 }
 tree = ast.parse(path.read_text())
 definitions = [node for node in tree.body if getattr(node, "name", None) in names]
 context = {
     "__name__": "__main__", "dataclass": dataclasses.dataclass, "Path": Path,
     "logger": SimpleNamespace(debug=lambda *args: None),
+    "contextlib": contextlib, "tempfile": tempfile,
+    "get_environment_for_python": lambda exe: {},
 }
 future = ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0)
 for node in definitions:
@@ -29,10 +34,11 @@ for node in definitions:
 results = []
 for case in json.load(sys.stdin):
     context["ENV"] = SimpleNamespace(HCLI_BINARY_NAME=case.get("binary", "hy"))
+    context["get_hcli_display_command"] = lambda: case.get("binary", "hy")
     calls = []
 
     def run(argv, **kwargs):
-        assert kwargs == {"capture_output": True, "check": False}
+        assert kwargs == {"capture_output": True, "check": False, "env": {}}
         calls.append(argv)
         return SimpleNamespace(
             returncode=1 if case["mode"] == "error" else 0,

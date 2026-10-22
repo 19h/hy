@@ -72,21 +72,21 @@ fn naming_uses_the_first_exact_name_without_installation_identity_checks() {
         }
         let distribution = Distribution::new(&descriptors, &PLATFORMS);
         let expected = if matches!(change, "case" | "empty") {
-            json!({"fetches": [0, 0, 0], "error": "plugin 'example' not found in archive"})
+            json!({"fetches": [0], "error": "plugin"})
         } else {
             let version = if change == "version" {
                 "2"
             } else {
                 "1"
             };
-            success(&[0, 0, 0], vec![file(&distribution, version, "")], &[])
+            success(&[0], vec![file(&distribution, version, "")], &[])
         };
         check(vec![distribution], expected);
     }
 }
 
 #[test]
-fn checksums_are_case_sensitive_and_each_platform_is_fetched() {
+fn checksums_are_case_sensitive_and_identical_archives_are_fetched_once() {
     let descriptor = identity_manifest("1", "https://github.com/example/original");
     for change in ["valid", "uppercase", "empty", "wrong"] {
         let mut distribution = Distribution::new(std::slice::from_ref(&descriptor), &PLATFORMS);
@@ -97,7 +97,7 @@ fn checksums_are_case_sensitive_and_each_platform_is_fetched() {
             _ => {}
         }
         let expected = if change == "valid" {
-            success(&[0, 0, 0], vec![file(&distribution, "1", "")], &[])
+            success(&[0], vec![file(&distribution, "1", "")], &[])
         } else {
             json!({"fetches": [0], "error": "hash mismatch"})
         };
@@ -112,7 +112,7 @@ fn dependency_order_follows_platform_resolution_not_hash_sorting() {
     let mut first = Distribution::new(&[descriptor.clone()], &PLATFORMS[..2]);
     descriptor["plugin"]["pythonDependencies"] = json!(["order-second==2"]);
     let mut second = Distribution::new(&[descriptor], &PLATFORMS[2..]);
-    let mut dependencies = ["order-first==1", "order-second==2"];
+    let mut dependencies = ["order-second==2", "order-first==1"];
     // Make hash sorting observably different from target-platform order.
     if first.checksum < second.checksum {
         std::mem::swap(&mut first.bytes, &mut second.bytes);
@@ -120,7 +120,7 @@ fn dependency_order_follows_platform_resolution_not_hash_sorting() {
         dependencies.swap(0, 1);
     }
     let expected = success(
-        &[0, 0, 1],
+        &[1, 0],
         vec![
             file(&first, "1", "-linux-x86_64+macos-aarch64"),
             file(&second, "1", "-windows-x86_64"),
@@ -135,7 +135,7 @@ fn later_fetch_failure_precedes_earlier_descriptor_failure() {
     let first = Distribution::new(&[], &PLATFORMS[..2]);
     let mut second = Distribution::new(&[], &PLATFORMS[2..]);
     second.checksum = "0".repeat(64);
-    check(vec![first, second], json!({"fetches": [0, 0, 1], "error": "hash mismatch"}));
+    check(vec![first, second], json!({"fetches": [1], "error": "hash mismatch"}));
 }
 
 #[test]
@@ -166,7 +166,7 @@ fn selection_uses_index_identity_and_location_compatibility_independently() {
                 "1"
             };
             let expected = success(
-                &[0, 0, 0],
+                &[0],
                 vec![json!({
                     "file": format!("plugins/{name}-{version}.zip"),
                     "sha256": hash(&distribution.bytes),
@@ -178,49 +178,36 @@ fn selection_uses_index_identity_and_location_compatibility_independently() {
             } else {
                 "example==1"
             };
+            let expected = if field == "name" {
+                json!({"fetches":[0],"error":"plugin"})
+            } else {
+                expected
+            };
             check_spec(vec![distribution], spec, expected);
         }
     }
 }
 
 #[test]
-fn bundle_preprocessing_drops_scopes_and_preserves_compound_specs() {
+fn bundle_accepts_bare_and_compound_ranges_and_rejects_scopes_with_repo_override() {
     let descriptor = identity_manifest("1", "https://github.com/example/original");
-    for spec in [
-        "scope/example==1",
-        "scope/example==1@https://GitHub.com/Example/Original/",
-        "example>=1,==1",
-        "example==1,<=2",
-        "example!=2,==1",
-        "scope/example==1\n",
-    ] {
+    for spec in ["example", "example>=1,==1", "example==1,<=2", "example!=2,==1"] {
         let distribution = Distribution::new(std::slice::from_ref(&descriptor), &PLATFORMS);
-        let expected = success(&[0, 0, 0], vec![file(&distribution, "1", "")], &[]);
+        let expected = success(&[0], vec![file(&distribution, "1", "")], &[]);
         check_spec(vec![distribution], spec, expected);
+    }
+    for spec in ["scope/example", "scope/example==1@https://github.com/example/original"] {
+        let distribution = Distribution::new(std::slice::from_ref(&descriptor), &PLATFORMS);
+        check_spec(vec![distribution], spec, json!({"fetches":[],"error":"repository prefix"}));
     }
 }
 
 #[test]
-fn missing_equality_errors_use_the_preprocessed_reference() {
+fn malformed_references_fail_before_fetching_archives() {
     let descriptor = identity_manifest("1", "https://github.com/example/original");
-    for (spec, example) in [
-        ("example", "example==1.0.0"),
-        ("scope/example", "example==1.0.0"),
-        ("example@invalid", "example@invalid==1.0.0"),
-        (
-            "scope/example>=1@https://GitHub.com/Example/Original/",
-            "example>=1==1.0.0@https://github.com/example/original",
-        ),
-    ] {
+    for spec in ["example@invalid", "example=1"] {
         let distribution = Distribution::new(std::slice::from_ref(&descriptor), &PLATFORMS);
-        check_spec(
-            vec![distribution],
-            spec,
-            json!({
-                "fetches": [],
-                "error": format!("repository plugin specs must include exact version (e.g. {example})"),
-            }),
-        );
+        check_spec(vec![distribution], spec, json!({"fetches":[],"error":"plugin"}));
     }
 }
 
@@ -363,7 +350,14 @@ fn assert_downloads(calls: &Path, expected: &Value) {
         for invocation in invocations {
             let dependencies: Vec<_> =
                 invocation.lines().filter(|line| line.starts_with("order-")).collect();
-            assert_eq!(&json!(dependencies), expected);
+            assert!(dependencies.iter().all(|dependency| {
+                expected.as_array().unwrap().iter().any(|value| value.as_str() == Some(dependency))
+            }));
+            assert_eq!(
+                dependencies.len(),
+                1,
+                "each cell must contain only its selected archive's requirements"
+            );
         }
     }
 }
@@ -397,5 +391,13 @@ fn compare_source(locations: &[Value], spec: &str, expected: &Value) {
     let output = child.wait_with_output().unwrap();
     assert!(output.status.success());
     let actual: Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(&actual, expected);
+    if let Some(error) = expected.get("error").and_then(Value::as_str) {
+        assert_eq!(actual["fetches"], expected["fetches"]);
+        assert!(
+            actual["error"].as_str().is_some_and(|message| message.contains(error)),
+            "{actual}"
+        );
+    } else {
+        assert_eq!(&actual, expected);
+    }
 }

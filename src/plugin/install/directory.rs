@@ -3,7 +3,6 @@
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
 
 use chrono::{Datelike, Local, Timelike, Utc};
 use zip::write::SimpleFileOptions;
@@ -12,7 +11,7 @@ use crate::error::{Error, Result};
 
 const EXCLUDED: &[&str] = &[".git", ".hg", ".svn", "__pycache__", ".DS_Store"];
 
-pub(super) fn pack(root: &Path) -> Result<Vec<u8>> {
+pub(crate) fn pack(root: &Path) -> Result<Vec<u8>> {
     let mut paths = collect(root);
     paths.sort_by_cached_key(|path| {
         path.components()
@@ -93,10 +92,7 @@ fn collect(root: &Path) -> Vec<PathBuf> {
 }
 
 fn timestamp(metadata: &fs::Metadata) -> Result<zip::DateTime> {
-    let seconds = match metadata.modified()?.duration_since(UNIX_EPOCH) {
-        Ok(duration) => duration.as_secs_f64(),
-        Err(error) => -error.duration().as_secs_f64(),
-    };
+    let seconds = crate::util::python_time::modified(metadata)?;
     // ZipInfo.from_file passes the float st_mtime through time.localtime.
     let time = chrono::DateTime::<Utc>::from_timestamp(seconds.floor() as i64, 0)
         .ok_or_else(|| {

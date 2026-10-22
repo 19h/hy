@@ -1,4 +1,4 @@
-//! Inspect plugin sources; validation findings do not fail the lint command.
+//! Inspect plugin sources; recommendations are advisory and validation errors fail.
 
 use std::path::Path;
 
@@ -8,7 +8,14 @@ use crate::plugin;
 use crate::util::files;
 
 mod archive;
+mod components;
 mod report;
+
+#[derive(Default)]
+struct LintResult {
+    findings: usize,
+    errors: usize,
+}
 
 pub async fn run(args: PluginLintArgs) -> Result<()> {
     let findings = if args.path.starts_with("https://") || args.path.starts_with("http://") {
@@ -30,23 +37,35 @@ pub async fn run(args: PluginLintArgs) -> Result<()> {
             )));
         }
     };
-    if findings == 0 {
+    if findings.findings == 0 {
         println!("no recommendations");
     }
-    Ok(())
+    if findings.errors == 0 {
+        Ok(())
+    } else {
+        Err(Error::ChildExit(1))
+    }
 }
 
-fn lint_directory(path: &Path) -> Result<usize> {
+fn lint_directory(path: &Path) -> Result<LintResult> {
     let metadata = match plugin::read_metadata_from_directory(path) {
         Ok(metadata) => metadata,
         Err(error @ (Error::Json(_) | Error::PluginInstall(_))) => {
             println!("Error: ida-plugin.json validation failed: {error}");
-            return Ok(1);
+            return Ok(LintResult {
+                findings: 1,
+                errors: 1,
+            });
         }
         Err(error) => return Err(error),
     };
     let source = path.to_string_lossy();
-    let mut findings = report::metadata(&metadata, &source);
+    let authored: plugin::PluginManifest =
+        serde_json::from_slice(&std::fs::read(path.join("ida-plugin.json"))?)?;
+    let mut findings = report::metadata(&authored.metadata, &source);
+    let errors = components::authored(&authored.metadata, &source);
+    let (component_findings, component_errors) = components::directory(&metadata, path)?;
+    findings += component_findings + errors;
     let mut filenames = Vec::new();
     for entry in std::fs::read_dir(path)? {
         let entry = entry?;
@@ -56,5 +75,8 @@ fn lint_directory(path: &Path) -> Result<usize> {
         }
     }
     findings += report::readme(filenames.iter().map(String::as_str), &source);
-    Ok(findings)
+    Ok(LintResult {
+        findings,
+        errors: errors + component_errors,
+    })
 }

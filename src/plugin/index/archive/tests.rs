@@ -104,7 +104,7 @@ fn archive_indexing_matches_source_validation_host_filtering_and_failures() {
     compare_source(&cases, &expected);
     assert_eq!(
         format!("{:x}", Sha256::digest(serde_json::to_vec(&expected).unwrap())),
-        "109eb8759e7fd8e46014c18a42bbafd91ae9346b97db372fd0cb472acd49bc65",
+        "449b85662695eb5b2be42e2bbc726a9775f4b14dc6c3b80fc9faeecae7f3ddb9",
     );
 }
 
@@ -182,6 +182,6 @@ fn duplicate_member_names_match_source_catalogues() {
     assert_eq!(cases.len(), 13);
     assert_eq!(
         format!("{:x}", Sha256::digest(serde_json::to_vec(&expected).unwrap())),
-        "69a07a29a2f9be41155315da4e34d40692de3cc37b30e4fe363b7762691f508c",
+        "87037f79ab4cb8b04aea84754c1a9d23bd344df30f813c2ad380dd48d46677b8",
     );
 }

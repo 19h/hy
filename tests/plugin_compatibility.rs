@@ -109,7 +109,7 @@ fn unknown_architectures_and_empty_platforms_cannot_publish_plugins() {
         let output = command.output().unwrap();
         assert!(!output.status.success());
         let expected = if empty_platforms {
-            "not compatible"
+            "does not support"
         } else {
             "unrecognized IDA executable architecture"
         };

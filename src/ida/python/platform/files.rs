@@ -18,13 +18,11 @@ pub(super) fn profile_change(existing: &str, line: &str) -> Change {
     if lines.iter().any(|part| without_ending(part) == line) {
         return Change::Unchanged;
     }
-    // The pinned helper searches '=' before space. For ordinary fish exports
-    // this deliberately yields "set ", including unrelated set assignments.
-    let prefix = line.find('=').or_else(|| line.find(' ')).map_or(line, |index| &line[..=index]);
+    let assignment = assignment_pattern(line);
     let mut stale = false;
     let mut updated = String::new();
     for part in lines {
-        if part.trim_end_matches('\n').starts_with(prefix) {
+        if assignment.as_ref().is_some_and(|pattern| pattern.is_match(part)) {
             if !stale {
                 updated.push_str(line);
                 updated.push('\n');
@@ -45,6 +43,42 @@ pub(super) fn profile_change(existing: &str, line: &str) -> Change {
             "\n"
         }
     ))
+}
+
+fn assignment_pattern(line: &str) -> Option<regex::Regex> {
+    let declaration = regex::Regex::new(
+        r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=|^set\s+(?:-\S+\s+)*([A-Za-z_][A-Za-z0-9_]*)",
+    )
+    .expect("constant assignment expression");
+    let variable =
+        declaration.captures(line).and_then(|captures| captures.get(1).or_else(|| captures.get(2)));
+    variable.map(|variable| {
+        regex::Regex::new(&format!(
+            r"^(?:(?:export\s+)?{}=|set\s+(?:-\S+\s+)*{}(?:\s|$))",
+            regex::escape(variable.as_str()),
+            regex::escape(variable.as_str()),
+        ))
+        .expect("escaped assignment name")
+    })
+}
+
+pub(crate) fn preview_profile(path: &Path, line: &str) -> Result<(Vec<String>, Vec<String>)> {
+    let existing = if path.is_file() {
+        read(path)?
+    } else {
+        String::new()
+    };
+    let lines: Vec<_> = existing.split(line_break).collect();
+    if lines.contains(&line) {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let assignment = assignment_pattern(line);
+    let removed = lines
+        .into_iter()
+        .filter(|line| assignment.as_ref().is_some_and(|pattern| pattern.is_match(line)))
+        .map(str::to_owned)
+        .collect();
+    Ok((removed, vec![line.into()]))
 }
 
 fn line_break(character: char) -> bool {
@@ -103,12 +137,7 @@ pub(super) fn apply(kind: Kind, path: &Path, content: &str) -> Result<(bool, Str
         };
         return Ok((false, format!("{verb} {}", path.display())));
     }
-    if path.is_file()
-        && (existing.contains(content)
-            || existing
-                .split_inclusive(line_break)
-                .any(|line| without_ending(line) == content.trim_end_matches('\n')))
-    {
+    if path.is_file() && existing.trim_end_matches('\n') == content.trim_end_matches('\n') {
         return Ok((true, format!("{} already configured", path.display())));
     }
     fs::create_dir_all(path.parent().unwrap())?;

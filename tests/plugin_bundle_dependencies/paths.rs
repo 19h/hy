@@ -49,26 +49,30 @@ fn local_paths_expand_home_and_normalize_before_reading() {
 }
 
 #[test]
-fn zip_directories_reach_the_file_read_error() {
+fn zip_directories_without_a_manifest_fail_before_packaging() {
     let sandbox = Sandbox::new();
     fs::create_dir(sandbox.path().join("directory.zip")).unwrap();
     for spec in ["directory.zip", "~/directory.zip", "~/./directory.zip"] {
-        compare_reference(&sandbox, spec, json!({"error_kind": "IsADirectoryError"}));
+        compare_reference(
+            &sandbox,
+            spec,
+            json!({"error": "no valid ida-plugin.json found in archive"}),
+        );
         let error = create_failure(&sandbox, spec);
-        assert!(error.to_lowercase().contains("is a directory"), "{spec}: {error}");
+        assert!(error.contains("no valid ida-plugin.json"), "{spec}: {error}");
     }
 }
 
 #[test]
-fn descriptor_errors_retain_the_original_path_spelling() {
+fn missing_descriptors_report_the_archive_failure() {
     let sandbox = Sandbox::new();
     let package = sandbox.path().join("empty.zip");
     zip::ZipWriter::new(fs::File::create(package).unwrap()).finish().unwrap();
     for spec in ["~/empty.zip", "~/./empty.zip"] {
-        let expected = format!("no ida-plugin.json found in {spec}");
+        let expected = "no valid ida-plugin.json found in archive";
         compare_reference(&sandbox, spec, json!({"error": expected}));
         let error = create_failure(&sandbox, spec);
-        assert!(error.contains(&expected), "{error}");
+        assert!(error.contains(expected), "{error}");
     }
 }
 

@@ -159,7 +159,7 @@ fn optional_blank_pattern_failure_is_reported_after_collecting_the_form() {
 }
 
 #[test]
-fn selecting_a_descriptor_default_preserves_an_existing_override_as_upstream_does() {
+fn selecting_a_descriptor_default_persists_the_explicit_response() {
     let sandbox = Sandbox::new();
     installed(
         &sandbox,
@@ -167,13 +167,16 @@ fn selecting_a_descriptor_default_preserves_an_existing_override_as_upstream_doe
             {"key":"text","name":"Text","type":"string","required":false,"default":"factory"},
         ]),
     );
-    let before = saved_settings(&sandbox, json!({"text":"override"}));
+    saved_settings(&sandbox, json!({"text":"override"}));
     let mut terminal = Terminal::start(sandbox.command(&["plugin", "config", "example", "setup"]));
     terminal.wait_for("Text");
     terminal.send(&format!("{}factory\n", "\x7f".repeat("override".len())));
     let (status, text) = terminal.finish();
     assert!(status.success(), "{text}");
-    assert_eq!(fs::read(settings_path(&sandbox)).unwrap(), before);
+    assert_eq!(read_settings(&sandbox), json!({"text":"factory"}));
+    let config: Value =
+        serde_json::from_slice(&fs::read(settings_path(&sandbox)).unwrap()).unwrap();
+    assert_eq!(config["Paths"]["sentinel"], "retain");
 }
 
 #[test]
@@ -194,8 +197,7 @@ fn prompt_defaults_follow_upstream_type_specific_fallbacks() {
     terminal.send("x\n");
     let (status, text) = terminal.finish();
     assert!(status.success(), "{text}");
-    // The accepted boolean default is omitted, preserving the old stored value.
-    assert_eq!(read_settings(&sandbox), json!({"flag":"non-boolean","text":"Truex"}));
+    assert_eq!(read_settings(&sandbox), json!({"flag":true,"text":"Truex"}));
 }
 
 #[test]

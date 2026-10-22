@@ -218,7 +218,7 @@ fn selected_assets_without_successful_content_return_failure() {
 
 #[cfg(unix)]
 #[test]
-fn navigation_preserves_api_folder_order_and_can_return_to_the_parent() {
+fn navigation_orders_versions_newest_first_and_can_return_to_the_parent() {
     use support::terminal::Terminal;
     let sandbox = Sandbox::new();
     write_config(&sandbox, &stored("key", "fixture-key"));
@@ -231,7 +231,7 @@ fn navigation_preserves_api_folder_order_and_can_return_to_the_parent() {
                 {"name": "inside", "type": "file", "asset": asset("second", base)}
             ]}
         ])),
-        "/api/assets/installers/first" => Response::json(asset("first", base)),
+        "/api/assets/installers/second" => Response::json(asset("first", base)),
         "/payload.bin" => Response {
             status: 200,
             content_type: "application/octet-stream",
@@ -244,15 +244,15 @@ fn navigation_preserves_api_folder_order_and_can_return_to_the_parent() {
         &server,
         &["download", "--output-dir", sandbox.path().to_str().unwrap()],
     ));
-    terminal.wait_for("9.1/");
+    terminal.wait_for("9.4/");
     terminal.send("\r");
-    terminal.wait_for("/9.1");
+    terminal.wait_for("/9.4");
     terminal.send("\r");
-    terminal.wait_for("9.1/");
+    terminal.wait_for("9.4/");
     terminal.send("\r");
-    terminal.wait_for("/9.1");
+    terminal.wait_for("/9.4");
     terminal.send("\x1b[B\r");
     let (status, output) = terminal.finish();
     assert!(status.success(), "{output}");
-    assert_eq!(server.requests()[1].path, "/api/assets/installers/first");
+    assert_eq!(server.requests()[1].path, "/api/assets/installers/second");
 }

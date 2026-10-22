@@ -73,6 +73,9 @@ impl Sandbox {
 
     pub fn command_for(&self, executable: &Path, args: &[&str]) -> Command {
         let mut command = Command::new(executable);
+        let mut paths = vec![self.path().to_path_buf()];
+        paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
+        command.env("PATH", std::env::join_paths(paths).unwrap());
         for (name, _) in std::env::vars_os() {
             if name.to_str().is_some_and(|name| name.to_ascii_lowercase().ends_with("_proxy")) {
                 command.env_remove(name);
@@ -95,6 +98,7 @@ impl Sandbox {
             .env_remove("HCLI_API_KEY")
             .env_remove("HCLI_AUTH_CREDENTIALS")
             .env("HCLI_CONFIG_NAMESPACE", "hcli")
+            .env("HCLI_BINARY_NAME", "hy")
             .env("HCLI_EXTENSION_PYTHON", "")
             .env_remove("GITHUB_TOKEN")
             .env_remove("GH_TOKEN")
@@ -222,6 +226,17 @@ pub fn fake_python(path: &Path) {
     use std::os::unix::fs::PermissionsExt;
 
     fs::write(path, include_str!("../fixtures/pip.sh")).unwrap();
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+    fake_uv(path);
+}
+
+/// Route uv's target-Python invocation into an owned pip recorder.
+#[cfg(unix)]
+pub fn fake_uv(python: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let path = python.parent().unwrap().join("uv");
+    let quoted = python.to_string_lossy().replace('\'', "'\\''");
+    fs::write(&path, format!("#!/bin/sh\nshift 4\nexec '{quoted}' -m \"$@\"\n")).unwrap();
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
 }
 

@@ -12,6 +12,7 @@ use crate::error::{Error, Result};
 mod archive;
 mod directory;
 mod source;
+pub(crate) use directory::pack as pack_directory;
 pub use source::InstallationSource;
 
 /// Validate that a plugin can be installed.
@@ -62,7 +63,7 @@ pub struct PreparedPlugin {
 
 impl PreparedPlugin {
     pub fn dependencies(&self) -> Result<Vec<String>> {
-        super::dependencies_from_directory(&self.metadata, &self.path)
+        super::components::python_dependencies(&self.metadata, &self.path)
     }
 
     pub fn publish(self, registration: super::EditableRegistration) -> Result<PathBuf> {
@@ -84,10 +85,12 @@ fn prepare_archive<R: Read + Seek>(
     if !force {
         validate_can_install(&metadata, ida_version)?;
     }
+    super::components::validate_collisions(&metadata, force)?;
 
     let staging = staging_directory()?;
     let target_dir = staging.path().join("new");
     archive::extract(archive, &root, &target_dir)?;
+    super::components::materialize(&metadata, &target_dir)?;
 
     super::validate_directory_files(&metadata, &target_dir)?;
     Ok(PreparedPlugin {
@@ -114,6 +117,7 @@ fn prepare_editable(
     if !force {
         validate_can_install(&metadata, ida_version)?;
     }
+    super::components::validate_collisions(&metadata, force)?;
 
     let staging = staging_directory()?;
     let target = staging.path().join("new");

@@ -34,7 +34,7 @@ fn open(request: &Request) -> Result<File> {
         return Err(Error::GitHubValue("embedded null byte".into()));
     }
     let metadata = std::fs::metadata(&path).map_err(url_error)?;
-    let modified = headers::modified(&metadata).map_err(url_error)?;
+    let modified = crate::util::python_time::modified(&metadata).map_err(url_error)?;
     open_after_stat(request, &path, modified)
 }
 

@@ -43,7 +43,7 @@ fn report_existing(store: &ConfigStore) -> Result<bool> {
         Some(name) => fmt::info(&format!("Default IDA instance: {name}")),
         None => fmt::warning(&format!(
             "No default IDA instance set. Use `{} ida switch` to set one.",
-            Env::global().binary_name
+            Env::global().display_command()
         )),
     }
     Ok(true)
@@ -75,7 +75,7 @@ fn register_discovered(store: &mut ConfigStore, paths: Vec<PathBuf>) -> Result<(
 }
 
 fn setup_instructions() {
-    let binary = &Env::global().binary_name;
+    let binary = &Env::global().display_command();
     fmt::info(&format!(
         "Use `{binary} ida add --auto` or `{binary} ida add <name> <path>`, then `{binary} ida switch`."
     ));

@@ -64,7 +64,7 @@ impl RuntimeFixture {
 #[ignore = "requires HY_TEST_EXTENSION_PYTHON with pinned ida-hcli installed"]
 fn extensions_are_discovered_in_help_list_and_sorted_command_inventory() {
     let fixture = RuntimeFixture::new();
-    let output = fixture.command(&["extension", "list"]).output().unwrap();
+    let output = fixture.command(&["hcli-extensions", "list"]).output().unwrap();
     assert_success(&output);
     assert!(String::from_utf8_lossy(&output.stdout).contains("Extensions: fixture"));
     let output = fixture.command(&["--help"]).output().unwrap();
@@ -178,14 +178,17 @@ fn extension_help_uses_its_real_options_and_unmodified_commands_use_rust() {
 #[ignore = "requires HY_TEST_EXTENSION_PYTHON with pinned ida-hcli installed"]
 fn failed_registration_is_an_error_instead_of_an_empty_catalog() {
     let fixture = RuntimeFixture::new();
-    let output =
-        fixture.command(&["extension", "list"]).env("HY_EXTENSION_BROKEN", "1").output().unwrap();
+    let output = fixture
+        .command(&["hcli-extensions", "list"])
+        .env("HY_EXTENSION_BROKEN", "1")
+        .output()
+        .unwrap();
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("fixture registration failed"));
     assert!(!String::from_utf8_lossy(&output.stdout).contains("No extensions installed"));
     for code in ["0", "7"] {
         let output = fixture
-            .command(&["extension", "list"])
+            .command(&["hcli-extensions", "list"])
             .env("HY_EXTENSION_EXIT", code)
             .output()
             .unwrap();
@@ -197,7 +200,7 @@ fn failed_registration_is_an_error_instead_of_an_empty_catalog() {
     fs::create_dir_all(&shadow).unwrap();
     fs::write(fixture.site.join("hcli/__init__.py"), "").unwrap();
     fs::write(shadow.join("__init__.py"), "").unwrap();
-    let output = fixture.command(&["extension", "list"]).output().unwrap();
+    let output = fixture.command(&["hcli-extensions", "list"]).output().unwrap();
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("hcli.lib.extensions"));
     assert!(!String::from_utf8_lossy(&output.stdout).contains("No extensions installed"));
@@ -217,7 +220,7 @@ fn explicitly_missing_extension_runtime_fails_with_its_path() {
     let sandbox = Sandbox::new();
     let missing = sandbox.path().join("missing-python");
     let output = sandbox
-        .command(&["extension", "list"])
+        .command(&["hcli-extensions", "list"])
         .env("HCLI_EXTENSION_PYTHON", &missing)
         .output()
         .unwrap();
@@ -231,7 +234,7 @@ fn explicitly_missing_extension_runtime_fails_with_its_path() {
 fn path_runtime_discovery_and_empty_catalog_do_not_require_explicit_configuration() {
     let fixture = RuntimeFixture::new();
     let output = fixture
-        .command(&["extension", "list"])
+        .command(&["hcli-extensions", "list"])
         .env_remove("HCLI_EXTENSION_PYTHON")
         .env("PATH", fixture.python.parent().unwrap())
         .output()

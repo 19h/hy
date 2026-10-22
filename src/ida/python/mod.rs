@@ -30,7 +30,29 @@ pub use probe::{probe_ida, probe_installation};
 pub use resolution::resolve;
 pub use scripts::{find_script, resolve_for_execution, run_python, run_script};
 pub use venv::install_dependencies;
-pub use venv::verify_dependencies;
+pub(crate) use venv::{install_with_constraints, verify_with_constraints};
+
+/// Full version for PEP 440 comparisons; a failed probe is memoized for this command.
+pub(crate) async fn full_version() -> Result<Option<String>> {
+    static VERSION: tokio::sync::OnceCell<Option<String>> = tokio::sync::OnceCell::const_new();
+    Ok(VERSION
+        .get_or_init(|| async {
+            let python = resolve().await.ok()?;
+            let output = output(
+                command(&python.exe)
+                    .args(["-c", "import sys; print('.'.join(map(str, sys.version_info[:3])))"]),
+                10,
+            )
+            .await
+            .ok()?;
+            output
+                .status
+                .success()
+                .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        })
+        .await
+        .clone())
+}
 
 pub(crate) async fn detect_current_version() -> Result<String> {
     let python = resolve().await?;
@@ -99,15 +121,6 @@ pub fn venv_python(root: &Path) -> PathBuf {
     })
 }
 
-pub fn venv_root(exe: &Path) -> Option<PathBuf> {
-    let parent = exe.parent()?;
-    if parent.join("pyvenv.cfg").is_file() {
-        return Some(parent.into());
-    }
-    let root = parent.parent()?;
-    root.join("pyvenv.cfg").is_file().then(|| root.to_path_buf())
-}
-
 pub fn find_command(name: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
@@ -133,22 +146,38 @@ pub fn find_command(name: &str) -> Option<PathBuf> {
 }
 
 pub fn command(exe: &Path) -> Command {
-    let mut cmd = Command::new(exe);
-    cmd.env_remove("PYTHONHOME").env("PYTHONUTF8", "1");
-    if let Some(root) = venv_root(exe) {
-        cmd.env("VIRTUAL_ENV", root);
+    let mut command = Command::new(exe);
+    configure_environment(&mut command, exe);
+    command.kill_on_drop(true);
+    command
+}
+
+pub(super) fn configure_environment(command: &mut Command, exe: &Path) {
+    clean_parent_environment(command);
+    if let Some(root) = environment::venv_root(exe) {
+        command.env("VIRTUAL_ENV", root);
     } else {
-        cmd.env_remove("VIRTUAL_ENV");
+        command.env_remove("VIRTUAL_ENV");
     }
-    let mut paths = vec![exe.parent().unwrap_or(Path::new(".")).to_path_buf()];
-    if let Some(path) = std::env::var_os("PATH") {
-        paths.extend(std::env::split_paths(&path));
+    let directory =
+        exe.parent().filter(|path| !path.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let mut path = directory.as_os_str().to_owned();
+    if let Some(inherited) = std::env::var_os("PATH").filter(|value| !value.is_empty()) {
+        path.push(if cfg!(windows) {
+            ";"
+        } else {
+            ":"
+        });
+        path.push(inherited);
     }
-    if let Ok(path) = std::env::join_paths(paths) {
-        cmd.env("PATH", path);
+    command.env("PATH", path);
+}
+
+/// Do not pass an embedding interpreter's module paths to a different Python.
+pub(crate) fn clean_parent_environment(command: &mut Command) {
+    for name in ["PYTHONHOME", "PYTHONPATH", "PYTHONEXECUTABLE", "PYTHONSTARTUP"] {
+        command.env_remove(name);
     }
-    cmd.kill_on_drop(true);
-    cmd
 }
 
 pub async fn output(cmd: &mut Command, seconds: u64) -> Result<std::process::Output> {

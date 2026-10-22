@@ -18,23 +18,26 @@ pub(super) async fn wheelhouse(
     destination: &Path,
     options: &PipOptions,
 ) -> Result<()> {
-    let python = python::resolve().await?;
-    let output = command(&python.exe, dependencies, target, destination, options)?.output().await?;
+    let uv = python::find_command("uv").ok_or_else(|| Error::Other(
+        "creating a plugin bundle with Python dependencies requires uv: https://docs.astral.sh/uv/".into(),
+    ))?;
+    let output = command(&uv, dependencies, target, destination, options)?.output().await?;
     if !output.status.success() {
-        return Err(Error::Other(failure(target, &output.stdout, &output.stderr)));
+        return Err(Error::BundleDownload(failure(target, &output.stdout, &output.stderr)));
     }
     Ok(())
 }
 
 fn command(
-    python: &Path,
+    uv: &Path,
     dependencies: &[String],
     target: &PipTarget,
     destination: &Path,
     options: &PipOptions,
 ) -> Result<Command> {
-    let mut command = Command::new(python);
-    command.args(["-m", "pip", "download"]);
+    let mut command = Command::new(uv);
+    python::clean_parent_environment(&mut command);
+    command.args(["tool", "run", "--python", &target.python_version, "pip", "download"]);
     command.args(target.pip_download_args()?);
     command.arg("--dest").arg(destination);
     if let Some(index) = options.index_url.as_ref().filter(|index| !index.is_empty()) {

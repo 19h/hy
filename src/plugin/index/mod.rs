@@ -23,7 +23,7 @@ pub use config::{RESERVED, Repository, repositories, save_repositories, valid_re
 pub use models::{Location, Plugin, Snapshot};
 pub(crate) use reference::is_direct_github;
 pub use reference::{Reference, normalize_host, parse_reference};
-pub use selection::{matches_reference, matching_plugins, select, select_for_platform};
+pub use selection::select;
 pub use transport::{fetch, github_archive};
 
 pub struct LoadedRepository {

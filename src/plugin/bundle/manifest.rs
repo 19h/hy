@@ -82,7 +82,10 @@ pub(super) fn read_from_archive(
 }
 
 pub fn validate_bundle_path(path: &str) -> Result<()> {
-    if path.starts_with('/') || path.split('/').any(|part| part == "..") || path.contains('\\') {
+    if path.starts_with('/')
+        || path.split('/').any(|part| part == "..")
+        || path.contains(['\\', ':'])
+    {
         return Err(Error::PluginInstall(format!("unsafe bundle path: {path}")));
     }
     Ok(())

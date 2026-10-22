@@ -26,9 +26,13 @@ class Sink(io.BytesIO):
 
 
 class File:
-    def __init__(self, files, name):
+    def __init__(self, files, name, parent):
         self.files = files
         self.name = name
+        self.parent = parent
+
+    def resolve(self):
+        return self
 
     def open(self, mode):
         assert mode == "wb"
@@ -46,7 +50,10 @@ class Destination:
         self.created = True
 
     def __truediv__(self, name):
-        return File(self.files, name)
+        return File(self.files, name, self)
+
+    def resolve(self):
+        return self
 
 
 results = []

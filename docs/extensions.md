@@ -6,15 +6,18 @@ configured interpreter, using `HCLI_EXTENSION_PYTHON`.
 Hy discovers the `hcli.extensions` entry-point group in a selected Python
 interpreter. That interpreter must have the extension packages and a compatible
 `ida-hcli` package installed. The current bridge is tested against upstream
-revision `92df5b10c8b2e860a10bbfd8595c8bc2b7c3b64f` (package version 0.24.0).
+revision `c10908cfb864008fcdb6ec067cb98a6ac67c7da2` (package version 0.26.4).
 It does not install or update a runtime automatically.
+
+`hy extension` aliases plugin management. Python extension maintenance uses
+`hy hcli-extensions`.
 
 Set the interpreter explicitly when extensions are installed in a virtual
 environment:
 
 ```sh
 export HCLI_EXTENSION_PYTHON=/absolute/path/to/venv/bin/python
-hy extension list
+hy hcli-extensions list
 ```
 
 When this variable is absent, Hy searches `PATH` for `python3`, then `python`.
@@ -22,7 +25,7 @@ When it is present but empty, Python extension discovery is disabled. Without
 an available interpreter, the native command tree remains usable. An explicitly
 configured interpreter that cannot start produces an error with its path.
 
-`hy extension create` prints the upstream template command. It does not create
+`hy hcli-extensions create` prints the upstream template command. It does not create
 files and does not accept a project-name argument.
 
 ## Command ownership and execution
@@ -66,14 +69,17 @@ To reproduce against the requested checkout:
 
 ```sh
 uv venv /tmp/hy-extension-runtime --python 3.13
-uv pip install --python /tmp/hy-extension-runtime/bin/python /Users/int/dev/ida-hcli
+uv export --frozen --project ../ida-hcli --no-dev --no-emit-project \
+    --format requirements-txt --output-file /tmp/hy-extension-requirements.txt
+uv pip sync --python /tmp/hy-extension-runtime/bin/python /tmp/hy-extension-requirements.txt
+uv pip install --no-deps --python /tmp/hy-extension-runtime/bin/python ../ida-hcli
 HY_TEST_EXTENSION_PYTHON=/tmp/hy-extension-runtime/bin/python \
-  cargo test --locked --test extensions -- --include-ignored
+    cargo test --locked --test extensions -- --include-ignored
 ```
 
 These tests are opt-in because the native test suite does not require an
-installed Python HCLI environment. Their verified runtime used Python 3.13.15,
-ida-hcli 0.24.0 and Click 8.5.0. Two runtime-configuration tests also run in the
+installed Python HCLI environment. All seven opt-in tests pass with Python 3.13.16,
+ida-hcli 0.26.4 and Click 8.1.8. Two runtime-configuration tests also run in the
 default suite without Python dependencies.
 
 Windows runtime execution, arbitrary lazy command groups, custom parser behavior,

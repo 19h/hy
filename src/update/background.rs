@@ -33,7 +33,7 @@ impl BackgroundUpdateChecker {
         self.start_with(
             cache::Cache::for_binary(&env.binary_name),
             env.version.clone(),
-            env.binary_name.clone(),
+            env.display_command().to_owned(),
             || {
                 let repo = super::GitHubRepo::from_url(&env.github_url)?;
                 super::compatible_version(

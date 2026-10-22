@@ -81,7 +81,7 @@ fn archive_reports_match_source_order_named_reads_and_lexical_parents() {
     #[cfg(unix)]
     assert_eq!(
         format!("{:x}", Sha256::digest(serde_json::to_vec(&expected).unwrap())),
-        "bbd77afa9685de30a2fc6006c58d321cae788445372f20e29aab10b179bf4bc8",
+        "74d799094dfc1be08ffe3361e9925d2765672ec44970cb592cec5c1d29584e06",
     );
 }
 
@@ -91,7 +91,7 @@ fn reference_errors_follow_descriptor_errors_without_hiding_valid_descriptors() 
     let path = sandbox.path().join("plugin.zip");
     fs::write(&path, cases::missing_reference_then_invalid_descriptor()).unwrap();
     let output = sandbox.run(&["plugin", "lint", path.to_str().unwrap()]);
-    assert_success(&output);
+    assert_eq!(output.status.code(), Some(1));
     let report = String::from_utf8(output.stdout).unwrap();
     let invalid = report.find("b/ida-plugin.json: ida-plugin.json validation failed").unwrap();
     let missing = report.find("a/ida-plugin.json: ida-plugin.json validation failed").unwrap();

@@ -1,7 +1,7 @@
 //! GitHub catalogue retries include redirects but precede final-body consumption.
 
 use std::future::Future;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use crate::error::{Error, Result};
 
@@ -30,7 +30,7 @@ pub(super) async fn send(
             )
         },
         tokio::time::sleep,
-        timestamp,
+        crate::util::python_time::now,
     )
     .await
 }
@@ -55,7 +55,7 @@ where
     S: AsyncFnMut() -> std::result::Result<reqwest::Response, Failure>,
     W: FnMut(Duration) -> WF,
     WF: Future<Output = ()>,
-    C: Fn() -> f64,
+    C: Fn() -> Result<f64>,
 {
     for transient_attempt in 1..=TRANSIENT_ATTEMPTS {
         for rate_attempt in 1..=RATE_LIMIT_ATTEMPTS {
@@ -102,13 +102,6 @@ where
     unreachable!("the final attempt returns its response or error")
 }
 
-fn timestamp() -> f64 {
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => duration.as_secs_f64(),
-        Err(error) => -error.duration().as_secs_f64(),
-    }
-}
-
 /// FileHandler wraps stat/open errors in URLError; reading the body happens later.
 pub(super) async fn open_file<S, W, WF>(mut open: S, mut wait: W) -> Result<std::fs::File>
 where
@@ -129,5 +122,7 @@ where
     unreachable!("the final file-open attempt returns its result")
 }
 
+#[cfg(test)]
+mod clock_tests;
 #[cfg(test)]
 mod tests;

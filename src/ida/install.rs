@@ -39,12 +39,20 @@ pub async fn install_ida(installer: &Path, destination: &Path) -> Result<PathBuf
     }
     std::fs::create_dir(destination)?;
     let destination = destination.canonicalize()?;
-    if cfg!(target_os = "macos") {
-        install_mac(&installer, &destination).await?;
+    let result = if cfg!(target_os = "macos") {
+        install_mac(&installer, &destination).await
     } else {
-        install_native(&installer, &destination).await?;
+        install_native(&installer, &destination).await
     }
-    verify_installation(&destination)?;
+    .and_then(|()| verify_installation(&destination));
+    if let Err(error) = result {
+        if let Err(cleanup) = std::fs::remove_dir_all(&destination) {
+            return Err(Error::IdaInstallFailed(format!(
+                "{error}; removing incomplete installation failed: {cleanup}"
+            )));
+        }
+        return Err(error);
+    }
     Ok(destination)
 }
 
@@ -66,10 +74,12 @@ async fn run(command: &mut Command, operation: &str) -> Result<()> {
     Ok(())
 }
 
-fn installer_command(installer: &Path, destination: &Path, debug_log: &Path) -> Command {
+fn installer_command(installer: &Path, destination: &Path) -> Command {
     let mut command = Command::new(installer);
-    command.args(["--mode", "unattended", "--debugtrace"]).arg(debug_log);
-    if cfg!(windows) {
+    command.args(["--mode", "unattended"]);
+    if cfg!(windows)
+        && !installer.file_name().is_some_and(|name| name.to_string_lossy().starts_with("ida-free"))
+    {
         command.args(["--install_python", "0"]);
     }
     command.arg("--prefix").arg(destination);
@@ -79,17 +89,31 @@ fn installer_command(installer: &Path, destination: &Path, debug_log: &Path) -> 
 async fn install_native(installer: &Path, destination: &Path) -> Result<()> {
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-
-        let mut permissions = std::fs::metadata(installer)?.permissions();
-        permissions.set_mode(permissions.mode() | 0o100);
-        std::fs::set_permissions(installer, permissions)?;
         let home =
             dirs::home_dir().ok_or_else(|| Error::Other("home directory is unavailable".into()))?;
         std::fs::create_dir_all(home.join(".local/share/applications"))?;
     }
-    let debug_log = destination.join("installer-debug.log");
-    run(&mut installer_command(installer, destination, &debug_log), "installer execution").await
+    #[cfg(target_os = "linux")]
+    let copy = {
+        use std::os::unix::fs::PermissionsExt;
+        let parent = destination.parent().ok_or_else(|| {
+            Error::IdaInstallFailed("installation has no parent directory".into())
+        })?;
+        let copy = tempfile::Builder::new().prefix(".hy-installer-").tempdir_in(parent)?;
+        let executable = copy.path().join(
+            installer
+                .file_name()
+                .ok_or_else(|| Error::IdaInstallFailed("installer has no filename".into()))?,
+        );
+        std::fs::copy(installer, &executable)?;
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700))?;
+        copy
+    };
+    #[cfg(target_os = "linux")]
+    let executable = copy.path().join(installer.file_name().expect("validated installer filename"));
+    #[cfg(target_os = "linux")]
+    let installer = executable.as_path();
+    run(&mut installer_command(installer, destination), "installer execution").await
 }
 
 async fn install_mac(installer: &Path, destination: &Path) -> Result<()> {
@@ -122,9 +146,7 @@ async fn install_mac(installer: &Path, destination: &Path) -> Result<()> {
         .ok_or_else(|| {
             Error::IdaInstallFailed("installer executable not found in application".into())
         })?;
-    let debug_log = unpack.path().join("installer-debug.log");
-    run(&mut installer_command(&executable, output.path(), &debug_log), "installer execution")
-        .await?;
+    run(&mut installer_command(&executable, output.path()), "installer execution").await?;
     let products = std::fs::read_dir(output.path())?.collect::<std::io::Result<Vec<_>>>()?;
     let [product] = products.as_slice() else {
         return Err(Error::IdaInstallFailed(

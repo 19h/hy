@@ -153,28 +153,14 @@ fn status_reports_multiple_names_and_fails_if_any_are_missing() {
 }
 
 #[test]
-fn explain_environment_reports_missing_installation_without_failing() {
+fn environment_diagnostics_fail_when_the_installation_is_missing() {
     let sandbox = Sandbox::new();
-    let output = sandbox.run(&["ida", "python", "explain-environment", "--json"]);
-    assert_success(&output);
-    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(report["experimental"], true);
-    assert_eq!(report["selected_installation"]["install_dir"], serde_json::Value::Null);
-    assert!(report["selected_installation"]["install_dir_error"].is_string());
-    assert_eq!(report["python_environment"], serde_json::Value::Null);
-    assert!(report.get("findings").is_none());
-
-    let doctor = sandbox.run(&["ida", "python", "doctor", "--json"]);
-    assert!(!doctor.status.success());
-    let report: serde_json::Value = serde_json::from_slice(&doctor.stdout).unwrap();
-    assert_eq!(report["ok"], false);
-    assert!(
-        report["findings"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|finding| finding["id"] == "python-exe-not-found")
-    );
+    for command in ["explain-environment", "doctor"] {
+        let output = sandbox.run(&["ida", "python", command, "--json"]);
+        assert_eq!(output.status.code(), Some(1));
+        assert!(String::from_utf8_lossy(&output.stderr).contains("IDA installation not found"));
+        assert!(output.stdout.is_empty());
+    }
 }
 
 #[test]

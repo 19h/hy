@@ -19,16 +19,27 @@ pub async fn install_dependencies(
     options: &PipOptions,
     wheelhouse: Option<&Path>,
 ) -> Result<()> {
-    run(exe, dependencies, options, wheelhouse, Operation::Install).await
+    install_with_constraints(exe, dependencies, &[], options, wheelhouse).await
 }
 
-pub async fn verify_dependencies(
+pub(crate) async fn install_with_constraints(
     exe: &Path,
     dependencies: &[String],
+    constraints: &[String],
     options: &PipOptions,
     wheelhouse: Option<&Path>,
 ) -> Result<()> {
-    run(exe, dependencies, options, wheelhouse, Operation::Resolve).await
+    run(exe, dependencies, constraints, options, wheelhouse, Operation::Install).await
+}
+
+pub(crate) async fn verify_with_constraints(
+    exe: &Path,
+    dependencies: &[String],
+    constraints: &[String],
+    options: &PipOptions,
+    wheelhouse: Option<&Path>,
+) -> Result<()> {
+    run(exe, dependencies, constraints, options, wheelhouse, Operation::Resolve).await
 }
 
 #[derive(Clone, Copy)]
@@ -40,17 +51,32 @@ enum Operation {
 async fn run(
     exe: &Path,
     dependencies: &[String],
+    constraints: &[String],
     options: &PipOptions,
     wheelhouse: Option<&Path>,
     operation: Operation,
 ) -> Result<()> {
-    let result = command(exe, dependencies, options, wheelhouse, operation).output().await?;
+    let mut command = command(exe, dependencies, options, wheelhouse, operation);
+    let constraint_file = if constraints.is_empty() {
+        None
+    } else {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new()?;
+        for constraint in constraints {
+            writeln!(file, "{constraint}")?;
+        }
+        file.flush()?;
+        command.arg("--constraint").arg(file.path());
+        Some(file)
+    };
+    let result = command.output().await?;
+    drop(constraint_file);
     if !result.status.success() {
         return Err(Error::PythonPackages(errors::message(
             exe,
             &result.stdout,
             &result.stderr,
-            &crate::config::Env::global().binary_name,
+            crate::config::Env::global().display_command(),
         )));
     }
     Ok(())
@@ -65,14 +91,14 @@ fn command(
 ) -> Command {
     let effective = wheelhouse.map(|path| options.with_wheelhouse(path));
     let options = effective.as_ref().unwrap_or(options);
-    let mut cmd = Command::new(exe);
+    let mut cmd = super::command(exe);
     cmd.args(["-m", "pip", "install"]);
     if matches!(operation, Operation::Resolve) {
         cmd.arg("--dry-run");
     }
     cmd.args(options.arguments());
     cmd.args(dependencies).stdin(Stdio::inherit()).kill_on_drop(true);
-    // Upstream inherits the process environment and stdin, captures both outputs,
-    // and imposes no timeout on pip. Interpreter probes have separate policies.
+    // Preserve stdin and capture diagnostics while applying the selected
+    // interpreter's environment. Pip has no timeout.
     cmd
 }

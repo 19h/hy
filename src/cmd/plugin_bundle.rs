@@ -46,18 +46,9 @@ fn info(args: BundleInfoArgs) -> Result<()> {
 
 async fn create(args: BundleCreateArgs, context: &PluginContext) -> Result<()> {
     let targets = super::plugin_bundle_targets::resolve(&args).await?;
-    let mut platforms: Vec<_> = targets.iter().map(|target| target.ida_platform.clone()).collect();
-    platforms.sort();
-    platforms.dedup();
-    let mut sources = super::plugin_bundle_sources::Sources::new(context, args.repo.as_deref());
-    let mut archives = Vec::new();
-    for spec in &args.plugin_specs {
-        let spinner = tui::spinner(format!("resolving {spec}"));
-        archives.extend(sources.resolve(spec, &platforms).await?);
-        spinner.finish_and_clear();
-    }
+    let cells = super::plugin_bundle_sources::resolve(&args, context, &targets).await?;
     let spinner = tui::spinner("building bundle");
-    bundle::create_bundle(&args.output, &archives, &targets, &context.pip, |message| {
+    bundle::create_bundle(&args.output, &cells, &context.pip, |message| {
         spinner.set_message(message.to_owned());
     })
     .await?;

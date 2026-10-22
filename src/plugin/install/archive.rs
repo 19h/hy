@@ -25,7 +25,12 @@ pub(super) fn extract<R: Read + Seek>(
             )));
         }
         let target = destination.join(&relative);
-        if relative.split('/').any(|part| part == "..") || !target.starts_with(destination) {
+        if relative.contains(':')
+            || cfg!(windows) && relative.contains('\\')
+            || relative.split('/').any(|part| part == "..")
+            || !crate::util::realpath::resolve(&target)?
+                .starts_with(crate::util::realpath::resolve(destination)?)
+        {
             return Err(Error::PluginInstall(format!(
                 "archive contains an unsafe path: {}",
                 member.name

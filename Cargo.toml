@@ -71,6 +71,8 @@ zip = { version = "8.6", default-features = false, features = [
 
 # Version parsing
 semver = { version = "1", features = ["serde"] }
+pep440_rs = "0.7"
+pep508_rs = "0.9"
 
 # URL parsing
 url = "2"

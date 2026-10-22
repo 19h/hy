@@ -1,5 +1,9 @@
 # HCLI port review
 
+The [HCLI 0.26.4 delta review](upstream-0.26.4.md) covers the subsequent
+`92df5b1..c10908c` range. The anchors and evidence below describe the earlier
+review and retain its boundaries for unrelated behavior.
+
 ## Comparison anchors
 
 The upstream checkout is `/Users/int/dev/ida-hcli`, at

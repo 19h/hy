@@ -157,7 +157,14 @@ fn handle_error(err: &Error) {
             eprintln!("{}", format!("Authentication failed: {message}").red());
         }
         Error::NotLoggedIn => {
-            eprintln!("{}", "Not logged in. Run `hy login` first.".red());
+            eprintln!(
+                "{}",
+                format!(
+                    "Not logged in. Run `{} login` first.",
+                    config::Env::global().display_command()
+                )
+                .red()
+            );
         }
         Error::NotFound(msg) => {
             eprintln!("{}", format!("Not found: {msg}").red());

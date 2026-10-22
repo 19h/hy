@@ -21,13 +21,15 @@ fn command(rig: &Rig, json_output: bool) -> Command {
     } else {
         vec!["ida", "python", "doctor"]
     };
+    let installation = rig.sandbox.path().join("diagnostic-ida");
+    script(&installation.join("idat"), "#!/bin/sh\nexit 1\n");
     let mut command = rig.sandbox.command(&args);
     command
         .env("PATH", &rig.tools)
         .env("HY_TEST_EVENTS", &rig.events)
         .env_remove("VIRTUAL_ENV")
         .env_remove("UV_CACHE_DIR")
-        .env("HCLI_CURRENT_IDA_INSTALL_DIR", rig.sandbox.path().join("missing-ida"));
+        .env("HCLI_CURRENT_IDA_INSTALL_DIR", installation);
     command
 }
 

@@ -24,8 +24,18 @@ impl PluginQueryReport {
                 ])
             })
             .collect();
-        let value =
-            Value::object([("plugin", plugin), ("download_locations", Value::Array(locations))]);
+        let value = Value::object([
+            ("plugin", plugin),
+            ("download_locations", Value::Array(locations)),
+            (
+                "repo",
+                report
+                    .repo
+                    .as_deref()
+                    .map(|repo| Value::String(repo.into()))
+                    .unwrap_or(Value::Null),
+            ),
+        ]);
         Ok(json_format::python_ascii(&value, "  "))
     }
 }

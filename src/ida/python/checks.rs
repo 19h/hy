@@ -22,7 +22,7 @@ pub(super) async fn version(executable: &Path) -> Result<Option<String>> {
 }
 
 fn version_command(executable: &Path) -> Command {
-    let mut command = Command::new(executable);
+    let mut command = super::command(executable);
     command
         .args(["-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"])
         .stdin(Stdio::inherit())
@@ -49,7 +49,7 @@ pub(super) async fn has_pip(executable: &Path) -> bool {
 }
 
 fn pip_command(executable: &Path) -> Command {
-    let mut command = Command::new(executable);
+    let mut command = super::command(executable);
     command.args(["-c", "import pip"]).stdin(Stdio::inherit()).kill_on_drop(true);
     command
 }

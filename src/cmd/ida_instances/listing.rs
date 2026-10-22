@@ -72,7 +72,7 @@ pub(super) fn print(instances: &Instances, default: &str) {
 }
 
 fn print_default_status(instances: &Instances, default: &str, rows: &[Row<'_>]) {
-    let binary = &Env::global().binary_name;
+    let binary = &Env::global().display_command();
     if default.is_empty() {
         fmt::warning(&format!("No default instance set. Use '{binary} ida switch' to set one."));
     } else if !instances.contains_key(default) {

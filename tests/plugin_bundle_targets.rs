@@ -135,7 +135,7 @@ fn current_python_uses_repeated_version_only_observations() {
     assert_success(&output);
     assert_eq!(fixture.targets()[0]["pythonVersion"], "3.13");
     let calls = fs::read_to_string(&fixture.calls).unwrap();
-    assert_eq!(calls.lines().collect::<Vec<_>>(), ["version:fixture-home|fixture-venv|0"; 2]);
+    assert_eq!(calls.lines().collect::<Vec<_>>(), ["version:||0"; 2]);
 }
 
 #[test]

@@ -68,7 +68,7 @@ pub(crate) async fn warn(resolved: &ResolvedPython) {
     let Ok(state) = collect::collect(resolved, ProbeMode::ResolutionOnly).await else {
         return;
     };
-    let binary = &crate::config::Env::global().binary_name;
+    let binary = &crate::config::Env::global().display_command();
     emit(&findings::check(&state, binary), binary);
 }
 
@@ -77,7 +77,7 @@ pub(crate) async fn validate_dependency_environment(
     dependencies: &[String],
     skip_environment_check: bool,
 ) -> Result<()> {
-    let binary = &crate::config::Env::global().binary_name;
+    let binary = &crate::config::Env::global().display_command();
     if !skip_environment_check
         && let Ok(state) = collect::collect(resolved, ProbeMode::AllowAdditional).await
     {

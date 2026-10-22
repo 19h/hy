@@ -46,10 +46,19 @@ pub(super) async fn run(executable: &Path, ui: &Ui) -> Result<Outcome> {
         ui.print(&format!("  {}. {}", index + 1, step.description));
         if let platform::Action::File {
             path,
-            ..
+            content,
         } = &step.action
         {
             ui.print(&format!("     {}", path.display()));
+            if step.kind == platform::Kind::ShellProfile {
+                let (removed, added) = platform::preview_profile(path, content)?;
+                for line in removed {
+                    ui.print(&format!("     - {line}"));
+                }
+                for line in added {
+                    ui.print(&format!("     + {line}"));
+                }
+            }
         }
     }
     for warning in &plan.warnings {

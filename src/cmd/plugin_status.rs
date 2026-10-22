@@ -28,6 +28,14 @@ struct InstalledStatus {
     upgrade_checked: bool,
     in_repository: Option<bool>,
     upgradable_to: Option<String>,
+    repo: Option<String>,
+    components: Option<Vec<ComponentInfo>>,
+}
+
+#[derive(Serialize)]
+struct ComponentInfo {
+    name: String,
+    version: String,
 }
 
 #[derive(Serialize)]
@@ -46,23 +54,52 @@ struct MissingStatus {
 }
 
 impl StatusReport {
-    fn print_text(&self) {
+    fn print_text(&self, show_components: bool, default: &str) {
         if self.plugins.is_empty() {
             println!("No plugins installed.");
         }
-        for entry in &self.plugins {
+        let mut entries: Vec<_> = self.plugins.iter().collect();
+        entries.sort_by_key(|entry| {
+            let repo = match entry {
+                StatusEntry::Installed(plugin) => plugin.repo.as_deref(),
+                _ => None,
+            };
+            super::plugin_listing::repository_order(repo)
+        });
+        let mut group = None;
+        for entry in entries {
+            let repo = match entry {
+                StatusEntry::Installed(plugin) => plugin.repo.as_deref(),
+                _ => None,
+            };
+            if group.is_some() && group != Some(repo) {
+                println!();
+            }
+            group = Some(repo);
             match entry {
-                StatusEntry::Installed(plugin) => println!(
-                    "{}\t{}\t{}",
-                    plugin.name,
-                    plugin.version,
-                    plugin.upgradable_to.as_deref().unwrap_or(""),
-                ),
+                StatusEntry::Installed(plugin) => {
+                    let reference = super::plugin_listing::install_reference(
+                        &plugin.name,
+                        plugin.repo.as_deref(),
+                        default,
+                    );
+                    println!(
+                        "{}\t{}\t{}",
+                        reference,
+                        plugin.version,
+                        plugin.upgradable_to.as_deref().unwrap_or("")
+                    );
+                    if show_components {
+                        for component in plugin.components.iter().flatten() {
+                            println!("    {}\t{}", component.name, component.version);
+                        }
+                    }
+                }
                 StatusEntry::Legacy(plugin) => println!(
                     "{}\t{}\t{}",
                     plugin.name,
                     plugin.version.as_deref().unwrap_or("unknown"),
-                    plugin.kind,
+                    plugin.kind
                 ),
                 StatusEntry::Missing(plugin) => println!("{}\tnot installed", plugin.name),
             }
@@ -70,24 +107,9 @@ impl StatusReport {
     }
 }
 
-async fn load_repositories(
-    context: &plugin::PluginContext,
-) -> Result<Vec<index::LoadedRepository>> {
-    let repositories = context.repositories()?;
-    let mut loaded = Vec::new();
-    for (name, repository) in repositories {
-        match context.load_repository(name.as_deref(), &repository.url, false).await {
-            Ok(repository) => loaded.push(repository),
-            Err(error) if context.repository.is_some() => return Err(error),
-            Err(error) => tracing::debug!(repository = ?name, %error, "repository unavailable"),
-        }
-    }
-    Ok(loaded)
-}
-
 fn installed_status(
     metadata: plugin::PluginMetadata,
-    repositories: &[index::LoadedRepository],
+    repositories: &plugin::repositories::Repositories,
     ida_version: Option<&str>,
     skip_upgrade_check: bool,
 ) -> InstalledStatus {
@@ -97,24 +119,18 @@ fn installed_status(
         host: index::normalize_host(&metadata.urls.repository).ok(),
         repo: None,
     };
-    let mut matches = repositories.iter().flat_map(|repository| {
-        repository
-            .snapshot
-            .plugins
-            .iter()
-            .filter(|plugin| index::matches_reference(plugin, &reference))
-            .map(move |_| repository)
+    let latest = index::select(&repositories.snapshot, &reference, ida_version).ok();
+    let repo = latest.and_then(|location| repositories.name_of(location)).map(str::to_owned);
+    let components = (!metadata.components.is_empty()).then(|| {
+        plugin::components::metadata_tree(&metadata)
+            .into_iter()
+            .skip(1)
+            .map(|component| ComponentInfo {
+                name: component.name.clone(),
+                version: component.version.clone(),
+            })
+            .collect()
     });
-    let first = matches.next();
-    // An identity appearing more than once is ambiguous even when both records
-    // advertise the same host. Status must agree with upgrade resolution.
-    let latest = if matches.next().is_none() {
-        first.and_then(|repository| {
-            index::select(&repository.snapshot, &reference, ida_version).ok()
-        })
-    } else {
-        None
-    };
     let upgradable_to = latest
         .filter(|location| {
             plugin::version_precedence(&location.descriptor.metadata.version)
@@ -129,16 +145,19 @@ fn installed_status(
         upgrade_checked: !skip_upgrade_check,
         in_repository: (!skip_upgrade_check).then_some(latest.is_some()),
         upgradable_to,
+        repo,
+        components,
     }
 }
 
 pub async fn run(args: PluginStatusArgs, context: &plugin::PluginContext) -> Result<()> {
     let installed = plugin::installed_plugins()?;
     let repositories = if args.offline || installed.is_empty() {
-        Vec::new()
+        plugin::repositories::Repositories::empty()
     } else {
         crate::ida::current_ida_platform()?;
-        load_repositories(context).await?
+        plugin::repositories::Repositories::load(context, &std::collections::HashMap::new(), None)
+            .await?
     };
     let ida_version = crate::config::Env::global()
         .current_ida_version
@@ -170,7 +189,9 @@ pub async fn run(args: PluginStatusArgs, context: &plugin::PluginContext) -> Res
             }));
         }
     } else {
-        for name in &args.names {
+        for reference in &args.names {
+            let parsed = index::parse_reference(reference)?;
+            let name = &parsed.name;
             if let Some(entry) =
                 installed.iter().find(|entry| entry.metadata.name.eq_ignore_ascii_case(name))
             {
@@ -189,10 +210,21 @@ pub async fn run(args: PluginStatusArgs, context: &plugin::PluginContext) -> Res
             }
         }
     }
+    report.plugins.sort_by(|left, right| match (left, right) {
+        (StatusEntry::Installed(left), StatusEntry::Installed(right)) => {
+            super::plugin_listing::repository_order(left.repo.as_deref())
+                .cmp(&super::plugin_listing::repository_order(right.repo.as_deref()))
+                .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+        }
+        (StatusEntry::Installed(_), _) => std::cmp::Ordering::Less,
+        (_, StatusEntry::Installed(_)) => std::cmp::Ordering::Greater,
+        _ => std::cmp::Ordering::Equal,
+    });
     if args.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
-        report.print_text();
+        let (_, default) = index::repositories()?;
+        report.print_text(args.show_components, &default);
     }
     if missing {
         Err(Error::ChildExit(1))

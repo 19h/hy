@@ -9,6 +9,21 @@ use crate::util::python_zip::fixtures::{Member, central_offset, local_offset, zi
 
 use super::*;
 
+#[cfg(unix)]
+#[test]
+fn existing_destination_symlinks_cannot_redirect_archive_writes() {
+    let directory = tempfile::tempdir().unwrap();
+    let destination = directory.path().join("destination");
+    let outside = directory.path().join("outside");
+    std::fs::create_dir(&destination).unwrap();
+    std::fs::create_dir(&outside).unwrap();
+    std::os::unix::fs::symlink(&outside, destination.join("nested")).unwrap();
+    let bytes = zip(&[Member::new(b"package/nested/payload", b"must not escape")]);
+    let mut archive = crate::util::python_zip::Archive::new(Cursor::new(bytes)).unwrap();
+    assert!(extract(&mut archive, "package/", &destination).is_err());
+    assert!(!outside.join("payload").exists());
+}
+
 fn inventory(root: &Path) -> Value {
     let mut files = BTreeMap::new();
     let mut directories = BTreeSet::new();
@@ -125,6 +140,6 @@ fn subtree_extraction_matches_source_selection_validation_and_named_reads() {
     #[cfg(unix)]
     assert_eq!(
         format!("{:x}", Sha256::digest(serde_json::to_vec(&expected).unwrap())),
-        "b6a4efa2a1478f4c8c8b1f480308543e60a56f2ed9158f95c90f55f640aecb85",
+        "48c3d3a715260dd601de68fcf037e93cd16e7349e734a80b14a16bb5da016a8f",
     );
 }

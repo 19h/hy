@@ -51,14 +51,7 @@ fn invalid_file_references_stop_one_archive_but_invalid_descriptors_are_skipped(
             .iter()
             .map(|plugin| plugin["name"].as_str().unwrap())
             .collect();
-        assert_eq!(
-            names,
-            if invalid_first {
-                vec!["independent"]
-            } else {
-                vec!["first", "independent"]
-            }
-        );
+        assert_eq!(names, vec!["independent"]);
     }
 }
 

@@ -2,13 +2,14 @@ use std::cell::{Cell, RefCell};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 use serde_json::{Value, json};
 
 use super::*;
 use crate::error::Error;
 use crate::util::python_json::{self, Text};
+use crate::util::python_time::modified;
 
 fn compare_source(operation: &str, cases: &[Value], expected: &[Value]) {
     let Some(python) = std::env::var_os("HY_TEST_BUNDLE_ORACLE_PYTHON") else {

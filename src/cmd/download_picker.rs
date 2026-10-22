@@ -1,9 +1,11 @@
-//! Hierarchical installer selection, preserving API folder and file order.
+//! Hierarchical installer selection with natural descending release order.
 
 use crate::api::{ApiClient, Asset, TreeNode};
 use crate::error::Result;
 use crate::util::fmt;
 use console::style;
+
+mod ordering;
 
 pub(super) async fn run(client: &ApiClient) -> Result<Vec<String>> {
     fmt::info("Fetching available downloads...");
@@ -38,15 +40,17 @@ fn select_asset(root: &[TreeNode]) -> Result<Option<Asset>> {
         }
 
         // Partition into folders and files.
-        let folders: Vec<&TreeNode> = current_nodes
+        let mut folders: Vec<&TreeNode> = current_nodes
             .iter()
             .copied()
             .filter(|n| {
                 n.node_type == "folder" && n.children.as_ref().is_some_and(|c| !c.is_empty())
             })
             .collect();
-        let files: Vec<&TreeNode> =
+        let mut files: Vec<&TreeNode> =
             current_nodes.iter().copied().filter(|n| n.node_type == "file").collect();
+        ordering::sort(&mut folders)?;
+        ordering::sort(&mut files)?;
 
         // Build display items.
         let mut items: Vec<String> = Vec::new();

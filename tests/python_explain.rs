@@ -108,7 +108,7 @@ fn mismatch_checks_cover_activated_requested_and_base_environments_in_order() {
 }
 
 #[test]
-fn unavailable_versions_remain_unknown_and_missing_installations_have_no_notes() {
+fn unavailable_versions_remain_unknown_and_missing_installations_fail() {
     let rig = Rig::new();
     rig.interpreter(&rig.fixture.python, None);
     let result = report(&mut rig.command(&rig.probe()));
@@ -119,10 +119,11 @@ fn unavailable_versions_remain_unknown_and_missing_installations_have_no_notes()
         format!("failed to run {}", rig.fixture.python.display())
     );
     assert_eq!(result["python_version_mismatches"], json!([]));
-    let result = report(rig.command(&rig.probe()).env_remove("HCLI_CURRENT_IDA_INSTALL_DIR"));
-    assert_eq!(result["architecture_and_version"], Value::Null);
-    assert_eq!(result["python_environment"], Value::Null);
-    assert_eq!(result["notes"], json!([]));
+    let output =
+        rig.command(&rig.probe()).env_remove("HCLI_CURRENT_IDA_INSTALL_DIR").output().unwrap();
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("IDA installation not found"));
+    assert!(output.stdout.is_empty());
 }
 
 #[test]
@@ -189,6 +190,7 @@ fn installation_versions_keep_metadata_provenance_and_ignore_overrides_when_list
         if source == "directory" {
             installation = rig.fixture.sandbox.path().join("IDA Professional 9.0.app");
             fs::create_dir(&installation).unwrap();
+            guard_fixture::executable(&installation.join("idat"), "#!/bin/sh\nexit 1\n");
         } else if source == "binary" {
             fs::write(installation.join("ida"), b"fixture 9.1.123456").unwrap();
         } else {

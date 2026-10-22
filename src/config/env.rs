@@ -50,6 +50,10 @@ pub struct Env {
 }
 
 impl Env {
+    pub fn display_command(&self) -> &'static str {
+        crate::util::invocation::display()
+    }
+
     /// Return the global `Env` instance, initialising it on first call.
     pub fn global() -> &'static Self {
         ENV.get_or_init(Self::from_environment)

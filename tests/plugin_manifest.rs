@@ -66,7 +66,7 @@ fn invalid_descriptors_cannot_reach_dependency_installation_or_publication() {
             // Regular distributions skip invalid archived descriptors. Editable
             // sources and repository snapshots validate the descriptor directly.
             let diagnostic = if matches!(source, "archive" | "directory") {
-                "ida-plugin.json not found in archive"
+                "no valid ida-plugin.json found in archive"
             } else {
                 diagnostic
             };

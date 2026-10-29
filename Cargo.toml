@@ -1,6 +1,6 @@
 [package]
 name = "hy"
-version = "0.18.1"
+version = "0.26.4"
 edition = "2024"
 description = "HCLI - Hex-Rays CLI Utility"
 license = "MIT"
